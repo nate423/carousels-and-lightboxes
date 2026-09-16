@@ -16,11 +16,24 @@
       <label><input type="radio" name="scroll-alignment" value="end" /> End</label>
     </div>
     <div class="carousels">
-      <div class="carousel-with-controls">
-        <div class="carousel-wrapper" id="h-scroll" data-scroll-axis="x"></div>
-        <div class="page-controls" for="h-scroll">
-          <div class="page-indicator-dot"></div>
-          <div class="page-indicator-dot current"></div>
+      <div class="carousel-comparison">
+        <h2>CSS-driven (native view-timeline, polyfilled where unsupported)</h2>
+        <div class="carousel-with-controls">
+          <div class="carousel-wrapper comparison-wrapper" id="h-scroll" data-scroll-axis="x"></div>
+          <div class="page-controls" for="h-scroll">
+            <div class="page-indicator-dot"></div>
+            <div class="page-indicator-dot current"></div>
+          </div>
+        </div>
+      </div>
+      <div class="carousel-comparison">
+        <h2>JS-driven (legacy scroll listener, pre-refactor)</h2>
+        <div class="carousel-with-controls">
+          <div class="carousel-wrapper comparison-wrapper" id="h-scroll-js" data-scroll-axis="x" data-effect="js"></div>
+          <div class="page-controls" for="h-scroll-js">
+            <div class="page-indicator-dot"></div>
+            <div class="page-indicator-dot current"></div>
+          </div>
         </div>
       </div>
       <div class="carousel-wrapper" data-scroll-axis="y"></div>

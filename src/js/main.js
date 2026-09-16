@@ -101,13 +101,10 @@ document.addEventListener("DOMContentLoaded", function () {
     offsetLength,
     scrollAxis
   ) {
-    const carouselWrapper = document.querySelector(
-      ".carousel-with-controls .carousel-wrapper"
-    );
-    const pageControls = document.querySelector(
-      ".carousel-with-controls .page-controls"
-    );
-    const items = carouselWrapper.querySelectorAll(".carousel-item");
+    const controlsContainer = wrapper.closest(".carousel-with-controls");
+    if (!controlsContainer) return;
+    const pageControls = controlsContainer.querySelector(".page-controls");
+    const items = wrapper.querySelectorAll(".carousel-item");
 
     pageControls.innerHTML = "";
 
@@ -209,10 +206,10 @@ document.addEventListener("DOMContentLoaded", function () {
     setupPageIndicators(wrapper, offsetFromStart, offsetLength, scrollAxis);
   } // End populateCarousel function
 
-  function updatePageIndicator(currentIndex) {
-    const dots = document.querySelectorAll(
-      ".carousel-with-controls .page-controls .page-indicator-dot"
-    );
+  function updatePageIndicator(wrapper, currentIndex) {
+    const controlsContainer = wrapper.closest(".carousel-with-controls");
+    if (!controlsContainer) return;
+    const dots = controlsContainer.querySelectorAll(".page-indicator-dot");
     dots.forEach((dot, index) => {
       dot.classList.toggle("current", index === currentIndex);
     });
@@ -299,8 +296,86 @@ document.addEventListener("DOMContentLoaded", function () {
           : `0 ${translations[i]}px`; // Y-axis translation
     });
 
-    updatePageIndicator(currentIndex);
+    updatePageIndicator(wrapper, currentIndex);
   } // End adjustStylesBasedOnProgress function
+
+  // Pre-refactor implementation (scale/opacity/blur/translate all computed
+  // and written as inline styles on every scroll event), kept only so the
+  // `data-effect="js"` comparison carousel can run side by side with the
+  // CSS scroll-driven version above.
+  const LEGACY_UNFOCUSED_SCALE = 0.8;
+  const LEGACY_UNFOCUSED_OPACITY = 0.5;
+  const LEGACY_UNFOCUSED_BLUR = 0;
+
+  function adjustStylesBasedOnProgressLegacyJS(
+    wrapper,
+    scrollDistance,
+    offsetLength,
+    offsetFromStart,
+    scrollAxis
+  ) {
+    const items = wrapper.querySelectorAll(".carousel-item");
+    const { anchors, lengths, scrollAnchor } = getItemMetrics(
+      wrapper,
+      items,
+      offsetFromStart,
+      offsetLength,
+      scrollDistance,
+      getAlignmentFraction(wrapper),
+      getScrollPadding(wrapper)
+    );
+
+    const currentProgress = computeCurrentProgress(anchors, scrollAnchor);
+    const currentIndex = computeCurrentIndex(currentProgress, items.length);
+
+    const scales = [];
+    const opacities = [];
+    const blurs = [];
+
+    items.forEach((_, i) => {
+      const itemProgress = computeItemProgress(currentProgress, i);
+      scales.push(transition(itemProgress, LEGACY_UNFOCUSED_SCALE, 1));
+      opacities.push(transition(itemProgress, LEGACY_UNFOCUSED_OPACITY, 1));
+      blurs.push(transition(itemProgress, LEGACY_UNFOCUSED_BLUR, 0));
+    });
+
+    const translations = computeTranslations(
+      anchors,
+      lengths,
+      scales,
+      currentProgress
+    );
+
+    items.forEach((item, i) => {
+      const translationAttribute =
+        scrollAxis === "x"
+          ? `translate3d(${translations[i]}px, 0, 0)`
+          : `translate3d(0, ${translations[i]}px, 0)`;
+
+      item.style.transform = `${translationAttribute} scale(${scales[i]})`;
+      item.style.opacity = opacities[i];
+      item.style.filter = `blur(${blurs[i]}px)`;
+    });
+
+    updatePageIndicator(wrapper, currentIndex);
+  } // End adjustStylesBasedOnProgressLegacyJS function
+
+  function isLegacyJS(wrapper) {
+    return wrapper.dataset.effect === "js";
+  }
+
+  function applyScrollEffect(
+    wrapper,
+    scrollDistance,
+    offsetLength,
+    offsetFromStart,
+    scrollAxis
+  ) {
+    const fn = isLegacyJS(wrapper)
+      ? adjustStylesBasedOnProgressLegacyJS
+      : adjustStylesBasedOnProgress;
+    fn(wrapper, scrollDistance, offsetLength, offsetFromStart, scrollAxis);
+  }
 
   // Re-point a wrapper at a new alignment: keeps whichever item is currently
   // "focused" under the cursor of the new alignment (no smooth scroll, so it
@@ -324,7 +399,9 @@ document.addEventListener("DOMContentLoaded", function () {
     );
     wrapper.dataset.scrollAlignment = alignment;
     updateSpacers(wrapper, spacers, offsetLength, scrollAxis);
-    updateAnimationRanges(wrapper, scrollDistance, offsetLength, offsetFromStart);
+    if (!isLegacyJS(wrapper)) {
+      updateAnimationRanges(wrapper, scrollDistance, offsetLength, offsetFromStart);
+    }
 
     const scrollTarget = computeScrollTarget(
       wrapper,
@@ -339,7 +416,7 @@ document.addEventListener("DOMContentLoaded", function () {
       behavior: "instant"
     });
 
-    adjustStylesBasedOnProgress(
+    applyScrollEffect(
       wrapper,
       scrollDistance,
       offsetLength,
@@ -377,9 +454,11 @@ document.addEventListener("DOMContentLoaded", function () {
       30
     );
 
-    updateAnimationRanges(wrapper, scrollDistance, offsetLength, offsetFromStart);
+    if (!isLegacyJS(wrapper)) {
+      updateAnimationRanges(wrapper, scrollDistance, offsetLength, offsetFromStart);
+    }
 
-    adjustStylesBasedOnProgress(
+    applyScrollEffect(
       wrapper,
       scrollDistance,
       offsetLength,
@@ -388,7 +467,7 @@ document.addEventListener("DOMContentLoaded", function () {
     );
 
     wrapper.addEventListener("scroll", () =>
-      adjustStylesBasedOnProgress(
+      applyScrollEffect(
         wrapper,
         scrollDistance,
         offsetLength,
@@ -399,7 +478,9 @@ document.addEventListener("DOMContentLoaded", function () {
 
     window.addEventListener("resize", () => {
       updateSpacers(wrapper, spacers, offsetLength, scrollAxis);
-      updateAnimationRanges(wrapper, scrollDistance, offsetLength, offsetFromStart);
+      if (!isLegacyJS(wrapper)) {
+        updateAnimationRanges(wrapper, scrollDistance, offsetLength, offsetFromStart);
+      }
     });
     //
     return {
