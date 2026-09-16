@@ -276,3 +276,23 @@ export function computeTranslationBreakpoints(
     return { scrollAnchor, translations };
   });
 }
+
+// The JS-effect analog of what a native scroll-timeline does with the same
+// breakpoints (see computeTranslationBreakpoints): finds which pair of
+// adjacent breakpoints brackets scrollAnchor and linearly interpolates each
+// item's translation between them, instead of recomputing computeTranslations
+// from scratch every scroll frame. Same bracket-search shape as
+// computeCurrentProgress above, just walking breakpoints instead of anchors.
+export function interpolateTranslations(breakpoints, scrollAnchor) {
+  const n = breakpoints.length;
+  if (n === 0) return [];
+  if (n === 1) return breakpoints[0].translations;
+
+  let i = 0;
+  while (i < n - 2 && breakpoints[i + 1].scrollAnchor < scrollAnchor) i++;
+
+  const p = progress(scrollAnchor, breakpoints[i].scrollAnchor, breakpoints[i + 1].scrollAnchor);
+  return breakpoints[i].translations.map((start, itemIndex) =>
+    transition(p, start, breakpoints[i + 1].translations[itemIndex])
+  );
+}
