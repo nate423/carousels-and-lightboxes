@@ -30,16 +30,20 @@ document.addEventListener("DOMContentLoaded", function () {
     );
   }
 
-  // The CSS scroll-driven animation on .carousel-item owns scale/opacity;
-  // this reads the same --unfocused-scale custom property so the JS-only
-  // gap-compensating translate (see computeTranslations) stays in sync with
-  // whatever scale the CSS animation is actually applying.
-  function getUnfocusedScale(wrapper) {
-    return (
-      parseFloat(
-        getComputedStyle(wrapper).getPropertyValue("--unfocused-scale")
-      ) || 1
-    );
+  // The JS-only gap-compensating translate (see computeTranslations) needs
+  // to know each item's *actual* current scale. It can't be re-derived from
+  // currentProgress/computeItemProgress (the old index-space triangular
+  // falloff) because the live CSS animation follows a per-item pixel-space
+  // curve instead (animation-range, from computeAnimationRanges) - the two
+  // only agree exactly at an item's own peak and at full falloff, so
+  // anywhere mid-transition (guaranteed whenever neighboring items have
+  // different widths, which they always do here) the re-derived value would
+  // be wrong and the compensation would over/under-shoot the real gap.
+  // Reading the live rendered value instead is always correct by definition.
+  function getLiveScale(item) {
+    const value = getComputedStyle(item).scale;
+    if (!value || value === "none") return 1;
+    return parseFloat(value.split(" ")[0]) || 1;
   }
 
   function addSpacersToWrapper(wrapper) {
@@ -274,12 +278,10 @@ document.addEventListener("DOMContentLoaded", function () {
 
     const currentProgress = computeCurrentProgress(anchors, scrollAnchor);
     const currentIndex = computeCurrentIndex(currentProgress, items.length);
-    const unfocusedScale = getUnfocusedScale(wrapper);
 
     const scales = [];
-    items.forEach((_, i) => {
-      const itemProgress = computeItemProgress(currentProgress, i);
-      scales.push(transition(itemProgress, unfocusedScale, 1));
+    items.forEach((item) => {
+      scales.push(getLiveScale(item));
     });
 
     const translations = computeTranslations(
