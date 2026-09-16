@@ -1,12 +1,15 @@
 import {
+  transition,
   getItemMetrics,
-  findCenteredIndex,
-  computeProgress,
-  interpolateOpacity,
-  interpolateBlur,
-  interpolateScale,
+  computeCurrentProgress,
+  computeCurrentIndex,
+  computeItemProgress,
   computeTranslations
 } from "./carousel-math.js";
+
+const UNFOCUSED_SCALE = 0.8;
+const UNFOCUSED_OPACITY = 0.5;
+const UNFOCUSED_BLUR = 0; // currently a no-op; raise above 0 to enable
 
 document.addEventListener("DOMContentLoaded", function () {
   function addSpacersToWrapper(wrapper) {
@@ -177,24 +180,25 @@ document.addEventListener("DOMContentLoaded", function () {
       scrollDistance
     );
 
-    const centeredIndex = findCenteredIndex(centers, scrollCenter);
+    const currentProgress = computeCurrentProgress(centers, scrollCenter);
+    const currentIndex = computeCurrentIndex(currentProgress, items.length);
 
     const scales = [];
     const opacities = [];
     const blurs = [];
 
     items.forEach((_, i) => {
-      const progress = computeProgress(centers, i, scrollCenter);
-      scales.push(interpolateScale(progress));
-      opacities.push(interpolateOpacity(progress));
-      blurs.push(interpolateBlur(progress));
+      const itemProgress = computeItemProgress(currentProgress, i);
+      scales.push(transition(itemProgress, UNFOCUSED_SCALE, 1));
+      opacities.push(transition(itemProgress, UNFOCUSED_OPACITY, 1));
+      blurs.push(transition(itemProgress, UNFOCUSED_BLUR, 0));
     });
 
     const translations = computeTranslations(
       centers,
       lengths,
       scales,
-      scrollCenter
+      currentProgress
     );
 
     items.forEach((item, i) => {
@@ -205,10 +209,10 @@ document.addEventListener("DOMContentLoaded", function () {
 
       item.style.transform = `${translationAttribute} scale(${scales[i]})`;
       item.style.opacity = opacities[i];
-      item.style.filter = `blur(${blurs[i]})`;
+      item.style.filter = `blur(${blurs[i]}px)`;
     });
 
-    updatePageIndicator(centeredIndex);
+    updatePageIndicator(currentIndex);
   } // End adjustStylesBasedOnProgress function
 
   function setupCarousel(wrapper) {

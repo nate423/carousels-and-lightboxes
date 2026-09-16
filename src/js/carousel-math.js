@@ -1,3 +1,28 @@
+// Two generic primitives (matching Origami Studio's Progress/Transition
+// patches), used throughout instead of bespoke per-value interpolation:
+//   progress(value, start, end)   - where does value fall between start/end
+//   transition(progress, start, end) - map a progress back onto a range
+//
+// Three distinct "progress" values come out of these for this carousel:
+//   - scrollProgress: progress(rawScrollPosition, 0, maxScrollPosition) -
+//     0 at the very start of the carousel, 1 at the very end. Not needed by
+//     anything below, but it's the reference point for the naming: every
+//     "X progress" here means "0 at the start of X's range, 1 at the end."
+//   - currentProgress: continuous position in *item-index* units (0 at item
+//     0, n-1 at the last item, fractional in between, e.g. 1.35). This is
+//     "which item is current" without the discrete jump at the 50% mark.
+//   - itemProgress: per item, how far *that item* has animated from its
+//     unfocused/collapsed state to its focused/current state (0 to 1).
+//     A pure function of currentProgress and the item's own index.
+
+export function progress(value, start, end) {
+  return (value - start) / (end - start);
+}
+
+export function transition(p, start, end) {
+  return start + p * (end - start);
+}
+
 export function getItemMetrics(
   wrapper,
   items,
@@ -19,80 +44,53 @@ export function getItemMetrics(
   return { centers, lengths, scrollCenter };
 }
 
-export function findCenteredIndex(centers, scrollCenter) {
-  let centeredIndex = 0;
-  let smallestDistance = Infinity;
+// Inverse-interpolates scrollCenter against the real item centers: finds
+// which pair of adjacent items brackets it and reports a fractional index
+// between them. Extrapolates (unclamped) past the first/last item using
+// that end segment's spacing, so it stays continuous everywhere.
+export function computeCurrentProgress(centers, scrollCenter) {
+  const n = centers.length;
+  if (n < 2) return 0;
 
-  centers.forEach((center, i) => {
-    const distance = Math.abs(scrollCenter - center);
-    if (distance < smallestDistance) {
-      smallestDistance = distance;
-      centeredIndex = i;
-    }
-  });
+  let i = 0;
+  while (i < n - 2 && centers[i + 1] < scrollCenter) i++;
 
-  return centeredIndex;
+  return i + progress(scrollCenter, centers[i], centers[i + 1]);
 }
 
-// Falls off linearly from 1 (at this item's own center) to 0 by the time
-// scrollCenter reaches whichever neighbor is ahead of it.
-export function computeProgress(centers, i, scrollCenter) {
-  const itemCenter = centers[i];
-  const distanceFromCenter = Math.abs(scrollCenter - itemCenter);
-
-  const nextItemCenterDistance =
-    i < centers.length - 1 ? Math.abs(itemCenter - centers[i + 1]) : 0;
-  const prevItemCenterDistance =
-    i > 0 ? Math.abs(itemCenter - centers[i - 1]) : 0;
-
-  let transitionDistance;
-  if (i === 0) {
-    transitionDistance = nextItemCenterDistance;
-  } else if (i === centers.length - 1) {
-    transitionDistance = prevItemCenterDistance;
-  } else {
-    transitionDistance =
-      scrollCenter > itemCenter
-        ? nextItemCenterDistance
-        : prevItemCenterDistance;
-  }
-
-  return 1 - Math.min(distanceFromCenter / transitionDistance, 1);
+// Discrete "which item is current" - jumps at the halfway point between
+// two items, unlike currentProgress.
+export function computeCurrentIndex(currentProgress, itemCount) {
+  return Math.min(Math.max(Math.round(currentProgress), 0), itemCount - 1);
 }
 
-export function interpolateOpacity(progress) {
-  return 0.5 + progress * 0.5;
-}
-
-export function interpolateBlur(progress) {
-  return (1 - progress) * 0 + "px";
-}
-
-export function interpolateScale(progress) {
-  return 0.8 + progress * 0.2;
+// Triangular falloff: 1 exactly at this item's own index, down to 0 by the
+// time currentProgress reaches either neighboring index.
+export function computeItemProgress(currentProgress, i) {
+  return Math.min(Math.max(1 - Math.abs(currentProgress - i), 0), 1);
 }
 
 // Each item's scale() shrinks it symmetrically around its own center, which
 // pulls both of its edges inward by scaleDiff/2 and would otherwise widen the
 // visual gap to every neighbor further out. To keep every adjacent gap equal
-// to the layout's natural gap, translate each item toward scrollCenter by the
-// accumulated scale-loss of every item between it and scrollCenter.
+// to the layout's natural gap, translate each item toward the current item by
+// the accumulated scale-loss of every item between it and the current item.
 //
 // The split between the two accumulation directions must be the continuous
-// itemCenter-vs-scrollCenter comparison (not "which item is currently
-// closest"): scrollCenter crosses an item's own center exactly when that
-// item's scaleDiff is 0 (progress === 1 there), so anchoring on it keeps the
-// running sums continuous. Anchoring on the closest-item index instead would
-// flip at the midpoint between two items, where scaleDiff is generally
-// nonzero on both sides, producing a visible jump.
-export function computeTranslations(centers, lengths, scales, scrollCenter) {
+// currentProgress (not the discrete currentIndex): currentProgress crosses
+// an item's own index exactly when that item's itemProgress is 1 (scaleDiff
+// is 0 there), so anchoring on it keeps the running sums continuous.
+// Anchoring on currentIndex instead would flip at the midpoint between two
+// items, where scaleDiff is generally nonzero on both sides, producing a
+// visible jump.
+export function computeTranslations(centers, lengths, scales, currentProgress) {
   const n = centers.length;
   const translations = new Array(n).fill(0);
   const scaleDiff = (i) => lengths[i] * (1 - scales[i]);
 
   let acc = 0;
   for (let i = n - 1; i >= 0; i--) {
-    if (centers[i] < scrollCenter) {
+    if (i < currentProgress) {
       acc += scaleDiff(i);
       translations[i] = acc - scaleDiff(i) / 2;
     }
@@ -100,7 +98,7 @@ export function computeTranslations(centers, lengths, scales, scrollCenter) {
 
   acc = 0;
   for (let i = 0; i < n; i++) {
-    if (centers[i] > scrollCenter) {
+    if (i > currentProgress) {
       acc += scaleDiff(i);
       translations[i] = -(acc - scaleDiff(i) / 2);
     }
