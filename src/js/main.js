@@ -379,6 +379,31 @@ document.addEventListener("DOMContentLoaded", function () {
     fn(wrapper, scrollDistance, offsetLength, offsetFromStart, scrollAxis);
   }
 
+  // Right after animation-range is (re)set, the browser hasn't yet
+  // evaluated the scroll-driven animation against it - it paints correctly,
+  // but a same-tick getComputedStyle(item).scale read (used by
+  // adjustStylesBasedOnProgress's gap compensation, see getLiveScale) still
+  // reflects the pre-update state until the next frame. Deferring the very
+  // first post-range-change effect application by a frame avoids reading
+  // that stale value.
+  function applyScrollEffectNextFrame(
+    wrapper,
+    scrollDistance,
+    offsetLength,
+    offsetFromStart,
+    scrollAxis
+  ) {
+    requestAnimationFrame(() =>
+      applyScrollEffect(
+        wrapper,
+        scrollDistance,
+        offsetLength,
+        offsetFromStart,
+        scrollAxis
+      )
+    );
+  }
+
   // Re-point a wrapper at a new alignment: keeps whichever item is currently
   // "focused" under the cursor of the new alignment (no smooth scroll, so it
   // doesn't fight the user's next scroll gesture), then resizes the spacers
@@ -418,13 +443,8 @@ document.addEventListener("DOMContentLoaded", function () {
       behavior: "instant"
     });
 
-    applyScrollEffect(
-      wrapper,
-      scrollDistance,
-      offsetLength,
-      offsetFromStart,
-      scrollAxis
-    );
+    const apply = isLegacyJS(wrapper) ? applyScrollEffect : applyScrollEffectNextFrame;
+    apply(wrapper, scrollDistance, offsetLength, offsetFromStart, scrollAxis);
   } // End setAlignment function
 
   function setupCarousel(wrapper) {
@@ -460,13 +480,8 @@ document.addEventListener("DOMContentLoaded", function () {
       updateAnimationRanges(wrapper, scrollDistance, offsetLength, offsetFromStart);
     }
 
-    applyScrollEffect(
-      wrapper,
-      scrollDistance,
-      offsetLength,
-      offsetFromStart,
-      scrollAxis
-    );
+    const initialApply = isLegacyJS(wrapper) ? applyScrollEffect : applyScrollEffectNextFrame;
+    initialApply(wrapper, scrollDistance, offsetLength, offsetFromStart, scrollAxis);
 
     wrapper.addEventListener("scroll", () =>
       applyScrollEffect(
