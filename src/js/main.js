@@ -75,10 +75,10 @@ document.addEventListener("DOMContentLoaded", function () {
     );
   }
 
-  function getUnfocusedScale(wrapper) {
+  function getNoncurrentScale(wrapper) {
     return (
       parseFloat(
-        getComputedStyle(wrapper).getPropertyValue("--unfocused-scale")
+        getComputedStyle(wrapper).getPropertyValue("--noncurrent-scale")
       ) || 1
     );
   }
@@ -257,7 +257,7 @@ document.addEventListener("DOMContentLoaded", function () {
   } // End updatePageIndicator function
 
   // Re-point a wrapper at a new alignment: keeps whichever item is currently
-  // "focused" under the cursor of the new alignment (no smooth scroll, so it
+  // "current" under the cursor of the new alignment (no smooth scroll, so it
   // doesn't fight the user's next scroll gesture), then resizes the spacers
   // and redraws to match.
   function setAlignment(config, alignment) {
@@ -332,7 +332,7 @@ document.addEventListener("DOMContentLoaded", function () {
       scrollAxis,
       getAlignmentFraction,
       getScrollPadding,
-      getUnfocusedScale,
+      getNoncurrentScale,
       updatePageIndicator
     };
 

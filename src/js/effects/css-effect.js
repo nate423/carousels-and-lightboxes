@@ -27,9 +27,9 @@ import {
 // treatment (see computeTranslationBreakpoints in carousel-math.js for why
 // it's exactly representable this way too), just off a second, wrapper-level
 // scroll-timeline instead of the per-item view-timeline - see main.css.
-let nextFocusId = 0;
-const focusKeyframeRules = new Map();
-let focusKeyframeStyleEl = null;
+let nextItemId = 0;
+const currentKeyframeRules = new Map();
+let currentKeyframeStyleEl = null;
 const translateKeyframeRules = new Map();
 let translateKeyframeStyleEl = null;
 // The scroll-timeline polyfill (Safari) doesn't support animation-timeline
@@ -51,18 +51,18 @@ let positionStyleEl = null;
 // instead of n times (was O(n^2) - the likely cause of the jank/freezing
 // seen resizing the window, since resize has no debounce and calls setup()
 // on every native 'resize' event).
-function setItemKeyframes(item, peakX, range, translateStops, scrollAxis) {
-  const focusName = `item-focus-${item.dataset.focusId}`;
-  focusKeyframeRules.set(
-    focusName,
-    `@keyframes ${focusName} {
-      0% { scale: var(--unfocused-scale); opacity: var(--unfocused-opacity); }
+function setItemCurrentKeyframes(item, peakX, range, translateStops, scrollAxis) {
+  const currentName = `item-current-${item.dataset.itemId}`;
+  currentKeyframeRules.set(
+    currentName,
+    `@keyframes ${currentName} {
+      0% { scale: var(--noncurrent-scale); opacity: var(--noncurrent-opacity); }
       ${peakX * 100}% { scale: 1; opacity: 1; }
-      100% { scale: var(--unfocused-scale); opacity: var(--unfocused-opacity); }
+      100% { scale: var(--noncurrent-scale); opacity: var(--noncurrent-opacity); }
     }`
   );
 
-  const translateName = `item-translate-${item.dataset.focusId}`;
+  const translateName = `item-translate-${item.dataset.itemId}`;
   const stops = translateStops
     .map(({ percent, value }) => {
       const translateValue = scrollAxis === "x" ? `${value}px 0` : `0 ${value}px`;
@@ -71,7 +71,7 @@ function setItemKeyframes(item, peakX, range, translateStops, scrollAxis) {
     .join("\n      ");
   translateKeyframeRules.set(translateName, `@keyframes ${translateName} {\n      ${stops}\n    }`);
 
-  const animationName = `${focusName}, ${translateName}`;
+  const animationName = `${currentName}, ${translateName}`;
   const animationTimeline = "--item-reveal, --carousel-scroll";
   const animationRange = `cover ${range.start * 100}% cover ${range.end * 100}%, 0% 100%`;
 
@@ -80,8 +80,8 @@ function setItemKeyframes(item, peakX, range, translateStops, scrollAxis) {
   item.style.animationRange = animationRange;
 
   positionRules.set(
-    item.dataset.focusId,
-    `.carousel-item[data-focus-id="${item.dataset.focusId}"] {
+    item.dataset.itemId,
+    `.carousel-item[data-item-id="${item.dataset.itemId}"] {
       animation-name: ${animationName};
       animation-timeline: ${animationTimeline};
       animation-range: ${animationRange};
@@ -105,7 +105,7 @@ function replaceStyleEl(prevEl, cssText) {
 }
 
 function flushKeyframeStyles() {
-  focusKeyframeStyleEl = replaceStyleEl(focusKeyframeStyleEl, [...focusKeyframeRules.values()].join("\n"));
+  currentKeyframeStyleEl = replaceStyleEl(currentKeyframeStyleEl, [...currentKeyframeRules.values()].join("\n"));
   translateKeyframeStyleEl = replaceStyleEl(
     translateKeyframeStyleEl,
     [...translateKeyframeRules.values()].join("\n")
@@ -114,7 +114,7 @@ function flushKeyframeStyles() {
 }
 
 function onItemCreated(item) {
-  item.dataset.focusId = String(nextFocusId++);
+  item.dataset.itemId = String(nextItemId++);
 }
 
 // Sets each item's `animation-range` from its own geometry, sized to the
@@ -123,7 +123,7 @@ function onItemCreated(item) {
 // whenever neighboring items differ in size, which they always do here).
 // That asymmetry means the item's own peak (where it's genuinely
 // "current") generally doesn't sit at the range's arithmetic midpoint, so
-// each item gets its own @keyframes rule (see setItemFocusKeyframes) with
+// each item gets its own @keyframes rule (see setItemCurrentKeyframes) with
 // the "scale: 1" stop placed at peakX instead of a fixed 50%, keeping the
 // peak exactly at this item's real anchor crossing. Pure layout math -
 // only needs recomputing when geometry or alignment changes, not on
@@ -134,7 +134,7 @@ function onItemCreated(item) {
 // even the plain default `cover 0%`/`100%` - Chromium holds it clamped at
 // the boundary's keyframe value for several more pixels of real scroll
 // before it starts interpolating, even though the declared range and
-// computeItemFocus's prediction are both already correct at that point.
+// computeTranslationBreakpoints' prediction are both already correct at that point.
 // Confirmed at the painted-layout level (getBoundingClientRect, not just
 // getComputedStyle) and reproduces identically with no custom range at
 // all, so it's inherent to the browser's view-timeline boundary-crossing
@@ -152,7 +152,7 @@ function setup(ctx) {
     scrollAxis,
     getAlignmentFraction,
     getScrollPadding,
-    getUnfocusedScale
+    getNoncurrentScale
   } = ctx;
   const items = wrapper.querySelectorAll(".carousel-item");
   const alignment = getAlignmentFraction(wrapper);
@@ -183,10 +183,7 @@ function setup(ctx) {
   const breakpoints = computeTranslationBreakpoints(
     anchors,
     lengths,
-    wrapper[offsetLength],
-    alignment,
-    scrollPadding,
-    getUnfocusedScale(wrapper),
+    getNoncurrentScale(wrapper),
     wrapperAnchorPoint,
     wrapperAnchorPoint + Math.max(maxScroll, 0)
   );
@@ -196,7 +193,7 @@ function setup(ctx) {
       percent: percentFor(bp.scrollAnchor),
       value: bp.translations[i]
     }));
-    setItemKeyframes(item, ranges[i].peakX, ranges[i], translateStops, scrollAxis);
+    setItemCurrentKeyframes(item, ranges[i].peakX, ranges[i], translateStops, scrollAxis);
   });
   flushKeyframeStyles();
 } // End setup function

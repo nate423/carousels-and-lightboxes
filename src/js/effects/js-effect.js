@@ -10,9 +10,9 @@ import {
   transition
 } from "../carousel-math.js";
 
-const UNFOCUSED_SCALE = 0.8;
-const UNFOCUSED_OPACITY = 0.5;
-const UNFOCUSED_BLUR = 0;
+const NONCURRENT_SCALE = 0.8;
+const NONCURRENT_OPACITY = 0.5;
+const NONCURRENT_BLUR = 0;
 
 // No per-item id needed - there's no CSS @keyframes rule to target.
 function onItemCreated() {}
@@ -52,9 +52,9 @@ function apply(ctx) {
 
   items.forEach((_, i) => {
     const itemProgress = computeItemProgress(currentProgress, i);
-    scales.push(transition(itemProgress, UNFOCUSED_SCALE, 1));
-    opacities.push(transition(itemProgress, UNFOCUSED_OPACITY, 1));
-    blurs.push(transition(itemProgress, UNFOCUSED_BLUR, 0));
+    scales.push(transition(itemProgress, NONCURRENT_SCALE, 1));
+    opacities.push(transition(itemProgress, NONCURRENT_OPACITY, 1));
+    blurs.push(transition(itemProgress, NONCURRENT_BLUR, 0));
   });
 
   const translations = computeTranslations(anchors, lengths, scales, currentProgress);
