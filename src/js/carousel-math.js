@@ -45,7 +45,7 @@ export function transition(p, start, end) {
 // At alignment 0.5 the two insets cancel out (inset - 2*inset*0.5 = 0), so
 // scrollPadding is a no-op for center alignment and doesn't need to be
 // special-cased anywhere that calls this.
-function wrapperAnchor(wrapperLength, alignment, scrollPadding) {
+export function wrapperAnchor(wrapperLength, alignment, scrollPadding) {
   return (
     scrollPadding + alignment * (wrapperLength - 2 * scrollPadding)
   );
@@ -269,4 +269,56 @@ export function computeTranslations(anchors, lengths, scales, currentProgress) {
   }
 
   return translations;
+}
+
+// Precomputes the exact breakpoints needed to reconstruct computeTranslations'
+// output as a native CSS @keyframes curve (one per item, driven by a
+// scroll-timeline spanning the wrapper's whole scrollable range - see
+// css-effect.js). As a function of raw scroll offset, every item's
+// translation is piecewise-linear: computeItemFocus's per-item window is
+// built (via computeAnimationRanges) to reach exactly 0 right as scrollAnchor
+// crosses a neighboring anchor, so each item's scaleDiff only bends at its
+// own neighbors' anchors - meaning the anchors themselves are the only
+// interior points where any item's translation can change slope. The two
+// ends of the *reachable* scroll range (minScrollAnchor/maxScrollAnchor -
+// the scrollAnchor at raw scroll offset 0 and at maxScroll, i.e. exactly
+// where the leading/trailing spacer bottoms/tops out) close off the curve;
+// note these are generally NOT the same as the first/last item's own
+// off-screen cover-range fallback used by computeAnimationRanges, which
+// covers space the carousel can never actually be scrolled to - reusing
+// that fallback here would place a spurious breakpoint the scroll-timeline
+// can never reach, past minScrollAnchor/maxScrollAnchor, colliding with the
+// real boundary once both clamp to the same 0%/100% keyframe stop. That's
+// `n + 2` breakpoints total, shared by every item - exact, not a sampled
+// approximation.
+export function computeTranslationBreakpoints(
+  anchors,
+  lengths,
+  wrapperLength,
+  alignment,
+  scrollPadding,
+  unfocusedScale,
+  minScrollAnchor,
+  maxScrollAnchor
+) {
+  const n = anchors.length;
+  if (n === 0) return [];
+
+  const breakpointAnchors = [minScrollAnchor, ...anchors, maxScrollAnchor].sort((a, b) => a - b);
+
+  return breakpointAnchors.map((scrollAnchor) => {
+    const focus = computeItemFocus(
+      anchors,
+      lengths,
+      wrapperLength,
+      alignment,
+      scrollPadding,
+      scrollAnchor
+    );
+    const scales = focus.map((f) => transition(f, unfocusedScale, 1));
+    const currentProgress = computeCurrentProgress(anchors, scrollAnchor);
+    const translations = computeTranslations(anchors, lengths, scales, currentProgress);
+
+    return { scrollAnchor, translations };
+  });
 }

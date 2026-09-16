@@ -148,6 +148,23 @@ body {
   view-timeline-axis: block;
 }
 
+/* Second, wrapper-level named timeline (distinct from the per-item
+   --item-reveal view-timeline above) tracking raw scroll offset across the
+   whole scrollable range - drives the gap-compensating translate, which
+   (unlike scale/opacity) needs global state a per-item view-timeline can't
+   see. Items reference it directly since they're descendants of the wrapper
+   - see setItemFocusKeyframes in css-effect.js for the generated per-item
+   @keyframes and computeTranslationBreakpoints in carousel-math.js for why
+   this is exactly reconstructable rather than sampled. */
+.carousel-wrapper:not([data-effect="js"]) {
+  scroll-timeline-name: --carousel-scroll;
+  scroll-timeline-axis: inline;
+}
+
+.carousel-wrapper[data-scroll-axis="y"]:not([data-effect="js"]) {
+  scroll-timeline-axis: block;
+}
+
 @keyframes item-focus {
   0% {
     scale: var(--unfocused-scale);

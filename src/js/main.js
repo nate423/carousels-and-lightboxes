@@ -11,6 +11,43 @@ import { jsEffect } from "./effects/js-effect.js";
 
 const DEFAULT_ALIGNMENT = "center";
 
+// Native `resize` fires on close to every frame during a live window drag,
+// not just once it settles. Without this, a several-second drag queues up
+// dozens of full per-item geometry-read + @keyframes-rebuild passes (per
+// carousel on the page) that are still draining in the frames right after
+// the drag ends - exactly when a user tends to start scrolling - producing
+// jank that has nothing to do with scroll itself. Debouncing collapses that
+// flood down to one recompute after resizing actually stops.
+function debounce(fn, delayMs) {
+  let timeoutId;
+  return (...args) => {
+    clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => fn(...args), delayMs);
+  };
+}
+
+// Native `scroll` can fire more than once per animation frame (trackpads in
+// particular). effect.apply() reads item.offsetLeft/offsetWidth
+// (getItemMetrics) and then writes a page-dot class at the end
+// (updatePageIndicator) - fine within one call, but if a second 'scroll'
+// event lands before the browser's next natural layout pass, its read runs
+// right after the previous call's write, forcing a synchronous layout
+// recalc instead of a cheap cached read (confirmed via DevTools Performance
+// - "Forced reflow" insight). Collapsing same-frame scroll events down to
+// one rAF-scheduled apply() call guarantees the read always happens after
+// the browser's own layout pass, not interleaved with our own write.
+function rafThrottle(fn) {
+  let scheduled = false;
+  return (...args) => {
+    if (scheduled) return;
+    scheduled = true;
+    requestAnimationFrame(() => {
+      scheduled = false;
+      fn(...args);
+    });
+  };
+}
+
 // Which variant a wrapper uses is just a data attribute - each effect
 // module implements the same { onItemCreated, setup, apply } shape, so
 // everything below is variant-agnostic and works with either, or both at
@@ -278,6 +315,11 @@ document.addEventListener("DOMContentLoaded", function () {
     // e.g. item[offsetFromStart] = calculated distance an item is from its offset parent,
     // i.e. `left` in x scroll, `top` in y scroll
 
+    const scrollSize = scrollAxis === "x" ? "scrollWidth" : "scrollHeight";
+    // e.g. wrapper[scrollSize] = total scrollable content length, used (with
+    // offsetLength) to normalize raw scroll offset into the 0%-100% range a
+    // native scroll-timeline reports - see css-effect.js.
+
     // Bundles everything an effect module needs to read geometry and write
     // styles/page-dots for this one wrapper, so main.js and the effect
     // modules don't have to keep passing the same handful of args around.
@@ -286,6 +328,7 @@ document.addEventListener("DOMContentLoaded", function () {
       scrollDistance,
       offsetLength,
       offsetFromStart,
+      scrollSize,
       scrollAxis,
       getAlignmentFraction,
       getScrollPadding,
@@ -306,12 +349,18 @@ document.addEventListener("DOMContentLoaded", function () {
     effect.setup(ctx);
     effect.apply(ctx);
 
-    wrapper.addEventListener("scroll", () => effect.apply(ctx));
+    wrapper.addEventListener(
+      "scroll",
+      rafThrottle(() => effect.apply(ctx))
+    );
 
-    window.addEventListener("resize", () => {
-      updateSpacers(wrapper, spacers, offsetLength, scrollAxis);
-      effect.setup(ctx);
-    });
+    window.addEventListener(
+      "resize",
+      debounce(() => {
+        updateSpacers(wrapper, spacers, offsetLength, scrollAxis);
+        effect.setup(ctx);
+      }, 150)
+    );
     //
     return {
       wrapper,

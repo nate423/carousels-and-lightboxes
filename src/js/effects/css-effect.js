@@ -1,16 +1,17 @@
-// CSS-driven variant: scale/opacity come from a native scroll-driven
-// animation (`animation-range` + per-item @keyframes) on .carousel-item.
-// This module only precomputes that animation geometry (setup) and, on
-// scroll, the gap-compensating translate + current index that the CSS
-// animation itself can't derive (apply) - see carousel-math.js for why.
+// CSS-driven variant: scale/opacity/translate all come from native
+// scroll-driven animations (`animation-range` + per-item @keyframes) on
+// .carousel-item - scale/opacity off the per-item --item-reveal
+// view-timeline, translate off the wrapper-level --carousel-scroll
+// scroll-timeline (see main.css). This module only precomputes that
+// animation geometry (setup); apply() just derives the current index for
+// the page dots, which is the one thing no timeline can hand back to JS.
 import {
   getItemMetrics,
   computeCurrentProgress,
   computeCurrentIndex,
-  computeItemFocus,
-  computeTranslations,
   computeAnimationRanges,
-  transition
+  computeTranslationBreakpoints,
+  wrapperAnchor
 } from "../carousel-math.js";
 
 // `animation-timing-function` (including the linear() control-point syntax)
@@ -22,27 +23,59 @@ import {
 // "scale: 1" stop declared at that exact percentage. Every item needs a
 // distinct, stable id for this (assigned in onItemCreated) and a shared
 // stylesheet holding one generated rule per item, rebuilt whenever setup()
-// recomputes geometry.
+// recomputes geometry. The gap-compensating translate gets the same
+// treatment (see computeTranslationBreakpoints in carousel-math.js for why
+// it's exactly representable this way too), just off a second, wrapper-level
+// scroll-timeline instead of the per-item view-timeline - see main.css.
 let nextFocusId = 0;
 const focusKeyframeRules = new Map();
 let focusKeyframeStyleEl = null;
+const translateKeyframeRules = new Map();
+let translateKeyframeStyleEl = null;
 
-function setItemFocusKeyframes(item, peakX) {
-  if (!focusKeyframeStyleEl) {
-    focusKeyframeStyleEl = document.createElement("style");
-    document.head.appendChild(focusKeyframeStyleEl);
-  }
-  const name = `item-focus-${item.dataset.focusId}`;
+// Only builds the rule text and points the item at it - doesn't touch the
+// shared stylesheets' textContent. Setting textContent is a full
+// reparse/recalc of every rule in it, so setup() batches all n items' rules
+// and writes each stylesheet exactly once after its items.forEach loop
+// instead of n times (was O(n^2) - the likely cause of the jank/freezing
+// seen resizing the window, since resize has no debounce and calls setup()
+// on every native 'resize' event).
+function setItemKeyframes(item, peakX, range, translateStops, scrollAxis) {
+  const focusName = `item-focus-${item.dataset.focusId}`;
   focusKeyframeRules.set(
-    name,
-    `@keyframes ${name} {
+    focusName,
+    `@keyframes ${focusName} {
       0% { scale: var(--unfocused-scale); opacity: var(--unfocused-opacity); }
       ${peakX * 100}% { scale: 1; opacity: 1; }
       100% { scale: var(--unfocused-scale); opacity: var(--unfocused-opacity); }
     }`
   );
+
+  const translateName = `item-translate-${item.dataset.focusId}`;
+  const stops = translateStops
+    .map(({ percent, value }) => {
+      const translateValue = scrollAxis === "x" ? `${value}px 0` : `0 ${value}px`;
+      return `${percent}% { translate: ${translateValue}; }`;
+    })
+    .join("\n      ");
+  translateKeyframeRules.set(translateName, `@keyframes ${translateName} {\n      ${stops}\n    }`);
+
+  item.style.animationName = `${focusName}, ${translateName}`;
+  item.style.animationTimeline = "--item-reveal, --carousel-scroll";
+  item.style.animationRange = `cover ${range.start * 100}% cover ${range.end * 100}%, 0% 100%`;
+}
+
+function flushKeyframeStyles() {
+  if (!focusKeyframeStyleEl) {
+    focusKeyframeStyleEl = document.createElement("style");
+    document.head.appendChild(focusKeyframeStyleEl);
+  }
+  if (!translateKeyframeStyleEl) {
+    translateKeyframeStyleEl = document.createElement("style");
+    document.head.appendChild(translateKeyframeStyleEl);
+  }
   focusKeyframeStyleEl.textContent = [...focusKeyframeRules.values()].join("\n");
-  item.style.animationName = name;
+  translateKeyframeStyleEl.textContent = [...translateKeyframeRules.values()].join("\n");
 }
 
 function onItemCreated(item) {
@@ -78,55 +111,69 @@ function setup(ctx) {
   const {
     wrapper,
     scrollDistance,
+    scrollSize,
     offsetLength,
     offsetFromStart,
+    scrollAxis,
     getAlignmentFraction,
-    getScrollPadding
+    getScrollPadding,
+    getUnfocusedScale
   } = ctx;
   const items = wrapper.querySelectorAll(".carousel-item");
+  const alignment = getAlignmentFraction(wrapper);
+  const scrollPadding = getScrollPadding(wrapper);
   const { anchors, lengths } = getItemMetrics(
     wrapper,
     items,
     offsetFromStart,
     offsetLength,
     scrollDistance,
-    getAlignmentFraction(wrapper),
-    getScrollPadding(wrapper)
+    alignment,
+    scrollPadding
   );
-  const ranges = computeAnimationRanges(
+  const ranges = computeAnimationRanges(anchors, lengths, wrapper[offsetLength], alignment, scrollPadding);
+
+  // Native scroll-timeline progress is 0%/100% at raw scroll offset
+  // 0/maxScroll, not at wrapperAnchorPoint - scrollAnchor = scrollOffset +
+  // wrapperAnchorPoint (see getItemMetrics), so the reachable scrollAnchor
+  // range is [wrapperAnchorPoint, wrapperAnchorPoint + maxScroll]. These are
+  // the true breakpoint boundaries (see computeTranslationBreakpoints).
+  const wrapperAnchorPoint = wrapperAnchor(wrapper[offsetLength], alignment, scrollPadding);
+  const maxScroll = wrapper[scrollSize] - wrapper[offsetLength];
+  const percentFor = (scrollAnchor) =>
+    maxScroll <= 0
+      ? 0
+      : Math.min(Math.max(((scrollAnchor - wrapperAnchorPoint) / maxScroll) * 100, 0), 100);
+
+  const breakpoints = computeTranslationBreakpoints(
     anchors,
     lengths,
     wrapper[offsetLength],
-    getAlignmentFraction(wrapper),
-    getScrollPadding(wrapper)
+    alignment,
+    scrollPadding,
+    getUnfocusedScale(wrapper),
+    wrapperAnchorPoint,
+    wrapperAnchorPoint + Math.max(maxScroll, 0)
   );
 
   items.forEach((item, i) => {
-    const { start, end, peakX } = ranges[i];
-    item.style.animationRange = `cover ${start * 100}% cover ${end * 100}%`;
-    setItemFocusKeyframes(item, peakX);
+    const translateStops = breakpoints.map((bp) => ({
+      percent: percentFor(bp.scrollAnchor),
+      value: bp.translations[i]
+    }));
+    setItemKeyframes(item, ranges[i].peakX, ranges[i], translateStops, scrollAxis);
   });
+  flushKeyframeStyles();
 } // End setup function
 
-// Scale/opacity are driven entirely by the CSS scroll-driven animation on
-// .carousel-item; this only computes the gap-compensating translate
-// (computeTranslations needs global state - every item's scale-loss
-// relative to the current item - which a per-item view-timeline can't
-// see) and the discrete current index for the page dots.
+// Scale/opacity/translate are all driven entirely by the CSS scroll-driven
+// animations on .carousel-item; this only computes the discrete current
+// index for the page dots, since no timeline hands that back to JS.
 function apply(ctx) {
-  const {
-    wrapper,
-    scrollDistance,
-    offsetLength,
-    offsetFromStart,
-    scrollAxis,
-    getAlignmentFraction,
-    getScrollPadding,
-    getUnfocusedScale,
-    updatePageIndicator
-  } = ctx;
+  const { wrapper, scrollDistance, offsetLength, offsetFromStart, getAlignmentFraction, getScrollPadding, updatePageIndicator } =
+    ctx;
   const items = wrapper.querySelectorAll(".carousel-item");
-  const { anchors, lengths, scrollAnchor } = getItemMetrics(
+  const { anchors, scrollAnchor } = getItemMetrics(
     wrapper,
     items,
     offsetFromStart,
@@ -138,26 +185,6 @@ function apply(ctx) {
 
   const currentProgress = computeCurrentProgress(anchors, scrollAnchor);
   const currentIndex = computeCurrentIndex(currentProgress, items.length);
-
-  const focus = computeItemFocus(
-    anchors,
-    lengths,
-    wrapper[offsetLength],
-    getAlignmentFraction(wrapper),
-    getScrollPadding(wrapper),
-    scrollAnchor
-  );
-  const unfocusedScale = getUnfocusedScale(wrapper);
-  const scales = focus.map((f) => transition(f, unfocusedScale, 1));
-
-  const translations = computeTranslations(anchors, lengths, scales, currentProgress);
-
-  items.forEach((item, i) => {
-    item.style.translate =
-      scrollAxis === "x"
-        ? `${translations[i]}px 0` // X-axis translation
-        : `0 ${translations[i]}px`; // Y-axis translation
-  });
 
   updatePageIndicator(wrapper, currentIndex);
 } // End apply function
