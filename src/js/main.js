@@ -1,3 +1,13 @@
+import {
+  getItemMetrics,
+  findCenteredIndex,
+  computeProgress,
+  interpolateOpacity,
+  interpolateBlur,
+  interpolateScale,
+  computeTranslations
+} from "./carousel-math.js";
+
 document.addEventListener("DOMContentLoaded", function () {
   function addSpacersToWrapper(wrapper) {
     const firstSpacer = document.createElement("div");
@@ -16,19 +26,6 @@ document.addEventListener("DOMContentLoaded", function () {
     let content = `Item ${i} (${itemWidth} × ${itemHeight})`;
     item.innerHTML = content;
   } // End setItemTextContent function
-
-  function interpolateOpacity(progress) {
-    return 0.5 + progress * 0.5;
-  }
-
-  function interpolateBlur(progress) {
-    return (1 - progress) * 0 + "px";
-  }
-
-  function interpolateScale(progress) {
-    return 0.8 + progress * 0.2;
-    // return 1;
-  }
 
   function updateSpacers(wrapper, spacers, offsetLength, scrollAxis) {
     const firstSpacer = spacers[0];
@@ -90,59 +87,6 @@ document.addEventListener("DOMContentLoaded", function () {
       pageControls.appendChild(dot);
     });
   } // End setupPageIndicators function
-
-  function calculateProgress(
-    wrapper,
-    scrollCenter,
-    offsetFromStart,
-    offsetLength,
-    items,
-    item,
-    i
-  ) {
-    const itemOffsetFromWrapperStart =
-      item[offsetFromStart] - wrapper[offsetFromStart];
-    const itemCenter = itemOffsetFromWrapperStart + item[offsetLength] / 2;
-    const distanceFromCenter = Math.abs(scrollCenter - itemCenter);
-
-    let nextItemCenterDistance = 0;
-    if (i < items.length - 1) {
-      const nextItem = items[i + 1];
-      const nextItemOffsetFromWrapperStart =
-        nextItem[offsetFromStart] - wrapper[offsetFromStart];
-      const nextItemCenter =
-        nextItemOffsetFromWrapperStart + nextItem[offsetLength] / 2;
-      nextItemCenterDistance = Math.abs(itemCenter - nextItemCenter);
-    }
-
-    let prevItemCenterDistance = 0;
-    if (i > 0) {
-      const prevItem = items[i - 1];
-      const prevItemOffsetFromWrapperStart =
-        prevItem[offsetFromStart] - wrapper[offsetFromStart];
-      const prevItemCenter =
-        prevItemOffsetFromWrapperStart + prevItem[offsetLength] / 2;
-      prevItemCenterDistance = Math.abs(itemCenter - prevItemCenter);
-    }
-
-    let transitionDistance;
-    if (i === 0) {
-      transitionDistance = nextItemCenterDistance;
-      // First item overshoot mirrors next item distance
-    } else if (i === items.length - 1) {
-      transitionDistance = prevItemCenterDistance;
-      // Last item overshoot mirrors prev item distance
-    } else {
-      transitionDistance =
-        scrollCenter > itemCenter
-          ? nextItemCenterDistance
-          : prevItemCenterDistance;
-      // Other items use the direction-specific distance
-    }
-
-    return 1 - Math.min(distanceFromCenter / transitionDistance, 1);
-    //
-  } // End calculateProgress function
 
   function populateCarousel(
     wrapper,
@@ -224,102 +168,47 @@ document.addEventListener("DOMContentLoaded", function () {
     offsetFromStart,
     scrollAxis
   ) {
-    const scrollCenter = wrapper[scrollDistance] + wrapper[offsetLength] / 2;
     const items = wrapper.querySelectorAll(".carousel-item");
+    const { centers, lengths, scrollCenter } = getItemMetrics(
+      wrapper,
+      items,
+      offsetFromStart,
+      offsetLength,
+      scrollDistance
+    );
 
-    let centeredItemIndex = null;
-    let smallestDistanceFromCenter = Infinity;
+    const centeredIndex = findCenteredIndex(centers, scrollCenter);
 
-    // forEach - Set smallestDistanceFromCenter and centeredItemIndex
-    items.forEach((item, i) => {
-      const itemOffsetFromWrapperStart =
-        item[offsetFromStart] - wrapper[offsetFromStart];
-      const itemCenter = itemOffsetFromWrapperStart + item[offsetLength] / 2;
-      const distanceFromCenter = Math.abs(scrollCenter - itemCenter);
-      if (distanceFromCenter < smallestDistanceFromCenter) {
-        smallestDistanceFromCenter = distanceFromCenter;
-        centeredItemIndex = i;
-      }
+    const scales = [];
+    const opacities = [];
+    const blurs = [];
+
+    items.forEach((_, i) => {
+      const progress = computeProgress(centers, i, scrollCenter);
+      scales.push(interpolateScale(progress));
+      opacities.push(interpolateOpacity(progress));
+      blurs.push(interpolateBlur(progress));
     });
 
-    let accumulatedScaleDiffBefore = new Array(items.length).fill(0);
-    let accumulatedScaleDiffAfter = 0;
+    const translations = computeTranslations(
+      centers,
+      lengths,
+      scales,
+      scrollCenter
+    );
 
-    // forEach - Accumulate scale differences to maintain consistent gap
     items.forEach((item, i) => {
-      const progress = calculateProgress(
-        wrapper,
-        scrollCenter,
-        offsetFromStart,
-        offsetLength,
-        items,
-        item,
-        i
-      );
-
-      const itemOffsetFromWrapperStart =
-        item[offsetFromStart] - wrapper[offsetFromStart];
-      const itemCenter = itemOffsetFromWrapperStart + item[offsetLength] / 2;
-
-      const scale = interpolateScale(progress);
-      const itemScaledLength = item[offsetLength] * scale;
-      const scaleDiff = item[offsetLength] - itemScaledLength;
-
-      item.scaleDiff = scaleDiff;
-
-      if (itemCenter < scrollCenter) {
-        for (let j = 0; j <= i; j++) {
-          accumulatedScaleDiffBefore[j] += scaleDiff;
-        }
-      }
-    });
-
-    // forEach - Interpolate styles based on progress
-    items.forEach((item, i) => {
-      const progress = calculateProgress(
-        wrapper,
-        scrollCenter,
-        offsetFromStart,
-        offsetLength,
-        items,
-        item,
-        i
-      );
-      const itemOffsetFromWrapperStart =
-        item[offsetFromStart] - wrapper[offsetFromStart];
-      const itemCenter = itemOffsetFromWrapperStart + item[offsetLength] / 2;
-      const distanceFromCenter = Math.abs(scrollCenter - itemCenter);
-
-      const opacity = interpolateOpacity(progress);
-      const blur = interpolateBlur(progress);
-      const scale = interpolateScale(progress);
-
-      const itemScaledLength = item[offsetLength] * scale;
-      const scaleDiff = item[offsetLength] - itemScaledLength;
-      const itemToSelfEdge = scaleDiff / 2;
-
-      let translation = 0;
-
-      if (itemCenter < scrollCenter) {
-        translation = accumulatedScaleDiffBefore[i] - itemToSelfEdge;
-      } else if (itemCenter > scrollCenter) {
-        accumulatedScaleDiffAfter += scaleDiff;
-        translation = -accumulatedScaleDiffAfter + scaleDiff - itemToSelfEdge;
-      }
-
       const translationAttribute =
         scrollAxis === "x"
-          ? `translate3d(${translation}px, 0, 0)` // X-axis translation
-          : `translate3d(0, ${translation}px, 0)`; // Y-axis translation
+          ? `translate3d(${translations[i]}px, 0, 0)` // X-axis translation
+          : `translate3d(0, ${translations[i]}px, 0)`; // Y-axis translation
 
-      item.style.transform = `${translationAttribute} scale(${scale})`;
-      item.style.opacity = opacity;
-      item.style.filter = `blur(${blur})`;
-      //
-    }); // End forEach
+      item.style.transform = `${translationAttribute} scale(${scales[i]})`;
+      item.style.opacity = opacities[i];
+      item.style.filter = `blur(${blurs[i]})`;
+    });
 
-    updatePageIndicator(centeredItemIndex);
-    //
+    updatePageIndicator(centeredIndex);
   } // End adjustStylesBasedOnProgress function
 
   function setupCarousel(wrapper) {
