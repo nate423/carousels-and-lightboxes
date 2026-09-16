@@ -144,8 +144,24 @@ body {
   animation-timing-function: linear;
 }
 
+/* Redeclares view-timeline-name alongside the axis override rather than
+   relying on the cascade to layer just view-timeline-axis on top of the
+   rule above - the scroll-timeline polyfill's stylesheet parser reads each
+   rule's own declaration block as an isolated unit (see
+   saveSubjectSelectorToViewTimeline in vendor/scroll-timeline.js: it bails
+   out entirely unless that same rule's text contains view-timeline-name),
+   it doesn't resolve the real cascade the way a browser does. An
+   axis-only override rule is therefore invisible to it, so it kept
+   tracking every carousel's timeline on the inline axis regardless of
+   data-scroll-axis="y" - the vertical demo's items never got a non-zero
+   timeline progress since inline-axis (x) scroll never changes there. */
 .carousel-wrapper[data-scroll-axis="y"]:not([data-effect="js"]) .carousel-item {
+  view-timeline-name: --item-reveal;
   view-timeline-axis: block;
+  animation-name: item-focus;
+  animation-timeline: --item-reveal;
+  animation-fill-mode: both;
+  animation-timing-function: linear;
 }
 
 /* Second, wrapper-level named timeline (distinct from the per-item
@@ -161,7 +177,11 @@ body {
   scroll-timeline-axis: inline;
 }
 
+/* Same reasoning as the view-timeline-axis override above - the polyfill's
+   parser needs scroll-timeline-name in the same rule as the axis it's
+   overriding, or it never sees the override at all. */
 .carousel-wrapper[data-scroll-axis="y"]:not([data-effect="js"]) {
+  scroll-timeline-name: --carousel-scroll;
   scroll-timeline-axis: block;
 }
 
