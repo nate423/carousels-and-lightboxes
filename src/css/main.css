@@ -132,6 +132,16 @@ body {
      scale/opacity come from inline styles instead (see main.js). */
   scale: 1;
   opacity: 1;
+
+  /* Works around a WebKit bug (bugs.webkit.org #98538 and others):
+     overflow:hidden + border-radius on an element that's also being
+     transformed (here, animated `scale`) can lose sync between the clip
+     mask and the transform mid-scroll, so the item flashes fully
+     transparent instead of interpolating - worst right as it nears the
+     scrollport edge. isolation:isolate forces the item onto its own
+     stable stacking/compositing context, which keeps the clip and
+     transform composited together. */
+  isolation: isolate;
 }
 
 /* The scroll-driven animation is opted OUT of for the data-effect="js"
