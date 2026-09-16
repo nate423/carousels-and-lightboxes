@@ -8,6 +8,7 @@ import {
 } from "./carousel-math.js";
 import { cssEffect } from "./effects/css-effect.js";
 import { jsEffect } from "./effects/js-effect.js";
+import { originEffect } from "./effects/origin-effect.js";
 
 const DEFAULT_ALIGNMENT = "center";
 
@@ -42,7 +43,7 @@ function rafThrottle(fn) {
 // module implements the same { onItemCreated, setup, apply } shape, so
 // everything below is variant-agnostic and works with either, or both at
 // once (as in the side-by-side comparison demo).
-const EFFECTS = { css: cssEffect, js: jsEffect };
+const EFFECTS = { css: cssEffect, js: jsEffect, origin: originEffect };
 
 function getEffect(wrapper) {
   return EFFECTS[wrapper.dataset.effect] || cssEffect;
@@ -186,8 +187,9 @@ document.addEventListener("DOMContentLoaded", function () {
       // item.setAttribute("contenteditable", "true");
 
       if (wrapper.classList.contains("placeholder-boxes")) {
-        const itemWidth = randomDimension(50, 300); /* min <> max width */
-        const itemHeight = randomDimension(50, 300); /* min <> max height */
+        const uniform = wrapper.classList.contains("uniform-size");
+        const itemWidth = uniform ? "100px" : randomDimension(50, 300); /* min <> max width */
+        const itemHeight = uniform ? "100px" : randomDimension(50, 300); /* min <> max height */
         setItemTextContent(
           item,
           i,

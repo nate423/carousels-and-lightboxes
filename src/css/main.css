@@ -105,6 +105,13 @@ body {
   scroll-snap-type: y mandatory;
 }
 
+/* Demonstrates the origin effect's actual constraint: 0 gap never causes
+   overlap (see origin-effect.js) - the "minimum visual gap" it produces is
+   whatever an item's own scale-loss adds on top of this. */
+.carousel-wrapper.uniform-size {
+  --wrapper-gap: 0px;
+}
+
 .carousel-item,
 .spacer {
   height: var(--carousel-item-height);
@@ -129,7 +136,11 @@ body {
 
 /* The scroll-driven animation is opted OUT of for the data-effect="js"
    comparison carousel, which computes scale/opacity itself on every scroll
-   event instead - see adjustStylesBasedOnProgressJS in main.js. */
+   event instead - see adjustStylesBasedOnProgressJS in main.js. Both
+   data-effect="css" and data-effect="origin" (origin-effect.js) share this
+   --item-reveal view-timeline scaffolding and override animation-name/-range
+   per item themselves; data-effect="origin" just never uses the
+   --carousel-scroll timeline declared below, since it needs no translate. */
 .carousel-wrapper:not([data-effect="js"]) .carousel-item {
   view-timeline-name: --item-reveal;
   view-timeline-axis: inline;
