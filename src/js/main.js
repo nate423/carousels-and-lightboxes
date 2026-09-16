@@ -7,12 +7,10 @@ import {
   computeCurrentProgress,
   computeCurrentIndex,
   computeItemProgress,
-  computeTranslations
+  computeTranslations,
+  computeAnimationRanges
 } from "./carousel-math.js";
 
-const UNFOCUSED_SCALE = 0.8;
-const UNFOCUSED_OPACITY = 0.5;
-const UNFOCUSED_BLUR = 0; // currently a no-op; raise above 0 to enable
 const DEFAULT_ALIGNMENT = "center";
 
 document.addEventListener("DOMContentLoaded", function () {
@@ -29,6 +27,18 @@ document.addEventListener("DOMContentLoaded", function () {
       parseFloat(
         getComputedStyle(wrapper).getPropertyValue("--carousel-scroll-padding")
       ) || 0
+    );
+  }
+
+  // The CSS scroll-driven animation on .carousel-item owns scale/opacity;
+  // this reads the same --unfocused-scale custom property so the JS-only
+  // gap-compensating translate (see computeTranslations) stays in sync with
+  // whatever scale the CSS animation is actually applying.
+  function getUnfocusedScale(wrapper) {
+    return (
+      parseFloat(
+        getComputedStyle(wrapper).getPropertyValue("--unfocused-scale")
+      ) || 1
     );
   }
 
@@ -208,6 +218,45 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   } // End updatePageIndicator function
 
+  // Sets each item's `animation-range` from its own geometry so the CSS
+  // scroll-driven animation's 50% keyframe lands exactly at this item's
+  // anchor point, per alignment/scroll-padding. Pure layout math - only
+  // needs recomputing when geometry or alignment changes, not on scroll.
+  function updateAnimationRanges(
+    wrapper,
+    scrollDistance,
+    offsetLength,
+    offsetFromStart
+  ) {
+    const items = wrapper.querySelectorAll(".carousel-item");
+    const { anchors, lengths } = getItemMetrics(
+      wrapper,
+      items,
+      offsetFromStart,
+      offsetLength,
+      scrollDistance,
+      getAlignmentFraction(wrapper),
+      getScrollPadding(wrapper)
+    );
+    const ranges = computeAnimationRanges(
+      anchors,
+      lengths,
+      wrapper[offsetLength],
+      getAlignmentFraction(wrapper),
+      getScrollPadding(wrapper)
+    );
+
+    items.forEach((item, i) => {
+      const { start, end } = ranges[i];
+      item.style.animationRange = `cover ${start * 100}% cover ${end * 100}%`;
+    });
+  } // End updateAnimationRanges function
+
+  // Scale/opacity are driven entirely by the CSS scroll-driven animation on
+  // .carousel-item now; this only computes the gap-compensating translate
+  // (computeTranslations needs global state - every item's scale-loss
+  // relative to the current item - which a per-item view-timeline can't
+  // see) and the discrete current index for the page dots.
   function adjustStylesBasedOnProgress(
     wrapper,
     scrollDistance,
@@ -228,16 +277,12 @@ document.addEventListener("DOMContentLoaded", function () {
 
     const currentProgress = computeCurrentProgress(anchors, scrollAnchor);
     const currentIndex = computeCurrentIndex(currentProgress, items.length);
+    const unfocusedScale = getUnfocusedScale(wrapper);
 
     const scales = [];
-    const opacities = [];
-    const blurs = [];
-
     items.forEach((_, i) => {
       const itemProgress = computeItemProgress(currentProgress, i);
-      scales.push(transition(itemProgress, UNFOCUSED_SCALE, 1));
-      opacities.push(transition(itemProgress, UNFOCUSED_OPACITY, 1));
-      blurs.push(transition(itemProgress, UNFOCUSED_BLUR, 0));
+      scales.push(transition(itemProgress, unfocusedScale, 1));
     });
 
     const translations = computeTranslations(
@@ -248,14 +293,10 @@ document.addEventListener("DOMContentLoaded", function () {
     );
 
     items.forEach((item, i) => {
-      const translationAttribute =
+      item.style.translate =
         scrollAxis === "x"
-          ? `translate3d(${translations[i]}px, 0, 0)` // X-axis translation
-          : `translate3d(0, ${translations[i]}px, 0)`; // Y-axis translation
-
-      item.style.transform = `${translationAttribute} scale(${scales[i]})`;
-      item.style.opacity = opacities[i];
-      item.style.filter = `blur(${blurs[i]}px)`;
+          ? `${translations[i]}px 0` // X-axis translation
+          : `0 ${translations[i]}px`; // Y-axis translation
     });
 
     updatePageIndicator(currentIndex);
@@ -283,6 +324,7 @@ document.addEventListener("DOMContentLoaded", function () {
     );
     wrapper.dataset.scrollAlignment = alignment;
     updateSpacers(wrapper, spacers, offsetLength, scrollAxis);
+    updateAnimationRanges(wrapper, scrollDistance, offsetLength, offsetFromStart);
 
     const scrollTarget = computeScrollTarget(
       wrapper,
@@ -335,6 +377,8 @@ document.addEventListener("DOMContentLoaded", function () {
       30
     );
 
+    updateAnimationRanges(wrapper, scrollDistance, offsetLength, offsetFromStart);
+
     adjustStylesBasedOnProgress(
       wrapper,
       scrollDistance,
@@ -353,9 +397,10 @@ document.addEventListener("DOMContentLoaded", function () {
       )
     );
 
-    window.addEventListener("resize", () =>
-      updateSpacers(wrapper, spacers, offsetLength, scrollAxis)
-    );
+    window.addEventListener("resize", () => {
+      updateSpacers(wrapper, spacers, offsetLength, scrollAxis);
+      updateAnimationRanges(wrapper, scrollDistance, offsetLength, offsetFromStart);
+    });
     //
     return {
       wrapper,

@@ -89,6 +89,9 @@ body {
      edge, fighting the --carousel-scroll-padding inset applied in JS. */
   scroll-padding: var(--carousel-scroll-padding);
   box-shadow: inset 0 0 0 1px rgb(255 0 0 / 0.3);
+
+  --unfocused-scale: 0.8;
+  --unfocused-opacity: 0.5;
 }
 
 .carousel-with-controls .carousel-wrapper::-webkit-scrollbar {
@@ -114,6 +117,43 @@ body {
   width: var(--carousel-item-width);
   overflow: hidden;
   border-radius: var(--item-border-radius);
+
+  /* Neutral fallback in case the timeline never resolves (e.g. the
+     polyfill script failed to load) - degrades to "no scroll effect"
+     rather than every item stuck permanently scaled down/faded. */
+  scale: 1;
+  opacity: 1;
+
+  view-timeline-name: --item-reveal;
+  view-timeline-axis: inline;
+
+  /* animation-range is computed and set per item in JS (updateAnimationRanges
+     in main.js), from the same anchor/alignment math as everything else in
+     carousel-math.js - keyword ranges (entry/exit/contain) don't track a
+     custom alignment anchor point across items of wildly different sizes. */
+  animation-name: item-focus;
+  animation-timeline: --item-reveal;
+  animation-fill-mode: both;
+  animation-timing-function: linear;
+}
+
+.carousel-wrapper[data-scroll-axis="y"] .carousel-item {
+  view-timeline-axis: block;
+}
+
+@keyframes item-focus {
+  0% {
+    scale: var(--unfocused-scale);
+    opacity: var(--unfocused-opacity);
+  }
+  50% {
+    scale: 1;
+    opacity: 1;
+  }
+  100% {
+    scale: var(--unfocused-scale);
+    opacity: var(--unfocused-opacity);
+  }
 }
 
 .carousel-item-snap-fix {
@@ -130,6 +170,7 @@ body {
 .carousel-wrapper[data-scroll-alignment="end"] .carousel-item-snap-fix {
   scroll-snap-align: end;
 }
+
 
 .carousel-with-controls {
   position: relative;

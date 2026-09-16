@@ -140,6 +140,44 @@ export function computeItemProgress(currentProgress, i) {
   return Math.min(Math.max(1 - Math.abs(currentProgress - i), 0), 1);
 }
 
+// Per-item `animation-range` (in native CSS `cover <percent>` units) for the
+// scroll-driven scale/opacity keyframe, computed so its 50% ("focused")
+// keyframe stop lands exactly where this item's own anchor point (see
+// getItemMetrics) crosses the wrapper's anchor point - i.e. exactly when the
+// old JS-only itemProgress math would have reported 1. Native `cover 0%`/
+// `100%` correspond respectively to "item's leading edge at the wrapper's
+// trailing edge" and "item's trailing edge at the wrapper's leading edge",
+// a span of (wrapperLength + itemLength) - from that geometry, an item at
+// on-screen leading-edge position `x` sits at cover-percent
+// `(wrapperLength - x) / (wrapperLength + itemLength)`. The falloff window
+// on each side is sized to the pixel gap to the neighboring anchor (falling
+// back to the item's own length at the carousel's edges, where there's no
+// neighbor), matching how the old itemProgress falloff reached 0 exactly
+// when currentProgress crossed a neighboring index.
+export function computeAnimationRanges(anchors, lengths, wrapperLength, alignment, scrollPadding) {
+  const n = anchors.length;
+  const wrapperAnchorPoint = wrapperAnchor(wrapperLength, alignment, scrollPadding);
+
+  return anchors.map((anchor, i) => {
+    const itemLength = lengths[i];
+    const span = wrapperLength + itemLength;
+    const focusedLeadingEdge = wrapperAnchorPoint - itemLength * alignment;
+    const peak = (wrapperLength - focusedLeadingEdge) / span;
+
+    const deltaPrev = i > 0 ? anchor - anchors[i - 1] : itemLength;
+    const deltaNext = i < n - 1 ? anchors[i + 1] - anchor : itemLength;
+
+    return {
+      start: clamp(peak - deltaPrev / span, 0, 1),
+      end: clamp(peak + deltaNext / span, 0, 1)
+    };
+  });
+}
+
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
+
 // Each item's scale() shrinks it symmetrically around its own center, which
 // pulls both of its edges inward by scaleDiff/2 and would otherwise widen the
 // visual gap to every neighbor further out. To keep every adjacent gap equal
