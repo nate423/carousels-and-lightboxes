@@ -154,6 +154,15 @@ body {
 .carousel-wrapper:not([data-effect="js"]) .carousel-item {
   view-timeline-name: --item-reveal;
   view-timeline-axis: inline;
+  /* view-timeline-inset defaults to "auto", which resolves to the
+     scroller's scroll-padding on each side - silently double-applying it
+     on top of the scrollPadding term computeAnimationRanges already bakes
+     into its own peak/range math (via wrapperAnchor), throwing every
+     "cover" percentage off by the scroll-padding amount whenever alignment
+     isn't center (where the two insets happen to cancel out, masking this
+     everywhere else). Pinning it to 0 leaves scrollPadding handled in
+     exactly one place. */
+  view-timeline-inset: 0px;
 
   /* animation-range is computed and set per item in JS (updateAnimationRanges
      in main.js), from the same anchor/alignment math as everything else in
@@ -179,6 +188,7 @@ body {
 .carousel-wrapper[data-scroll-axis="y"]:not([data-effect="js"]) .carousel-item {
   view-timeline-name: --item-reveal;
   view-timeline-axis: block;
+  view-timeline-inset: 0px;
   animation-name: item-current;
   animation-timeline: --item-reveal;
   animation-fill-mode: both;
