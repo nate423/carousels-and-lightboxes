@@ -32,6 +32,17 @@ const focusKeyframeRules = new Map();
 let focusKeyframeStyleEl = null;
 const translateKeyframeRules = new Map();
 let translateKeyframeStyleEl = null;
+// The scroll-timeline polyfill (Safari) doesn't support animation-timeline
+// et al. set as inline styles - it works by parsing real stylesheet rules
+// for those properties and matching their selectors against the DOM (see
+// getAnimationTimelineOptions in vendor/scroll-timeline.js), the same way
+// it discovers everything else here. Inline styles are invisible to it.
+// So every item's animation-name/-timeline/-range also gets a generated
+// selector rule here, in addition to the inline styles below (which native
+// engines read directly, and which win in the CSSOM anyway - same values,
+// so no conflict).
+const positionRules = new Map();
+let positionStyleEl = null;
 
 // Only builds the rule text and points the item at it - doesn't touch the
 // shared stylesheets' textContent. Setting textContent is a full
@@ -60,22 +71,46 @@ function setItemKeyframes(item, peakX, range, translateStops, scrollAxis) {
     .join("\n      ");
   translateKeyframeRules.set(translateName, `@keyframes ${translateName} {\n      ${stops}\n    }`);
 
-  item.style.animationName = `${focusName}, ${translateName}`;
-  item.style.animationTimeline = "--item-reveal, --carousel-scroll";
-  item.style.animationRange = `cover ${range.start * 100}% cover ${range.end * 100}%, 0% 100%`;
+  const animationName = `${focusName}, ${translateName}`;
+  const animationTimeline = "--item-reveal, --carousel-scroll";
+  const animationRange = `cover ${range.start * 100}% cover ${range.end * 100}%, 0% 100%`;
+
+  item.style.animationName = animationName;
+  item.style.animationTimeline = animationTimeline;
+  item.style.animationRange = animationRange;
+
+  positionRules.set(
+    item.dataset.focusId,
+    `.carousel-item[data-focus-id="${item.dataset.focusId}"] {
+      animation-name: ${animationName};
+      animation-timeline: ${animationTimeline};
+      animation-range: ${animationRange};
+    }`
+  );
+}
+
+// The polyfill only transpiles a <style> element's contents at the moment
+// it's added to the DOM (it watches for HTMLStyleElement nodes appearing
+// via MutationObserver, then rewrites that element's innerHTML once) - a
+// later `.textContent =` on an already-inserted element is just a text-node
+// mutation inside it, which the polyfill never sees. So each flush swaps in
+// a fresh <style> with its final text already set, rather than mutating the
+// previous element's textContent in place.
+function replaceStyleEl(prevEl, cssText) {
+  const nextEl = document.createElement("style");
+  nextEl.textContent = cssText;
+  document.head.appendChild(nextEl);
+  if (prevEl) prevEl.remove();
+  return nextEl;
 }
 
 function flushKeyframeStyles() {
-  if (!focusKeyframeStyleEl) {
-    focusKeyframeStyleEl = document.createElement("style");
-    document.head.appendChild(focusKeyframeStyleEl);
-  }
-  if (!translateKeyframeStyleEl) {
-    translateKeyframeStyleEl = document.createElement("style");
-    document.head.appendChild(translateKeyframeStyleEl);
-  }
-  focusKeyframeStyleEl.textContent = [...focusKeyframeRules.values()].join("\n");
-  translateKeyframeStyleEl.textContent = [...translateKeyframeRules.values()].join("\n");
+  focusKeyframeStyleEl = replaceStyleEl(focusKeyframeStyleEl, [...focusKeyframeRules.values()].join("\n"));
+  translateKeyframeStyleEl = replaceStyleEl(
+    translateKeyframeStyleEl,
+    [...translateKeyframeRules.values()].join("\n")
+  );
+  positionStyleEl = replaceStyleEl(positionStyleEl, [...positionRules.values()].join("\n"));
 }
 
 function onItemCreated(item) {
