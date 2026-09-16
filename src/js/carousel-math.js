@@ -38,16 +38,31 @@ export function transition(p, start, end) {
   return start + p * (end - start);
 }
 
+// The wrapper's anchor point, inset from its true start/end by
+// scrollPadding on each side - same idea as the CSS `scroll-padding`
+// property, reimplemented here because that property doesn't survive the
+// spacer-based trailing-edge workaround these carousels already rely on.
+// At alignment 0.5 the two insets cancel out (inset - 2*inset*0.5 = 0), so
+// scrollPadding is a no-op for center alignment and doesn't need to be
+// special-cased anywhere that calls this.
+function wrapperAnchor(wrapperLength, alignment, scrollPadding) {
+  return (
+    scrollPadding + alignment * (wrapperLength - 2 * scrollPadding)
+  );
+}
+
 export function getItemMetrics(
   wrapper,
   items,
   offsetFromStart,
   offsetLength,
   scrollDistance,
-  alignment
+  alignment,
+  scrollPadding = 0
 ) {
   const scrollAnchor =
-    wrapper[scrollDistance] + wrapper[offsetLength] * alignment;
+    wrapper[scrollDistance] +
+    wrapperAnchor(wrapper[offsetLength], alignment, scrollPadding);
   const anchors = [];
   const lengths = [];
 
@@ -69,12 +84,33 @@ export function computeScrollTarget(
   item,
   offsetFromStart,
   offsetLength,
-  alignment
+  alignment,
+  scrollPadding = 0
 ) {
   return (
     item[offsetFromStart] -
     wrapper[offsetFromStart] -
-    (wrapper[offsetLength] - item[offsetLength]) * alignment
+    (wrapperAnchor(wrapper[offsetLength], alignment, scrollPadding) -
+      item[offsetLength] * alignment)
+  );
+}
+
+// Length of the spacer needed on one edge of the wrapper so that the item
+// touching that edge (edgeFraction 0 for the leading spacer, 1 for the
+// trailing one) can still reach the wrapper's anchor point. Generalizes the
+// plain "(wrapperLength - itemLength) * edgeFraction" case (scrollPadding 0)
+// with the same inset term as wrapperAnchor.
+export function computeSpacerLength(
+  wrapperLength,
+  itemLength,
+  edgeFraction,
+  gapLength,
+  scrollPadding = 0
+) {
+  return (
+    wrapperAnchor(wrapperLength, edgeFraction, scrollPadding) -
+    itemLength * edgeFraction -
+    gapLength
   );
 }
 

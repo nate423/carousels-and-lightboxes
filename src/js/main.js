@@ -3,6 +3,7 @@ import {
   alignmentFraction,
   getItemMetrics,
   computeScrollTarget,
+  computeSpacerLength,
   computeCurrentProgress,
   computeCurrentIndex,
   computeItemProgress,
@@ -21,6 +22,14 @@ document.addEventListener("DOMContentLoaded", function () {
 
   function getAlignmentFraction(wrapper) {
     return alignmentFraction(getAlignment(wrapper));
+  }
+
+  function getScrollPadding(wrapper) {
+    return (
+      parseFloat(
+        getComputedStyle(wrapper).getPropertyValue("--carousel-scroll-padding")
+      ) || 0
+    );
   }
 
   function addSpacersToWrapper(wrapper) {
@@ -51,18 +60,25 @@ document.addEventListener("DOMContentLoaded", function () {
     ];
     const gapLength = parseFloat(getComputedStyle(wrapper).gap);
     const alignment = getAlignmentFraction(wrapper);
-    // Each spacer only needs to make up the room on its own side of the
-    // alignment point - e.g. with alignment="start" the leading spacer
-    // collapses to ~0 (the first item's leading edge is already reachable)
-    // while the trailing spacer grows to let the last item reach it too.
-    const calcSpacerLength = (item, edgeFraction) =>
-      Math.max(0, (wrapper[offsetLength] - item[offsetLength]) * edgeFraction - gapLength);
+    const scrollPadding = getScrollPadding(wrapper);
 
     [firstSpacer, lastSpacer].forEach((spacer, index) => {
+      // Each spacer only needs to make up the room on its own side of the
+      // alignment point - e.g. with alignment="start" the leading spacer
+      // shrinks to just scrollPadding (the first item's leading edge is
+      // already reachable) while the trailing spacer grows to let the last
+      // item reach it too.
       const edgeFraction = index === 0 ? alignment : 1 - alignment;
-      const length = calcSpacerLength(
-        index === 0 ? firstItem : lastItem,
-        edgeFraction
+      const item = index === 0 ? firstItem : lastItem;
+      const length = Math.max(
+        0,
+        computeSpacerLength(
+          wrapper[offsetLength],
+          item[offsetLength],
+          edgeFraction,
+          gapLength,
+          scrollPadding
+        )
       );
       spacer.style[scrollAxis === "x" ? "width" : "height"] = length + "px";
       spacer.textContent = `Spacer (${spacer.offsetWidth}px × ${spacer.offsetHeight}px)`;
@@ -99,7 +115,8 @@ document.addEventListener("DOMContentLoaded", function () {
           targetItem,
           offsetFromStart,
           offsetLength,
-          getAlignmentFraction(wrapper)
+          getAlignmentFraction(wrapper),
+          getScrollPadding(wrapper)
         );
 
         // console.log(index, targetItem[offsetFromStart]);
@@ -161,7 +178,8 @@ document.addEventListener("DOMContentLoaded", function () {
           item,
           offsetFromStart,
           offsetLength,
-          getAlignmentFraction(wrapper)
+          getAlignmentFraction(wrapper),
+          getScrollPadding(wrapper)
         );
 
         wrapper.scrollTo({
@@ -204,7 +222,8 @@ document.addEventListener("DOMContentLoaded", function () {
       offsetFromStart,
       offsetLength,
       scrollDistance,
-      getAlignmentFraction(wrapper)
+      getAlignmentFraction(wrapper),
+      getScrollPadding(wrapper)
     );
 
     const currentProgress = computeCurrentProgress(anchors, scrollAnchor);
@@ -255,7 +274,8 @@ document.addEventListener("DOMContentLoaded", function () {
       offsetFromStart,
       offsetLength,
       scrollDistance,
-      getAlignmentFraction(wrapper)
+      getAlignmentFraction(wrapper),
+      getScrollPadding(wrapper)
     );
     const currentIndex = computeCurrentIndex(
       computeCurrentProgress(anchors, scrollAnchor),
@@ -269,7 +289,8 @@ document.addEventListener("DOMContentLoaded", function () {
       items[currentIndex],
       offsetFromStart,
       offsetLength,
-      getAlignmentFraction(wrapper)
+      getAlignmentFraction(wrapper),
+      getScrollPadding(wrapper)
     );
     wrapper.scrollTo({
       [scrollAxis === "x" ? "left" : "top"]: scrollTarget,
