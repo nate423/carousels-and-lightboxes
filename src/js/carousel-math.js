@@ -141,19 +141,36 @@ export function computeItemProgress(currentProgress, i) {
 }
 
 // Per-item `animation-range` (in native CSS `cover <percent>` units) for the
-// scroll-driven scale/opacity keyframe, computed so its 50% ("focused")
-// keyframe stop lands exactly where this item's own anchor point (see
-// getItemMetrics) crosses the wrapper's anchor point - i.e. exactly when the
-// old JS-only itemProgress math would have reported 1. Native `cover 0%`/
-// `100%` correspond respectively to "item's leading edge at the wrapper's
-// trailing edge" and "item's trailing edge at the wrapper's leading edge",
-// a span of (wrapperLength + itemLength) - from that geometry, an item at
-// on-screen leading-edge position `x` sits at cover-percent
-// `(wrapperLength - x) / (wrapperLength + itemLength)`. The falloff window
-// on each side is sized to the pixel gap to the neighboring anchor (falling
-// back to the item's own length at the carousel's edges, where there's no
-// neighbor), matching how the old itemProgress falloff reached 0 exactly
-// when currentProgress crossed a neighboring index.
+// scroll-driven scale/opacity keyframe. Native `cover 0%`/`100%` correspond
+// respectively to "item's leading edge at the wrapper's trailing edge" and
+// "item's trailing edge at the wrapper's leading edge", a span of
+// (wrapperLength + itemLength) - from that geometry, an item at on-screen
+// leading-edge position `x` sits at cover-percent
+// `(wrapperLength - x) / (wrapperLength + itemLength)`.
+//
+// The falloff window has to be asymmetric, sized independently to the real
+// pixel gap to each neighboring anchor (falling back to the item's own
+// length at the carousel's edges, where there's only one neighbor) -
+// otherwise the falloff doesn't reach exactly 0 at the moment a neighbor
+// actually becomes current, leaving either a dead zone (real gap wider than
+// the window) or a lag (real gap narrower) on whichever side isn't sized to
+// match, visible as the adjacent item's own focus starting or finishing
+// late relative to this one's.
+//
+// But an asymmetric range means the item's own peak (where it's genuinely
+// "current") generally does NOT sit at the range's arithmetic midpoint -
+// exactly the point a plain 0%/50%/100% @keyframes would treat as "focus
+// 1". `peakX` is where in [0, 1] across [start, end] that true peak
+// actually falls. `animation-timing-function` can't fix this on its own -
+// it applies independently *within* each keyframe-to-keyframe segment
+// (re-based to that segment's own local 0-1), not as a single remap across
+// the whole animation, so it can't shift where a keyframe's value actually
+// lands. Instead main.js (setItemFocusKeyframes) gives each item its own
+// generated `@keyframes` rule with the "scale: 1" stop placed directly at
+// `peakX%` - the only way to put a keyframe value at an arbitrary per-item
+// position - and computeItemFocus mirrors the same placement so the
+// JS-side prediction used for gap compensation matches what the CSS
+// actually renders.
 export function computeAnimationRanges(anchors, lengths, wrapperLength, alignment, scrollPadding) {
   const n = anchors.length;
   const wrapperAnchorPoint = wrapperAnchor(wrapperLength, alignment, scrollPadding);
@@ -167,15 +184,54 @@ export function computeAnimationRanges(anchors, lengths, wrapperLength, alignmen
     const deltaPrev = i > 0 ? anchor - anchors[i - 1] : itemLength;
     const deltaNext = i < n - 1 ? anchors[i + 1] - anchor : itemLength;
 
-    return {
-      start: clamp(peak - deltaPrev / span, 0, 1),
-      end: clamp(peak + deltaNext / span, 0, 1)
-    };
+    const start = clamp(peak - deltaPrev / span, 0, 1);
+    const end = clamp(peak + deltaNext / span, 0, 1);
+    const peakX = end === start ? 0.5 : clamp((peak - start) / (end - start), 0, 1);
+
+    return { start, end, peakX };
   });
 }
 
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
+}
+
+// The JS-only gap-compensating translate (see computeTranslations) needs to
+// know each item's *current* scale/focus. Reading it back from the DOM
+// (getComputedStyle) is unreliable - a scroll-driven animation's compositor-
+// side value isn't dependably reflected in computed style on any predictable
+// frame, so a freshly-initialized carousel can read a stale/default value
+// indefinitely. Instead, since computeAnimationRanges already produced the
+// exact `animation-range` and `peakX` (the keyframe stop position - see
+// setItemFocusKeyframes in main.js) handed to the CSS animation, this
+// recreates the same remapped tent shape from the same geometry - a pure
+// function of the current scroll position, matching whatever the CSS
+// renders by construction, with no DOM read involved.
+export function computeItemFocus(anchors, lengths, wrapperLength, alignment, scrollPadding, scrollAnchor) {
+  const wrapperAnchorPoint = wrapperAnchor(wrapperLength, alignment, scrollPadding);
+  const ranges = computeAnimationRanges(anchors, lengths, wrapperLength, alignment, scrollPadding);
+
+  return anchors.map((anchor, i) => {
+    const itemLength = lengths[i];
+    const span = wrapperLength + itemLength;
+    const onscreenLeadingEdge = wrapperAnchorPoint - itemLength * alignment + (anchor - scrollAnchor);
+    const coverPercent = (wrapperLength - onscreenLeadingEdge) / span;
+
+    const { start, end, peakX } = ranges[i];
+    const rangeProgress = end === start ? 0 : clamp((coverPercent - start) / (end - start), 0, 1);
+
+    // Mirrors the generated @keyframes' stops (0% -> unfocused, peakX% ->
+    // focused, 100% -> unfocused): piecewise-linear from 0 to peakX (tent
+    // output 0 to 1), then peakX to 1 (1 back down to 0) - see the final
+    // `1 - |2*eased - 1|` below, where `eased` is this segment-local 0-0.5
+    // or 0.5-1 position.
+    const eased =
+      rangeProgress < peakX
+        ? (peakX === 0 ? 0.5 : (rangeProgress / peakX) * 0.5)
+        : (peakX === 1 ? 0.5 : 0.5 + ((rangeProgress - peakX) / (1 - peakX)) * 0.5);
+
+    return 1 - Math.abs(2 * eased - 1);
+  });
 }
 
 // Each item's scale() shrinks it symmetrically around its own center, which

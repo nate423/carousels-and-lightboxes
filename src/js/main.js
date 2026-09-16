@@ -8,10 +8,43 @@ import {
   computeCurrentIndex,
   computeItemProgress,
   computeTranslations,
-  computeAnimationRanges
+  computeAnimationRanges,
+  computeItemFocus
 } from "./carousel-math.js";
 
 const DEFAULT_ALIGNMENT = "center";
+
+// `animation-timing-function` (including the linear() control-point syntax)
+// applies independently *within* each keyframe-to-keyframe segment, re-based
+// to that segment's own local 0-1 - it can't shift *where* a keyframe's
+// value actually falls across the overall range. Placing an item's peak at
+// an arbitrary, per-item asymmetric position (see computeAnimationRanges'
+// peakX) instead requires giving that item its own @keyframes rule with the
+// "scale: 1" stop declared at that exact percentage. Every item needs a
+// distinct, stable id for this (assigned once, in populateCarousel) and a
+// shared stylesheet holding one generated rule per item, rebuilt whenever
+// updateAnimationRanges recomputes geometry.
+let nextFocusId = 0;
+const focusKeyframeRules = new Map();
+let focusKeyframeStyleEl = null;
+
+function setItemFocusKeyframes(item, peakX) {
+  if (!focusKeyframeStyleEl) {
+    focusKeyframeStyleEl = document.createElement("style");
+    document.head.appendChild(focusKeyframeStyleEl);
+  }
+  const name = `item-focus-${item.dataset.focusId}`;
+  focusKeyframeRules.set(
+    name,
+    `@keyframes ${name} {
+      0% { scale: var(--unfocused-scale); opacity: var(--unfocused-opacity); }
+      ${peakX * 100}% { scale: 1; opacity: 1; }
+      100% { scale: var(--unfocused-scale); opacity: var(--unfocused-opacity); }
+    }`
+  );
+  focusKeyframeStyleEl.textContent = [...focusKeyframeRules.values()].join("\n");
+  item.style.animationName = name;
+}
 
 document.addEventListener("DOMContentLoaded", function () {
   function getAlignment(wrapper) {
@@ -30,20 +63,12 @@ document.addEventListener("DOMContentLoaded", function () {
     );
   }
 
-  // The JS-only gap-compensating translate (see computeTranslations) needs
-  // to know each item's *actual* current scale. It can't be re-derived from
-  // currentProgress/computeItemProgress (the old index-space triangular
-  // falloff) because the live CSS animation follows a per-item pixel-space
-  // curve instead (animation-range, from computeAnimationRanges) - the two
-  // only agree exactly at an item's own peak and at full falloff, so
-  // anywhere mid-transition (guaranteed whenever neighboring items have
-  // different widths, which they always do here) the re-derived value would
-  // be wrong and the compensation would over/under-shoot the real gap.
-  // Reading the live rendered value instead is always correct by definition.
-  function getLiveScale(item) {
-    const value = getComputedStyle(item).scale;
-    if (!value || value === "none") return 1;
-    return parseFloat(value.split(" ")[0]) || 1;
+  function getUnfocusedScale(wrapper) {
+    return (
+      parseFloat(
+        getComputedStyle(wrapper).getPropertyValue("--unfocused-scale")
+      ) || 1
+    );
   }
 
   function addSpacersToWrapper(wrapper) {
@@ -156,6 +181,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
       const item = document.createElement("div");
       item.classList.add("carousel-item");
+      item.dataset.focusId = String(nextFocusId++);
       // item.setAttribute("contenteditable", "true");
 
       if (wrapper.classList.contains("placeholder-boxes")) {
@@ -219,10 +245,30 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   } // End updatePageIndicator function
 
-  // Sets each item's `animation-range` from its own geometry so the CSS
-  // scroll-driven animation's 50% keyframe lands exactly at this item's
-  // anchor point, per alignment/scroll-padding. Pure layout math - only
-  // needs recomputing when geometry or alignment changes, not on scroll.
+  // Sets each item's `animation-range` from its own geometry, sized to the
+  // real pixel gap to each neighboring anchor so the falloff reaches
+  // exactly 0 exactly when that neighbor becomes current (asymmetric
+  // whenever neighboring items differ in size, which they always do here).
+  // That asymmetry means the item's own peak generally doesn't sit at the
+  // range's arithmetic midpoint, so each item gets its own @keyframes rule
+  // (see setItemFocusKeyframes) with the "scale: 1" stop placed at peakX
+  // instead of a fixed 50%, keeping the peak exactly at this item's real
+  // anchor crossing. Pure layout math - only needs recomputing when
+  // geometry or alignment changes, not on scroll.
+  //
+  // Known limitation (verified, not a bug here): right after an item
+  // crosses INTO a fresh animation-range - either this custom sub-range or
+  // even the plain default `cover 0%`/`100%` - Chromium holds it clamped at
+  // the boundary's keyframe value for several more pixels of real scroll
+  // before it starts interpolating, even though the declared range and
+  // computeItemFocus's prediction are both already correct at that point.
+  // Confirmed at the painted-layout level (getBoundingClientRect, not just
+  // getComputedStyle) and reproduces identically with no custom range at
+  // all, so it's inherent to the browser's view-timeline boundary-crossing
+  // detection, not something derivable from - or fixable via - our own
+  // geometry. Not compensated for here: any pixel offset that "fixed" it
+  // would just be hard-coding an unrelated, undocumented implementation
+  // detail rather than a value that falls out of this math.
   function updateAnimationRanges(
     wrapper,
     scrollDistance,
@@ -248,8 +294,9 @@ document.addEventListener("DOMContentLoaded", function () {
     );
 
     items.forEach((item, i) => {
-      const { start, end } = ranges[i];
+      const { start, end, peakX } = ranges[i];
       item.style.animationRange = `cover ${start * 100}% cover ${end * 100}%`;
+      setItemFocusKeyframes(item, peakX);
     });
   } // End updateAnimationRanges function
 
@@ -279,10 +326,16 @@ document.addEventListener("DOMContentLoaded", function () {
     const currentProgress = computeCurrentProgress(anchors, scrollAnchor);
     const currentIndex = computeCurrentIndex(currentProgress, items.length);
 
-    const scales = [];
-    items.forEach((item) => {
-      scales.push(getLiveScale(item));
-    });
+    const focus = computeItemFocus(
+      anchors,
+      lengths,
+      wrapper[offsetLength],
+      getAlignmentFraction(wrapper),
+      getScrollPadding(wrapper),
+      scrollAnchor
+    );
+    const unfocusedScale = getUnfocusedScale(wrapper);
+    const scales = focus.map((f) => transition(f, unfocusedScale, 1));
 
     const translations = computeTranslations(
       anchors,
@@ -379,31 +432,6 @@ document.addEventListener("DOMContentLoaded", function () {
     fn(wrapper, scrollDistance, offsetLength, offsetFromStart, scrollAxis);
   }
 
-  // Right after animation-range is (re)set, the browser hasn't yet
-  // evaluated the scroll-driven animation against it - it paints correctly,
-  // but a same-tick getComputedStyle(item).scale read (used by
-  // adjustStylesBasedOnProgress's gap compensation, see getLiveScale) still
-  // reflects the pre-update state until the next frame. Deferring the very
-  // first post-range-change effect application by a frame avoids reading
-  // that stale value.
-  function applyScrollEffectNextFrame(
-    wrapper,
-    scrollDistance,
-    offsetLength,
-    offsetFromStart,
-    scrollAxis
-  ) {
-    requestAnimationFrame(() =>
-      applyScrollEffect(
-        wrapper,
-        scrollDistance,
-        offsetLength,
-        offsetFromStart,
-        scrollAxis
-      )
-    );
-  }
-
   // Re-point a wrapper at a new alignment: keeps whichever item is currently
   // "focused" under the cursor of the new alignment (no smooth scroll, so it
   // doesn't fight the user's next scroll gesture), then resizes the spacers
@@ -443,8 +471,7 @@ document.addEventListener("DOMContentLoaded", function () {
       behavior: "instant"
     });
 
-    const apply = isLegacyJS(wrapper) ? applyScrollEffect : applyScrollEffectNextFrame;
-    apply(wrapper, scrollDistance, offsetLength, offsetFromStart, scrollAxis);
+    applyScrollEffect(wrapper, scrollDistance, offsetLength, offsetFromStart, scrollAxis);
   } // End setAlignment function
 
   function setupCarousel(wrapper) {
@@ -480,8 +507,7 @@ document.addEventListener("DOMContentLoaded", function () {
       updateAnimationRanges(wrapper, scrollDistance, offsetLength, offsetFromStart);
     }
 
-    const initialApply = isLegacyJS(wrapper) ? applyScrollEffect : applyScrollEffectNextFrame;
-    initialApply(wrapper, scrollDistance, offsetLength, offsetFromStart, scrollAxis);
+    applyScrollEffect(wrapper, scrollDistance, offsetLength, offsetFromStart, scrollAxis);
 
     wrapper.addEventListener("scroll", () =>
       applyScrollEffect(
