@@ -1,49 +1,24 @@
 import {
-  transition,
   alignmentFraction,
   getItemMetrics,
   computeScrollTarget,
   computeSpacerLength,
   computeCurrentProgress,
-  computeCurrentIndex,
-  computeItemProgress,
-  computeTranslations,
-  computeAnimationRanges,
-  computeItemFocus
+  computeCurrentIndex
 } from "./carousel-math.js";
+import { cssEffect } from "./effects/css-effect.js";
+import { jsEffect } from "./effects/js-effect.js";
 
 const DEFAULT_ALIGNMENT = "center";
 
-// `animation-timing-function` (including the linear() control-point syntax)
-// applies independently *within* each keyframe-to-keyframe segment, re-based
-// to that segment's own local 0-1 - it can't shift *where* a keyframe's
-// value actually falls across the overall range. Placing an item's peak at
-// an arbitrary, per-item asymmetric position (see computeAnimationRanges'
-// peakX) instead requires giving that item its own @keyframes rule with the
-// "scale: 1" stop declared at that exact percentage. Every item needs a
-// distinct, stable id for this (assigned once, in populateCarousel) and a
-// shared stylesheet holding one generated rule per item, rebuilt whenever
-// updateAnimationRanges recomputes geometry.
-let nextFocusId = 0;
-const focusKeyframeRules = new Map();
-let focusKeyframeStyleEl = null;
+// Which variant a wrapper uses is just a data attribute - each effect
+// module implements the same { onItemCreated, setup, apply } shape, so
+// everything below is variant-agnostic and works with either, or both at
+// once (as in the side-by-side comparison demo).
+const EFFECTS = { css: cssEffect, js: jsEffect };
 
-function setItemFocusKeyframes(item, peakX) {
-  if (!focusKeyframeStyleEl) {
-    focusKeyframeStyleEl = document.createElement("style");
-    document.head.appendChild(focusKeyframeStyleEl);
-  }
-  const name = `item-focus-${item.dataset.focusId}`;
-  focusKeyframeRules.set(
-    name,
-    `@keyframes ${name} {
-      0% { scale: var(--unfocused-scale); opacity: var(--unfocused-opacity); }
-      ${peakX * 100}% { scale: 1; opacity: 1; }
-      100% { scale: var(--unfocused-scale); opacity: var(--unfocused-opacity); }
-    }`
-  );
-  focusKeyframeStyleEl.textContent = [...focusKeyframeRules.values()].join("\n");
-  item.style.animationName = name;
+function getEffect(wrapper) {
+  return EFFECTS[wrapper.dataset.effect] || cssEffect;
 }
 
 document.addEventListener("DOMContentLoaded", function () {
@@ -155,8 +130,6 @@ document.addEventListener("DOMContentLoaded", function () {
           getScrollPadding(wrapper)
         );
 
-        // console.log(index, targetItem[offsetFromStart]);
-
         wrapper.scrollTo({
           [scrollAxis === "x" ? "left" : "top"]: scrollTarget,
           behavior: "smooth"
@@ -173,7 +146,8 @@ document.addEventListener("DOMContentLoaded", function () {
     offsetLength,
     offsetFromStart,
     scrollAxis,
-    n
+    n,
+    effect
   ) {
     for (let i = 0; i < n; i++) {
       const snapFixDiv = document.createElement("div");
@@ -181,7 +155,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
       const item = document.createElement("div");
       item.classList.add("carousel-item");
-      item.dataset.focusId = String(nextFocusId++);
+      effect.onItemCreated(item);
       // item.setAttribute("contenteditable", "true");
 
       if (wrapper.classList.contains("placeholder-boxes")) {
@@ -245,199 +219,12 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   } // End updatePageIndicator function
 
-  // Sets each item's `animation-range` from its own geometry, sized to the
-  // real pixel gap to each neighboring anchor so the falloff reaches
-  // exactly 0 exactly when that neighbor becomes current (asymmetric
-  // whenever neighboring items differ in size, which they always do here).
-  // That asymmetry means the item's own peak generally doesn't sit at the
-  // range's arithmetic midpoint, so each item gets its own @keyframes rule
-  // (see setItemFocusKeyframes) with the "scale: 1" stop placed at peakX
-  // instead of a fixed 50%, keeping the peak exactly at this item's real
-  // anchor crossing. Pure layout math - only needs recomputing when
-  // geometry or alignment changes, not on scroll.
-  //
-  // Known limitation (verified, not a bug here): right after an item
-  // crosses INTO a fresh animation-range - either this custom sub-range or
-  // even the plain default `cover 0%`/`100%` - Chromium holds it clamped at
-  // the boundary's keyframe value for several more pixels of real scroll
-  // before it starts interpolating, even though the declared range and
-  // computeItemFocus's prediction are both already correct at that point.
-  // Confirmed at the painted-layout level (getBoundingClientRect, not just
-  // getComputedStyle) and reproduces identically with no custom range at
-  // all, so it's inherent to the browser's view-timeline boundary-crossing
-  // detection, not something derivable from - or fixable via - our own
-  // geometry. Not compensated for here: any pixel offset that "fixed" it
-  // would just be hard-coding an unrelated, undocumented implementation
-  // detail rather than a value that falls out of this math.
-  function updateAnimationRanges(
-    wrapper,
-    scrollDistance,
-    offsetLength,
-    offsetFromStart
-  ) {
-    const items = wrapper.querySelectorAll(".carousel-item");
-    const { anchors, lengths } = getItemMetrics(
-      wrapper,
-      items,
-      offsetFromStart,
-      offsetLength,
-      scrollDistance,
-      getAlignmentFraction(wrapper),
-      getScrollPadding(wrapper)
-    );
-    const ranges = computeAnimationRanges(
-      anchors,
-      lengths,
-      wrapper[offsetLength],
-      getAlignmentFraction(wrapper),
-      getScrollPadding(wrapper)
-    );
-
-    items.forEach((item, i) => {
-      const { start, end, peakX } = ranges[i];
-      item.style.animationRange = `cover ${start * 100}% cover ${end * 100}%`;
-      setItemFocusKeyframes(item, peakX);
-    });
-  } // End updateAnimationRanges function
-
-  // Scale/opacity are driven entirely by the CSS scroll-driven animation on
-  // .carousel-item now; this only computes the gap-compensating translate
-  // (computeTranslations needs global state - every item's scale-loss
-  // relative to the current item - which a per-item view-timeline can't
-  // see) and the discrete current index for the page dots.
-  function adjustStylesBasedOnProgress(
-    wrapper,
-    scrollDistance,
-    offsetLength,
-    offsetFromStart,
-    scrollAxis
-  ) {
-    const items = wrapper.querySelectorAll(".carousel-item");
-    const { anchors, lengths, scrollAnchor } = getItemMetrics(
-      wrapper,
-      items,
-      offsetFromStart,
-      offsetLength,
-      scrollDistance,
-      getAlignmentFraction(wrapper),
-      getScrollPadding(wrapper)
-    );
-
-    const currentProgress = computeCurrentProgress(anchors, scrollAnchor);
-    const currentIndex = computeCurrentIndex(currentProgress, items.length);
-
-    const focus = computeItemFocus(
-      anchors,
-      lengths,
-      wrapper[offsetLength],
-      getAlignmentFraction(wrapper),
-      getScrollPadding(wrapper),
-      scrollAnchor
-    );
-    const unfocusedScale = getUnfocusedScale(wrapper);
-    const scales = focus.map((f) => transition(f, unfocusedScale, 1));
-
-    const translations = computeTranslations(
-      anchors,
-      lengths,
-      scales,
-      currentProgress
-    );
-
-    items.forEach((item, i) => {
-      item.style.translate =
-        scrollAxis === "x"
-          ? `${translations[i]}px 0` // X-axis translation
-          : `0 ${translations[i]}px`; // Y-axis translation
-    });
-
-    updatePageIndicator(wrapper, currentIndex);
-  } // End adjustStylesBasedOnProgress function
-
-  // Pre-refactor implementation (scale/opacity/blur/translate all computed
-  // and written as inline styles on every scroll event), kept only so the
-  // `data-effect="js"` comparison carousel can run side by side with the
-  // CSS scroll-driven version above.
-  const LEGACY_UNFOCUSED_SCALE = 0.8;
-  const LEGACY_UNFOCUSED_OPACITY = 0.5;
-  const LEGACY_UNFOCUSED_BLUR = 0;
-
-  function adjustStylesBasedOnProgressLegacyJS(
-    wrapper,
-    scrollDistance,
-    offsetLength,
-    offsetFromStart,
-    scrollAxis
-  ) {
-    const items = wrapper.querySelectorAll(".carousel-item");
-    const { anchors, lengths, scrollAnchor } = getItemMetrics(
-      wrapper,
-      items,
-      offsetFromStart,
-      offsetLength,
-      scrollDistance,
-      getAlignmentFraction(wrapper),
-      getScrollPadding(wrapper)
-    );
-
-    const currentProgress = computeCurrentProgress(anchors, scrollAnchor);
-    const currentIndex = computeCurrentIndex(currentProgress, items.length);
-
-    const scales = [];
-    const opacities = [];
-    const blurs = [];
-
-    items.forEach((_, i) => {
-      const itemProgress = computeItemProgress(currentProgress, i);
-      scales.push(transition(itemProgress, LEGACY_UNFOCUSED_SCALE, 1));
-      opacities.push(transition(itemProgress, LEGACY_UNFOCUSED_OPACITY, 1));
-      blurs.push(transition(itemProgress, LEGACY_UNFOCUSED_BLUR, 0));
-    });
-
-    const translations = computeTranslations(
-      anchors,
-      lengths,
-      scales,
-      currentProgress
-    );
-
-    items.forEach((item, i) => {
-      const translationAttribute =
-        scrollAxis === "x"
-          ? `translate3d(${translations[i]}px, 0, 0)`
-          : `translate3d(0, ${translations[i]}px, 0)`;
-
-      item.style.transform = `${translationAttribute} scale(${scales[i]})`;
-      item.style.opacity = opacities[i];
-      item.style.filter = `blur(${blurs[i]}px)`;
-    });
-
-    updatePageIndicator(wrapper, currentIndex);
-  } // End adjustStylesBasedOnProgressLegacyJS function
-
-  function isLegacyJS(wrapper) {
-    return wrapper.dataset.effect === "js";
-  }
-
-  function applyScrollEffect(
-    wrapper,
-    scrollDistance,
-    offsetLength,
-    offsetFromStart,
-    scrollAxis
-  ) {
-    const fn = isLegacyJS(wrapper)
-      ? adjustStylesBasedOnProgressLegacyJS
-      : adjustStylesBasedOnProgress;
-    fn(wrapper, scrollDistance, offsetLength, offsetFromStart, scrollAxis);
-  }
-
   // Re-point a wrapper at a new alignment: keeps whichever item is currently
   // "focused" under the cursor of the new alignment (no smooth scroll, so it
   // doesn't fight the user's next scroll gesture), then resizes the spacers
   // and redraws to match.
   function setAlignment(config, alignment) {
-    const { wrapper, spacers, scrollDistance, offsetLength, offsetFromStart, scrollAxis } = config;
+    const { wrapper, spacers, scrollDistance, offsetLength, offsetFromStart, scrollAxis, effect, ctx } = config;
     const items = wrapper.querySelectorAll(".carousel-item");
     const { anchors, scrollAnchor } = getItemMetrics(
       wrapper,
@@ -454,9 +241,7 @@ document.addEventListener("DOMContentLoaded", function () {
     );
     wrapper.dataset.scrollAlignment = alignment;
     updateSpacers(wrapper, spacers, offsetLength, scrollAxis);
-    if (!isLegacyJS(wrapper)) {
-      updateAnimationRanges(wrapper, scrollDistance, offsetLength, offsetFromStart);
-    }
+    effect.setup(ctx);
 
     const scrollTarget = computeScrollTarget(
       wrapper,
@@ -471,15 +256,14 @@ document.addEventListener("DOMContentLoaded", function () {
       behavior: "instant"
     });
 
-    applyScrollEffect(wrapper, scrollDistance, offsetLength, offsetFromStart, scrollAxis);
+    effect.apply(ctx);
   } // End setAlignment function
 
   function setupCarousel(wrapper) {
     wrapper.dataset.scrollAlignment ||= DEFAULT_ALIGNMENT;
+    const effect = getEffect(wrapper);
     const scrollAxis = wrapper.getAttribute("data-scroll-axis");
     const spacers = wrapper.querySelectorAll(".spacer");
-    const firstSpacer = spacers[0];
-    const lastSpacer = spacers[1];
 
     const scrollDistance = scrollAxis === "x" ? "scrollLeft" : "scrollTop";
     // e.g. wrapper[scrollDistance] = how far you've scrolled within the wrapper
@@ -494,36 +278,39 @@ document.addEventListener("DOMContentLoaded", function () {
     // e.g. item[offsetFromStart] = calculated distance an item is from its offset parent,
     // i.e. `left` in x scroll, `top` in y scroll
 
+    // Bundles everything an effect module needs to read geometry and write
+    // styles/page-dots for this one wrapper, so main.js and the effect
+    // modules don't have to keep passing the same handful of args around.
+    const ctx = {
+      wrapper,
+      scrollDistance,
+      offsetLength,
+      offsetFromStart,
+      scrollAxis,
+      getAlignmentFraction,
+      getScrollPadding,
+      getUnfocusedScale,
+      updatePageIndicator
+    };
+
     populateCarousel(
       wrapper,
       spacers[1],
       offsetLength,
       offsetFromStart,
       scrollAxis,
-      30
+      30,
+      effect
     );
 
-    if (!isLegacyJS(wrapper)) {
-      updateAnimationRanges(wrapper, scrollDistance, offsetLength, offsetFromStart);
-    }
+    effect.setup(ctx);
+    effect.apply(ctx);
 
-    applyScrollEffect(wrapper, scrollDistance, offsetLength, offsetFromStart, scrollAxis);
-
-    wrapper.addEventListener("scroll", () =>
-      applyScrollEffect(
-        wrapper,
-        scrollDistance,
-        offsetLength,
-        offsetFromStart,
-        scrollAxis
-      )
-    );
+    wrapper.addEventListener("scroll", () => effect.apply(ctx));
 
     window.addEventListener("resize", () => {
       updateSpacers(wrapper, spacers, offsetLength, scrollAxis);
-      if (!isLegacyJS(wrapper)) {
-        updateAnimationRanges(wrapper, scrollDistance, offsetLength, offsetFromStart);
-      }
+      effect.setup(ctx);
     });
     //
     return {
@@ -532,7 +319,9 @@ document.addEventListener("DOMContentLoaded", function () {
       scrollDistance,
       offsetLength,
       offsetFromStart,
-      scrollAxis
+      scrollAxis,
+      effect,
+      ctx
     };
   } // End setupCarousel function
 

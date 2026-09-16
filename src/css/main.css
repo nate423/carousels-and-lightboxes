@@ -129,7 +129,7 @@ body {
 
 /* The scroll-driven animation is opted OUT of for the data-effect="js"
    comparison carousel, which computes scale/opacity itself on every scroll
-   event instead - see adjustStylesBasedOnProgressLegacyJS in main.js. */
+   event instead - see adjustStylesBasedOnProgressJS in main.js. */
 .carousel-wrapper:not([data-effect="js"]) .carousel-item {
   view-timeline-name: --item-reveal;
   view-timeline-axis: inline;
