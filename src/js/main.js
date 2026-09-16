@@ -11,31 +11,21 @@ import { jsEffect } from "./effects/js-effect.js";
 
 const DEFAULT_ALIGNMENT = "center";
 
-// Native `resize` fires on close to every frame during a live window drag,
-// not just once it settles. Without this, a several-second drag queues up
-// dozens of full per-item geometry-read + @keyframes-rebuild passes (per
-// carousel on the page) that are still draining in the frames right after
-// the drag ends - exactly when a user tends to start scrolling - producing
-// jank that has nothing to do with scroll itself. Debouncing collapses that
-// flood down to one recompute after resizing actually stops.
-function debounce(fn, delayMs) {
-  let timeoutId;
-  return (...args) => {
-    clearTimeout(timeoutId);
-    timeoutId = setTimeout(() => fn(...args), delayMs);
-  };
-}
-
 // Native `scroll` can fire more than once per animation frame (trackpads in
-// particular). effect.apply() reads item.offsetLeft/offsetWidth
+// particular), and both `resize` and ResizeObserver behave the same way
+// during a live window drag - fired on close to every frame, not just once
+// it settles. effect.apply() reads item.offsetLeft/offsetWidth
 // (getItemMetrics) and then writes a page-dot class at the end
-// (updatePageIndicator) - fine within one call, but if a second 'scroll'
-// event lands before the browser's next natural layout pass, its read runs
-// right after the previous call's write, forcing a synchronous layout
-// recalc instead of a cheap cached read (confirmed via DevTools Performance
-// - "Forced reflow" insight). Collapsing same-frame scroll events down to
-// one rAF-scheduled apply() call guarantees the read always happens after
-// the browser's own layout pass, not interleaved with our own write.
+// (updatePageIndicator) - fine within one call, but if a second event lands
+// before the browser's next natural layout pass, its read runs right after
+// the previous call's write, forcing a synchronous layout recalc instead of
+// a cheap cached read (confirmed via DevTools Performance - "Forced reflow"
+// insight). Collapsing same-frame events down to one rAF-scheduled call
+// guarantees the read always happens after the browser's own layout pass,
+// not interleaved with our own write - and, for resize/ResizeObserver,
+// keeps geometry updating every frame instead of only once things settle,
+// so the carousel tracks a live drag smoothly instead of freezing then
+// jumping to its final state.
 function rafThrottle(fn) {
   let scheduled = false;
   return (...args) => {
@@ -354,13 +344,25 @@ document.addEventListener("DOMContentLoaded", function () {
       rafThrottle(() => effect.apply(ctx))
     );
 
-    window.addEventListener(
-      "resize",
-      debounce(() => {
-        updateSpacers(wrapper, spacers, offsetLength, scrollAxis);
-        effect.setup(ctx);
-      }, 150)
-    );
+    // Shared by both triggers below so a resize that also changes an item's
+    // own size (e.g. dragging the window while an image is still loading)
+    // coalesces into one refresh per frame instead of two.
+    const refreshGeometry = rafThrottle(() => {
+      updateSpacers(wrapper, spacers, offsetLength, scrollAxis);
+      effect.setup(ctx);
+      effect.apply(ctx);
+    });
+
+    window.addEventListener("resize", refreshGeometry);
+
+    // Item geometry can also change with no window resize at all - most
+    // commonly an image-based item whose intrinsic size arrives after
+    // layout (see populateCarousel's placeholder-images branch) - which
+    // would otherwise leave setup()'s cached anchors/breakpoints (see the
+    // effect modules) stale until the next window resize or alignment
+    // change. Observing every item directly catches that case too.
+    const itemResizeObserver = new ResizeObserver(refreshGeometry);
+    wrapper.querySelectorAll(".carousel-item").forEach((item) => itemResizeObserver.observe(item));
     //
     return {
       wrapper,
