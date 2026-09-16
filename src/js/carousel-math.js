@@ -14,6 +14,21 @@
 //   - itemProgress: per item, how far *that item* has animated from its
 //     unfocused/collapsed state to its focused/current state (0 to 1).
 //     A pure function of currentProgress and the item's own index.
+//
+// None of the above cares *where* "current" is measured from within the
+// wrapper/item - that's a separate, orthogonal concept: alignment. Alignment
+// is a fraction (0 = start/leading edge, 0.5 = center, 1 = end/trailing
+// edge) applied identically to the wrapper and to every item to produce a
+// single "anchor point" for each. Everything below just asks "is the
+// wrapper's anchor point at the same scroll position as this item's anchor
+// point?" - the fraction itself never needs to leak past getItemMetrics and
+// the scroll-target helpers.
+
+export const ALIGNMENT_FRACTIONS = { start: 0, center: 0.5, end: 1 };
+
+export function alignmentFraction(alignment) {
+  return ALIGNMENT_FRACTIONS[alignment] ?? ALIGNMENT_FRACTIONS.center;
+}
 
 export function progress(value, start, end) {
   return (value - start) / (end - start);
@@ -28,34 +43,53 @@ export function getItemMetrics(
   items,
   offsetFromStart,
   offsetLength,
-  scrollDistance
+  scrollDistance,
+  alignment
 ) {
-  const scrollCenter = wrapper[scrollDistance] + wrapper[offsetLength] / 2;
-  const centers = [];
+  const scrollAnchor =
+    wrapper[scrollDistance] + wrapper[offsetLength] * alignment;
+  const anchors = [];
   const lengths = [];
 
   items.forEach((item) => {
     const itemOffsetFromWrapperStart =
       item[offsetFromStart] - wrapper[offsetFromStart];
     lengths.push(item[offsetLength]);
-    centers.push(itemOffsetFromWrapperStart + item[offsetLength] / 2);
+    anchors.push(itemOffsetFromWrapperStart + item[offsetLength] * alignment);
   });
 
-  return { centers, lengths, scrollCenter };
+  return { anchors, lengths, scrollAnchor };
 }
 
-// Inverse-interpolates scrollCenter against the real item centers: finds
+// Scroll offset (relative to the wrapper) that puts this item's anchor point
+// at the wrapper's anchor point - i.e. where to scroll to bring it "current"
+// under the given alignment. Shared by click-to-scroll and page-dot clicks.
+export function computeScrollTarget(
+  wrapper,
+  item,
+  offsetFromStart,
+  offsetLength,
+  alignment
+) {
+  return (
+    item[offsetFromStart] -
+    wrapper[offsetFromStart] -
+    (wrapper[offsetLength] - item[offsetLength]) * alignment
+  );
+}
+
+// Inverse-interpolates scrollAnchor against the real item anchors: finds
 // which pair of adjacent items brackets it and reports a fractional index
 // between them. Extrapolates (unclamped) past the first/last item using
 // that end segment's spacing, so it stays continuous everywhere.
-export function computeCurrentProgress(centers, scrollCenter) {
-  const n = centers.length;
+export function computeCurrentProgress(anchors, scrollAnchor) {
+  const n = anchors.length;
   if (n < 2) return 0;
 
   let i = 0;
-  while (i < n - 2 && centers[i + 1] < scrollCenter) i++;
+  while (i < n - 2 && anchors[i + 1] < scrollAnchor) i++;
 
-  return i + progress(scrollCenter, centers[i], centers[i + 1]);
+  return i + progress(scrollAnchor, anchors[i], anchors[i + 1]);
 }
 
 // Discrete "which item is current" - jumps at the halfway point between
@@ -83,8 +117,8 @@ export function computeItemProgress(currentProgress, i) {
 // Anchoring on currentIndex instead would flip at the midpoint between two
 // items, where scaleDiff is generally nonzero on both sides, producing a
 // visible jump.
-export function computeTranslations(centers, lengths, scales, currentProgress) {
-  const n = centers.length;
+export function computeTranslations(anchors, lengths, scales, currentProgress) {
+  const n = anchors.length;
   const translations = new Array(n).fill(0);
   const scaleDiff = (i) => lengths[i] * (1 - scales[i]);
 

@@ -1,6 +1,8 @@
 import {
   transition,
+  alignmentFraction,
   getItemMetrics,
+  computeScrollTarget,
   computeCurrentProgress,
   computeCurrentIndex,
   computeItemProgress,
@@ -10,8 +12,17 @@ import {
 const UNFOCUSED_SCALE = 0.8;
 const UNFOCUSED_OPACITY = 0.5;
 const UNFOCUSED_BLUR = 0; // currently a no-op; raise above 0 to enable
+const DEFAULT_ALIGNMENT = "center";
 
 document.addEventListener("DOMContentLoaded", function () {
+  function getAlignment(wrapper) {
+    return wrapper.dataset.scrollAlignment || DEFAULT_ALIGNMENT;
+  }
+
+  function getAlignmentFraction(wrapper) {
+    return alignmentFraction(getAlignment(wrapper));
+  }
+
   function addSpacersToWrapper(wrapper) {
     const firstSpacer = document.createElement("div");
     const lastSpacer = document.createElement("div");
@@ -39,11 +50,20 @@ document.addEventListener("DOMContentLoaded", function () {
       items[items.length - 1] || items[0]
     ];
     const gapLength = parseFloat(getComputedStyle(wrapper).gap);
-    const calcSpacerLength = (item) =>
-      (wrapper[offsetLength] - item[offsetLength]) / 2 - gapLength;
+    const alignment = getAlignmentFraction(wrapper);
+    // Each spacer only needs to make up the room on its own side of the
+    // alignment point - e.g. with alignment="start" the leading spacer
+    // collapses to ~0 (the first item's leading edge is already reachable)
+    // while the trailing spacer grows to let the last item reach it too.
+    const calcSpacerLength = (item, edgeFraction) =>
+      Math.max(0, (wrapper[offsetLength] - item[offsetLength]) * edgeFraction - gapLength);
 
     [firstSpacer, lastSpacer].forEach((spacer, index) => {
-      const length = calcSpacerLength(index === 0 ? firstItem : lastItem);
+      const edgeFraction = index === 0 ? alignment : 1 - alignment;
+      const length = calcSpacerLength(
+        index === 0 ? firstItem : lastItem,
+        edgeFraction
+      );
       spacer.style[scrollAxis === "x" ? "width" : "height"] = length + "px";
       spacer.textContent = `Spacer (${spacer.offsetWidth}px × ${spacer.offsetHeight}px)`;
     });
@@ -74,10 +94,13 @@ document.addEventListener("DOMContentLoaded", function () {
 
       dot.addEventListener("click", function () {
         const targetItem = items[index];
-        const scrollTarget =
-          targetItem[offsetFromStart] -
-          wrapper[offsetFromStart] -
-          (wrapper[offsetLength] - targetItem[offsetLength]) / 2;
+        const scrollTarget = computeScrollTarget(
+          wrapper,
+          targetItem,
+          offsetFromStart,
+          offsetLength,
+          getAlignmentFraction(wrapper)
+        );
 
         // console.log(index, targetItem[offsetFromStart]);
 
@@ -133,10 +156,13 @@ document.addEventListener("DOMContentLoaded", function () {
       wrapper.insertBefore(snapFixDiv, lastSpacer);
 
       item.addEventListener("click", function () {
-        const scrollTarget =
-          item[offsetFromStart] -
-          wrapper[offsetFromStart] -
-          (wrapper[offsetLength] - item[offsetLength]) / 2;
+        const scrollTarget = computeScrollTarget(
+          wrapper,
+          item,
+          offsetFromStart,
+          offsetLength,
+          getAlignmentFraction(wrapper)
+        );
 
         wrapper.scrollTo({
           [scrollAxis === "x" ? "left" : "top"]: scrollTarget,
@@ -172,15 +198,16 @@ document.addEventListener("DOMContentLoaded", function () {
     scrollAxis
   ) {
     const items = wrapper.querySelectorAll(".carousel-item");
-    const { centers, lengths, scrollCenter } = getItemMetrics(
+    const { anchors, lengths, scrollAnchor } = getItemMetrics(
       wrapper,
       items,
       offsetFromStart,
       offsetLength,
-      scrollDistance
+      scrollDistance,
+      getAlignmentFraction(wrapper)
     );
 
-    const currentProgress = computeCurrentProgress(centers, scrollCenter);
+    const currentProgress = computeCurrentProgress(anchors, scrollAnchor);
     const currentIndex = computeCurrentIndex(currentProgress, items.length);
 
     const scales = [];
@@ -195,7 +222,7 @@ document.addEventListener("DOMContentLoaded", function () {
     });
 
     const translations = computeTranslations(
-      centers,
+      anchors,
       lengths,
       scales,
       currentProgress
@@ -215,7 +242,51 @@ document.addEventListener("DOMContentLoaded", function () {
     updatePageIndicator(currentIndex);
   } // End adjustStylesBasedOnProgress function
 
+  // Re-point a wrapper at a new alignment: keeps whichever item is currently
+  // "focused" under the cursor of the new alignment (no smooth scroll, so it
+  // doesn't fight the user's next scroll gesture), then resizes the spacers
+  // and redraws to match.
+  function setAlignment(config, alignment) {
+    const { wrapper, spacers, scrollDistance, offsetLength, offsetFromStart, scrollAxis } = config;
+    const items = wrapper.querySelectorAll(".carousel-item");
+    const { anchors, scrollAnchor } = getItemMetrics(
+      wrapper,
+      items,
+      offsetFromStart,
+      offsetLength,
+      scrollDistance,
+      getAlignmentFraction(wrapper)
+    );
+    const currentIndex = computeCurrentIndex(
+      computeCurrentProgress(anchors, scrollAnchor),
+      items.length
+    );
+    wrapper.dataset.scrollAlignment = alignment;
+    updateSpacers(wrapper, spacers, offsetLength, scrollAxis);
+
+    const scrollTarget = computeScrollTarget(
+      wrapper,
+      items[currentIndex],
+      offsetFromStart,
+      offsetLength,
+      getAlignmentFraction(wrapper)
+    );
+    wrapper.scrollTo({
+      [scrollAxis === "x" ? "left" : "top"]: scrollTarget,
+      behavior: "instant"
+    });
+
+    adjustStylesBasedOnProgress(
+      wrapper,
+      scrollDistance,
+      offsetLength,
+      offsetFromStart,
+      scrollAxis
+    );
+  } // End setAlignment function
+
   function setupCarousel(wrapper) {
+    wrapper.dataset.scrollAlignment ||= DEFAULT_ALIGNMENT;
     const scrollAxis = wrapper.getAttribute("data-scroll-axis");
     const spacers = wrapper.querySelectorAll(".spacer");
     const firstSpacer = spacers[0];
@@ -265,7 +336,17 @@ document.addEventListener("DOMContentLoaded", function () {
       updateSpacers(wrapper, spacers, offsetLength, scrollAxis)
     );
     //
+    return {
+      wrapper,
+      spacers,
+      scrollDistance,
+      offsetLength,
+      offsetFromStart,
+      scrollAxis
+    };
   } // End setupCarousel function
+
+  const carouselConfigs = [];
 
   document.querySelectorAll(".carousel-wrapper").forEach((wrapper) => {
     addSpacersToWrapper(wrapper);
@@ -277,7 +358,14 @@ document.addEventListener("DOMContentLoaded", function () {
       wrapper.classList.add("placeholder-boxes");
     }
 
-    setupCarousel(wrapper);
+    carouselConfigs.push(setupCarousel(wrapper));
+  });
+
+  document.querySelectorAll('input[name="scroll-alignment"]').forEach((radio) => {
+    radio.addEventListener("change", function () {
+      if (!this.checked) return;
+      carouselConfigs.forEach((config) => setAlignment(config, this.value));
+    });
   });
   //
 });
