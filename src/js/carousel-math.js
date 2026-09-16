@@ -235,6 +235,63 @@ export function computeTranslations(anchors, lengths, scales, currentProgress) {
   return translations;
 }
 
+// Precomputes the per-item data computeTranslationsAt needs to evaluate
+// computeTranslations' result at an arbitrary currentProgress in O(1) per
+// item instead of O(n): computeItemProgress's falloff is exactly 0 outside a
+// fixed +/-1 window around currentProgress, so every item's scaleDiff
+// (lengths[i] * (1 - scales[i])) equals a currentProgress-independent
+// baseline - lengths[i] * (1 - noncurrentScale) - except for at most the one
+// or two items straddling currentProgress. Prefix-summing that baseline once
+// here means computeTranslationsAt's running sums are just a prefix-sum
+// lookup plus an O(1) correction at the straddling item(s), rather than
+// walking every item from scratch each time it's called.
+export function computeTranslationPrefixSums(lengths, noncurrentScale) {
+  const n = lengths.length;
+  const baseDiff = lengths.map((length) => length * (1 - noncurrentScale));
+  const prefix = new Array(n + 1).fill(0);
+  for (let i = 0; i < n; i++) prefix[i + 1] = prefix[i] + baseDiff[i];
+  return { baseDiff, prefix };
+}
+
+// computeTranslations' result for an arbitrary (possibly fractional,
+// possibly out-of-[0, n-1]) currentProgress, using the prefix sums from
+// computeTranslationPrefixSums instead of recomputing every item's scale and
+// walking the whole array. Exact, not an approximation: translations is
+// provably piecewise-linear in currentProgress with breaks only at integer
+// indices (see computeTranslationBreakpoints below), and
+// baseDiff(i) * min(|currentProgress - i|, 1) reproduces
+// lengths[i] * (1 - scales[i]) for every i, so scales[] never needs
+// computing at all. `m`/`k` are the real items immediately below/above
+// currentProgress (clamped to the valid index range) - the only two items
+// whose scaleDiff can differ from the baseline - so only their two
+// corrections need computing before every other item's translation falls
+// out of the prefix sum directly.
+export function computeTranslationsAt(prefix, baseDiff, currentProgress) {
+  const n = baseDiff.length;
+  const translations = new Array(n).fill(0);
+  if (n === 0) return translations;
+
+  const scaleDiffAt = (i) => baseDiff[i] * Math.min(Math.abs(currentProgress - i), 1);
+
+  const m = Math.min(Math.ceil(currentProgress) - 1, n - 1);
+  if (m >= 0) {
+    const reduction = baseDiff[m] - scaleDiffAt(m);
+    for (let i = 0; i <= m; i++) {
+      translations[i] = prefix[m + 1] - prefix[i] - reduction - scaleDiffAt(i) / 2;
+    }
+  }
+
+  const k = Math.max(Math.floor(currentProgress) + 1, 0);
+  if (k <= n - 1) {
+    const reduction = baseDiff[k] - scaleDiffAt(k);
+    for (let i = k; i < n; i++) {
+      translations[i] = -(prefix[i + 1] - prefix[k] - reduction - scaleDiffAt(i) / 2);
+    }
+  }
+
+  return translations;
+}
+
 // Precomputes the exact breakpoints needed to reconstruct computeTranslations'
 // output as a native CSS @keyframes curve (one per item, driven by a
 // scroll-timeline spanning the wrapper's whole scrollable range - see

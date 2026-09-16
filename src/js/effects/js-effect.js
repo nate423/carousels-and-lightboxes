@@ -1,19 +1,18 @@
 // JS-driven variant: scale/opacity/blur/translate are all computed and
 // written as inline styles on every scroll event, rather than delegating
-// to a native CSS scroll-driven animation. Item geometry and the exact
-// gap-compensating translation curve (see computeTranslationBreakpoints in
-// carousel-math.js) only change shape on setup() (init/resize/alignment
-// change) - not on scroll - so both are cached here and each scroll frame
-// just re-reads the wrapper's own scroll offset and interpolates against
-// that cache, instead of re-reading every item's layout and recomputing
-// translations from scratch.
+// to a native CSS scroll-driven animation. Item geometry only changes shape
+// on setup() (init/resize/alignment change) - not on scroll - so it's cached
+// here (as the prefix sums computeTranslationsAt needs, see carousel-math.js)
+// and each scroll frame just re-reads the wrapper's own scroll offset and
+// evaluates the translation curve directly at that point, instead of
+// re-reading every item's layout and recomputing translations from scratch.
 import {
   getItemMetrics,
   computeCurrentProgress,
   computeCurrentIndex,
   computeItemProgress,
-  computeTranslationBreakpoints,
-  interpolateTranslations,
+  computeTranslationPrefixSums,
+  computeTranslationsAt,
   wrapperAnchor,
   transition
 } from "../carousel-math.js";
@@ -27,19 +26,12 @@ const stateByWrapper = new WeakMap();
 // No per-item id needed - there's no CSS @keyframes rule to target.
 function onItemCreated() {}
 
-// Mirrors css-effect.js's setup(): reads item geometry once and precomputes
-// the same exact translation breakpoints a native scroll-timeline would be
-// driven off of, so apply() can interpolate instead of recomputing.
+// Reads item geometry once and precomputes the prefix sums
+// computeTranslationsAt needs, so apply() can evaluate the translation curve
+// directly at the current scroll position instead of recomputing it from
+// scratch.
 function setup(ctx) {
-  const {
-    wrapper,
-    scrollDistance,
-    scrollSize,
-    offsetLength,
-    offsetFromStart,
-    getAlignmentFraction,
-    getScrollPadding
-  } = ctx;
+  const { wrapper, scrollDistance, offsetLength, offsetFromStart, getAlignmentFraction, getScrollPadding } = ctx;
   const items = wrapper.querySelectorAll(".carousel-item");
   const alignment = getAlignmentFraction(wrapper);
   const scrollPadding = getScrollPadding(wrapper);
@@ -54,22 +46,14 @@ function setup(ctx) {
   );
 
   const wrapperAnchorPoint = wrapperAnchor(wrapper[offsetLength], alignment, scrollPadding);
-  const maxScroll = wrapper[scrollSize] - wrapper[offsetLength];
+  const { baseDiff, prefix } = computeTranslationPrefixSums(lengths, NONCURRENT_SCALE);
 
-  const breakpoints = computeTranslationBreakpoints(
-    anchors,
-    lengths,
-    NONCURRENT_SCALE,
-    wrapperAnchorPoint,
-    wrapperAnchorPoint + Math.max(maxScroll, 0)
-  );
-
-  stateByWrapper.set(wrapper, { items, anchors, wrapperAnchorPoint, breakpoints });
+  stateByWrapper.set(wrapper, { items, anchors, wrapperAnchorPoint, baseDiff, prefix });
 }
 
 function apply(ctx) {
   const { wrapper, scrollDistance, scrollAxis, updatePageIndicator } = ctx;
-  const { items, anchors, wrapperAnchorPoint, breakpoints } = stateByWrapper.get(wrapper);
+  const { items, anchors, wrapperAnchorPoint, baseDiff, prefix } = stateByWrapper.get(wrapper);
   const scrollAnchor = wrapper[scrollDistance] + wrapperAnchorPoint;
 
   const currentProgress = computeCurrentProgress(anchors, scrollAnchor);
@@ -86,7 +70,7 @@ function apply(ctx) {
     blurs.push(transition(itemProgress, NONCURRENT_BLUR, 0));
   });
 
-  const translations = interpolateTranslations(breakpoints, scrollAnchor);
+  const translations = computeTranslationsAt(prefix, baseDiff, currentProgress);
 
   items.forEach((item, i) => {
     const translationAttribute =
