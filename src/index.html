@@ -2,14 +2,26 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
   <title>Carousels and Lightboxes</title>
   <link rel="stylesheet" href="css/main.css" />
 </head>
+
 <body>
+
   <main>
-    <h1>Carousels and Lightboxes</h1>
-    <p>Prototype scaffold — start building here.</p>
+    <div class="carousels">
+      <div class="carousel-with-controls">
+        <div class="carousel-wrapper" id="h-scroll" data-scroll-axis="x"></div>
+        <div class="page-controls" for="h-scroll">
+          <div class="page-indicator-dot"></div>
+          <div class="page-indicator-dot current"></div>
+        </div>
+      </div>
+      <div class="carousel-wrapper" data-scroll-axis="y"></div>
+      <!--<div class="carousel-wrapper placeholder-images" data-scroll-axis="y"></div>
+    <div class="carousel-wrapper placeholder-images" data-scroll-axis="x"></div>-->
+    </div>
   </main>
 
   <script type="module" src="js/main.js"></script>
