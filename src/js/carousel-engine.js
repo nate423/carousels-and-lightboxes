@@ -93,7 +93,8 @@ export function createCarousel(wrapper, options = {}) {
   // scroll event's own handler runs.
   let scrollSource = "self";
 
-  // How forceful the most recent direct input on this carousel was. Note
+  // How forceful the most recent direct input on this carousel was, as a
+  // fraction of the carousel's own length (see wheelStrength below). Note
   // this is genuinely "the last input seen", not "what caused the scroll
   // being handled right now" - nothing resets it, so a carousel scrolling
   // under its own momentum still reports whatever last landed on it. That's
@@ -111,10 +112,32 @@ export function createCarousel(wrapper, options = {}) {
 
   function markSelfDriven(event) {
     scrollSource = "self";
-    lastInputStrength =
-      event.type === "wheel"
-        ? Math.abs(event.deltaX) + Math.abs(event.deltaY)
-        : DECISIVE_INPUT;
+    lastInputStrength = event.type === "wheel" ? wheelStrength(event) : DECISIVE_INPUT;
+  }
+
+  // A wheel tick's strength as a fraction of this carousel's own visible
+  // length, so the threshold comparing against it can be a dimensionless
+  // ratio. A raw delta can't be: WheelEvent deltas are not a portable unit -
+  // Chrome on Windows emits ~100-120 per mouse notch where a macOS trackpad
+  // emits single digits per frame, so any fixed pixel threshold means
+  // "everything is decisive" on one and "half of a deliberate scroll is
+  // weak" on the other. Asking instead how far the tick tried to move *this*
+  // carousel is the same question on every device.
+  //
+  // deltaMode other than DOM_DELTA_PIXEL (0) reports lines or pages rather
+  // than pixels, and comes from a classic notched mouse wheel. Those are
+  // unconditionally decisive: a notch is a discrete, deliberate act, and
+  // nothing about it coasts, so it can't be the decaying momentum residue
+  // this whole measurement exists to recognize. (Converting lines to pixels
+  // instead would need a made-up px-per-line factor to compare against a
+  // threshold that never applies to it.)
+  function wheelStrength(event) {
+    if (event.deltaMode !== 0) return DECISIVE_INPUT;
+    // Read during input dispatch, before this frame's style writes, so it's
+    // a cached read rather than a forced layout.
+    const wrapperLength = wrapper[offsetLength];
+    if (!wrapperLength) return DECISIVE_INPUT;
+    return (Math.abs(event.deltaX) + Math.abs(event.deltaY)) / wrapperLength;
   }
 
   // touchmove/pointerdown cover fingers and scrollbar drags; keydown covers

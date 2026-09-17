@@ -31,7 +31,13 @@
 import { computeCurrentIndex } from "./carousel-math.js";
 
 const LIVENESS_MS = 50; // ~3 dropped frames at 60fps - how stale the other carousel's last accepted scroll can be and still count as "still actively moving" (see the interrupt check below)
-const MIN_STEAL_STRENGTH = 15; // input strength required to interrupt a carousel that's still live - see the interrupt check below
+// How hard an input has to be to interrupt a carousel that's still live,
+// as a fraction of that carousel's own length - i.e. a tick that tries to
+// move it by less than 2% of its width is treated as momentum residue rather
+// than a deliberate grab. A ratio rather than a pixel count on purpose; see
+// wheelStrength in carousel-engine.js for why raw wheel deltas can't be
+// compared against a fixed number across devices.
+const MIN_STEAL_FRACTION = 0.02;
 
 // Temporary - flip off (or delete this whole block and its call sites below)
 // once things feel settled. Logs each scroll-driven decision this link makes
@@ -99,7 +105,7 @@ export function linkCarousels(a, b, { aToB = "continuous", bToA = "instant" } = 
         dest.lastAcceptedScrollAt !== null &&
         handlerStart - dest.lastAcceptedScrollAt < LIVENESS_MS;
       const inputStrength = source.carousel.getLastInputStrength();
-      if (destStillLive && inputStrength < MIN_STEAL_STRENGTH) {
+      if (destStillLive && inputStrength < MIN_STEAL_FRACTION) {
         debugLog(directionKey, "suppressed (dest still live, weak input)", { inputStrength });
         return;
       }
