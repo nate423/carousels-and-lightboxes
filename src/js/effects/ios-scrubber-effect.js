@@ -45,13 +45,20 @@
 //    redirecting an in-flight CSS transition is native browser behavior,
 //    nothing this module has to implement.
 //
-// Which path applies is read directly off the wrapper rather than passed
-// in: carousel-link.js's writeToDest suspends this wrapper's own
-// scroll-snap (`scrollSnapType = "none"`) for as long as it's actively
-// relaying the main carousel's scroll, restoring it ~150ms after the last
-// write (see SNAP_RESTORE_DELAY there) - exactly the same window in which
-// this wrapper's motion isn't a real drag on it at all, so it doubles as
-// the signal this effect needs, with nothing to keep in sync by hand.
+// Which path applies comes straight from the engine's own scroll
+// attribution (ctx.getScrollSource - see the scroll-attribution block in
+// carousel-engine.js): "driven" means an outside driver is writing this
+// wrapper's scroll position directly, which is exactly the case where this
+// wrapper's motion isn't a real drag on it at all. Nothing here has to be
+// kept in sync by hand, and nothing has to infer it from a side effect of
+// the layer doing the driving. (An earlier version read
+// `wrapper.style.scrollSnapType === "none"`, the inline style
+// carousel-link.js used to write while relaying. That worked, but it tied
+// this effect to another module's implementation detail with no import
+// between them, and it stayed true for the whole ~150ms snap-restore tail
+// after the last relayed write - so grabbing the strip right as the main
+// carousel stopped driving it rendered the first moments of a genuine drag
+// on the driven path. Attribution flips the instant a real input lands.)
 import { getItemMetrics, computeCurrentProgress, computeCurrentIndex } from "../carousel-math.js";
 
 // Same DEBUG/debugLog shape as carousel-link.js, so logs from both read the
@@ -149,12 +156,12 @@ function renderItem(item, closeness, itemWidth, expandedWidth, expandedPadding) 
 }
 
 function apply(ctx) {
-  const { wrapper, onProgress } = ctx;
+  const { wrapper, getScrollSource, onProgress } = ctx;
   const state = stateByWrapper.get(wrapper);
   const { items, itemWidth, expandedWidth, expandedPadding } = state;
 
   const currentProgress = readProgress(ctx, items);
-  const isDriven = wrapper.style.scrollSnapType === "none";
+  const isDriven = getScrollSource() === "driven";
 
   if (isDriven) {
     items.forEach((item, i) => {

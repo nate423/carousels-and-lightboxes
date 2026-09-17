@@ -16,6 +16,9 @@ import {
 } from "./carousel-math.js";
 
 const DEFAULT_ALIGNMENT = "center";
+// ms of no further direct writes before scroll-snap is handed back - see
+// suspendScrollSnap below.
+const SNAP_RESTORE_DELAY = 150;
 
 // Native `scroll` can fire more than once per animation frame (trackpads in
 // particular), and both `resize` and ResizeObserver behave the same way
@@ -53,6 +56,91 @@ export function createCarousel(wrapper, options = {}) {
   const offsetLength = scrollAxis === "x" ? "offsetWidth" : "offsetHeight";
   const offsetFromStart = scrollAxis === "x" ? "offsetLeft" : "offsetTop";
   const scrollSize = scrollAxis === "x" ? "scrollWidth" : "scrollHeight";
+
+  // --- Scroll attribution -------------------------------------------------
+  // Every scroll this wrapper emits is attributed to one of two sources, and
+  // anything watching it - a link relaying it to another carousel, an effect
+  // that renders differently depending on who is moving it (see
+  // ios-scrubber-effect.js) - reads that attribution instead of trying to
+  // reconstruct it from raw DOM events of its own.
+  //
+  //   "self"   - this carousel is moving for its own reasons: a real gesture
+  //              on it, or a goToIndex/setAlignment command aimed at it.
+  //              Authoritative motion, and the only kind worth relaying.
+  //   "driven" - an outside driver is writing this carousel's scroll position
+  //              directly through setProgressDirect. The scroll events that
+  //              follow are echoes of that write, not new information.
+  //
+  // "driven" is a hard, sticky state rather than a timing window, because a
+  // programmatic write's consequences have no bounded duration: the write
+  // fires its own native 'scroll' event (the echo), and so does the
+  // browser's scroll-snap "resnap" correction, which runs *asynchronously*
+  // after snap is handed back and can itself animate for an unpredictable
+  // stretch (observed up to ~1.8s) whenever the anchor we computed isn't
+  // pixel-identical to the browser's own snap-point geometry. Neither can
+  // happen without setProgressDirect having run first, so "has anything
+  // moved this carousel for its own reasons since the last direct write" is
+  // a complete, exact answer - no elapsed-time guess, and so no window that
+  // might cut off a legitimate but slow-to-arrive correction.
+  //
+  // Event ordering makes the flip back to "self" safe even when real input
+  // lands in the same batched frame as a pending echo: an input handler runs
+  // synchronously as part of input dispatch, before the 'scroll' it causes is
+  // ever queued, so the attribution is already correct by the time that
+  // scroll event's own handler runs.
+  let scrollSource = "self";
+
+  // How forceful the most recent direct input on this carousel was. Only
+  // wheel deltas are measured; every other input type is unconditionally
+  // decisive, since the ambiguity this exists to capture is specific to
+  // wheels - macOS/Chrome dispatch a flick's decaying momentum ticks to
+  // wherever the cursor happens to sit rather than where the gesture
+  // started, so a real but tiny wheel tick can land on a carousel nobody
+  // touched. A finger on the glass or a press on the scrollbar has no such
+  // analog. Read only by carousel-link.js, to decide whether an input is
+  // deliberate enough to interrupt a carousel that's still coasting.
+  const DECISIVE_INPUT = Infinity;
+  let lastInputStrength = 0;
+
+  function markSelfDriven(event) {
+    scrollSource = "self";
+    lastInputStrength =
+      event.type === "wheel"
+        ? Math.abs(event.deltaX) + Math.abs(event.deltaY)
+        : DECISIVE_INPUT;
+  }
+
+  // touchmove/pointerdown cover fingers and scrollbar drags; keydown covers
+  // arrow/page/home/end scrolling on browsers that make scrollers focusable.
+  ["wheel", "touchmove", "pointerdown", "keydown"].forEach((type) =>
+    wrapper.addEventListener(type, markSelfDriven, { passive: true })
+  );
+
+  // scroll-snap-type: mandatory (every carousel-engine wrapper has it) tries
+  // to correct exactly what a direct write looks like to it: a scroll
+  // position that isn't part of an active native gesture. Suspending it for
+  // the duration of a drive, and handing it back once writes stop, keeps the
+  // browser's own resnap from fighting setProgressDirect.
+  //
+  // Only writes the style when it isn't already "none" - a style write
+  // followed by a geometry read (offsetLeft/offsetWidth, in setProgressDirect
+  // right after) on the same element forces a synchronous layout
+  // recalculation. Re-writing "none" to "none" every frame of a live drive
+  // was exactly that: a no-op value change that still re-armed the forced
+  // reflow every frame.
+  let snapRestoreTimer = null;
+
+  function suspendScrollSnap() {
+    if (wrapper.style.scrollSnapType !== "none") {
+      wrapper.style.scrollSnapType = "none";
+    }
+    clearTimeout(snapRestoreTimer);
+    snapRestoreTimer = setTimeout(() => {
+      wrapper.style.scrollSnapType = "";
+    }, SNAP_RESTORE_DELAY);
+  }
+
+  const scrollListeners = new Set();
 
   function getAlignment() {
     return wrapper.dataset.scrollAlignment || DEFAULT_ALIGNMENT;
@@ -121,6 +209,12 @@ export function createCarousel(wrapper, options = {}) {
     const item = items[index];
     if (!item) return;
 
+    // A deliberate navigation of this carousel - a click on one of its own
+    // items, a page dot, a realignment - not an echo of somebody driving it.
+    // Marking it here is what lets those commands propagate through a link
+    // even when the last thing to touch this carousel was a direct write.
+    scrollSource = "self";
+
     const scrollTarget = computeScrollTarget(
       wrapper,
       item,
@@ -158,6 +252,9 @@ export function createCarousel(wrapper, options = {}) {
   // continuously changing during a live scroll/drag and native smooth-scroll
   // only makes sense against a fixed destination. See carousel-link.js.
   function setProgressDirect(progress) {
+    scrollSource = "driven";
+    suspendScrollSnap();
+
     const items = getItems();
     const alignment = getAlignmentFraction();
     const scrollPadding = getScrollPadding();
@@ -207,6 +304,7 @@ export function createCarousel(wrapper, options = {}) {
     getAlignmentFraction,
     getScrollPadding,
     getNoncurrentScale,
+    getScrollSource: () => scrollSource,
     onProgress: undefined
   };
 
@@ -214,9 +312,20 @@ export function createCarousel(wrapper, options = {}) {
   effect.setup(ctx);
   effect.apply(ctx);
 
+  // A single rAF-throttled pass per scroll frame, shared by the effect and
+  // every onScroll subscriber, so a link and an effect watching the same
+  // wrapper can never disagree about which frame they're in, and so the
+  // effect has always re-rendered for this position before anything
+  // downstream reads it. `source` is sampled once rather than per listener:
+  // it can only change on a real input event, which can't interleave with
+  // this synchronous loop.
   wrapper.addEventListener(
     "scroll",
-    rafThrottle(() => effect.apply(ctx))
+    rafThrottle(() => {
+      effect.apply(ctx);
+      const source = scrollSource;
+      scrollListeners.forEach((listener) => listener({ source }));
+    })
   );
 
   // Shared by both triggers below so a resize that also changes an item's
@@ -280,6 +389,15 @@ export function createCarousel(wrapper, options = {}) {
     getCurrentProgress,
     setProgressDirect,
     setAlignment,
+    getScrollSource: () => scrollSource,
+    getLastInputStrength: () => lastInputStrength,
+    // Notified once per scroll frame, after effect.apply, with the
+    // attribution of that scroll - see the scroll-attribution block above.
+    // Returns an unsubscribe function.
+    onScroll(listener) {
+      scrollListeners.add(listener);
+      return () => scrollListeners.delete(listener);
+    },
     setOnProgress(onProgress) {
       ctx.onProgress = onProgress;
     },
