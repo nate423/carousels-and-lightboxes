@@ -46,6 +46,27 @@
           </div>
         </div>
       </div>
+      <div class="carousel-comparison">
+        <h2>Thumbnail scrubber (filmstrip navigator instead of dots)</h2>
+        <div class="link-mode-controls">
+          <label>
+            Main → Strip
+            <select data-link-direction="aToB">
+              <option value="instant">Instant</option>
+              <option value="continuous" selected>Continuous</option>
+            </select>
+          </label>
+          <label>
+            Strip → Main
+            <select data-link-direction="bToA">
+              <option value="instant" selected>Instant</option>
+              <option value="continuous">Continuous</option>
+            </select>
+          </label>
+        </div>
+        <div class="carousel-wrapper comparison-wrapper placeholder-boxes thumbnail-scrubber-main" id="h-scroll-scrubber-main" data-scroll-axis="x"></div>
+        <div class="carousel-wrapper placeholder-boxes thumbnail-scrubber-strip" id="h-scroll-scrubber-strip" data-scroll-axis="x"></div>
+      </div>
       <div class="carousel-wrapper" data-scroll-axis="y"></div>
       <div class="carousel-wrapper placeholder-boxes uniform-size" data-scroll-axis="y" data-effect="origin"></div>
       <!--<div class="carousel-wrapper placeholder-images" data-scroll-axis="y"></div>

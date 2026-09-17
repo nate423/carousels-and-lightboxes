@@ -174,7 +174,7 @@ function setup(ctx) {
 // scroll-driven animation on .carousel-item; this only computes the discrete
 // current index for the page dots.
 function apply(ctx) {
-  const { wrapper, scrollDistance, offsetLength, offsetFromStart, getAlignmentFraction, getScrollPadding, updatePageIndicator } =
+  const { wrapper, scrollDistance, offsetLength, offsetFromStart, getAlignmentFraction, getScrollPadding, onProgress } =
     ctx;
   const items = wrapper.querySelectorAll(".carousel-item");
   const { anchors, scrollAnchor } = getItemMetrics(
@@ -190,7 +190,7 @@ function apply(ctx) {
   const currentProgress = computeCurrentProgress(anchors, scrollAnchor);
   const currentIndex = computeCurrentIndex(currentProgress, items.length);
 
-  updatePageIndicator(wrapper, currentIndex);
+  onProgress?.(currentIndex, currentProgress);
 } // End apply function
 
 export const originEffect = { name: "origin", onItemCreated, setup, apply };

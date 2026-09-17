@@ -202,7 +202,7 @@ function setup(ctx) {
 // animations on .carousel-item; this only computes the discrete current
 // index for the page dots, since no timeline hands that back to JS.
 function apply(ctx) {
-  const { wrapper, scrollDistance, offsetLength, offsetFromStart, getAlignmentFraction, getScrollPadding, updatePageIndicator } =
+  const { wrapper, scrollDistance, offsetLength, offsetFromStart, getAlignmentFraction, getScrollPadding, onProgress } =
     ctx;
   const items = wrapper.querySelectorAll(".carousel-item");
   const { anchors, scrollAnchor } = getItemMetrics(
@@ -218,7 +218,7 @@ function apply(ctx) {
   const currentProgress = computeCurrentProgress(anchors, scrollAnchor);
   const currentIndex = computeCurrentIndex(currentProgress, items.length);
 
-  updatePageIndicator(wrapper, currentIndex);
+  onProgress?.(currentIndex, currentProgress);
 } // End apply function
 
 export const cssEffect = { name: "css", onItemCreated, setup, apply };

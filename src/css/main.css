@@ -74,6 +74,23 @@ body {
   cursor: pointer;
 }
 
+.link-mode-controls {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  background: var(--bg-offset-2);
+  border-radius: 10px;
+  font-size: 13px;
+  width: fit-content;
+}
+
+.link-mode-controls label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .carousel-wrapper {
   display: flex;
   align-items: center;
@@ -312,6 +329,26 @@ body {
 
 .placeholder-boxes .carousel-item {
   padding: 6px;
+}
+
+/* The filmstrip navigator (see navigators/thumbnail-scrubber.js) - a second,
+   independent carousel synced to the main one, not a bolted-on widget. Its
+   items keep the main carousel's real per-item aspect ratio (set inline, in
+   JS) at this fixed height; a tighter --noncurrent-scale than the default
+   0.8 makes the current-vs-neighbor size difference read clearly at
+   filmstrip scale. Height is taller than any single thumbnail so the
+   scaled-up current one has room without the wrapper's own
+   overflow-y: hidden clipping it. */
+.thumbnail-scrubber-strip {
+  height: 100px;
+  --noncurrent-scale: 0.6;
+  --noncurrent-opacity: 0.6;
+  cursor: grab;
+}
+
+.thumbnail-scrubber-strip::-webkit-scrollbar,
+.thumbnail-scrubber-main::-webkit-scrollbar {
+  display: none;
 }
 
 .spacer {

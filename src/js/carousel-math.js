@@ -134,6 +134,22 @@ export function computeCurrentIndex(currentProgress, itemCount) {
   return Math.min(Math.max(Math.round(currentProgress), 0), itemCount - 1);
 }
 
+// Inverse of computeCurrentProgress: given a (possibly fractional, possibly
+// out-of-[0, n-1]) currentProgress, reconstructs the scrollAnchor that would
+// have produced it against this array of anchors. Used to manually drive one
+// carousel's scroll position from another carousel's live currentProgress
+// (see carousel-link.js) - a direct write, not a native scrollTo(), since the
+// source's progress is itself continuously changing during a live scroll/drag
+// and native smooth-scroll only makes sense against a fixed destination.
+export function computeScrollAnchorForProgress(anchors, progress) {
+  const n = anchors.length;
+  if (n === 0) return 0;
+  if (n === 1) return anchors[0];
+
+  const i = Math.min(Math.max(Math.floor(progress), 0), n - 2);
+  return transition(progress - i, anchors[i], anchors[i + 1]);
+}
+
 // Triangular falloff: 1 exactly at this item's own index, down to 0 by the
 // time currentProgress reaches either neighboring index.
 export function computeItemProgress(currentProgress, i) {

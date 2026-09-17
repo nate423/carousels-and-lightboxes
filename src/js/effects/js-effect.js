@@ -52,7 +52,7 @@ function setup(ctx) {
 }
 
 function apply(ctx) {
-  const { wrapper, scrollDistance, scrollAxis, updatePageIndicator } = ctx;
+  const { wrapper, scrollDistance, scrollAxis, onProgress } = ctx;
   const { items, anchors, wrapperAnchorPoint, baseDiff, prefix } = stateByWrapper.get(wrapper);
   const scrollAnchor = wrapper[scrollDistance] + wrapperAnchorPoint;
 
@@ -83,7 +83,7 @@ function apply(ctx) {
     item.style.filter = `blur(${blurs[i]}px)`;
   });
 
-  updatePageIndicator(wrapper, currentIndex);
+  onProgress?.(currentIndex, currentProgress);
 } // End apply function
 
 export const jsEffect = { name: "js", onItemCreated, setup, apply };
