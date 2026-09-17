@@ -14,6 +14,33 @@ function getEffect(wrapper) {
   return EFFECTS[wrapper.dataset.effect] || cssEffect;
 }
 
+// The thumbnail scrubber (unlike the side-by-side comparison demos above,
+// which are supposed to show each variant as-is, polyfilled or not) is meant
+// to just work, so it skips the polyfill entirely: css-effect.js needs real
+// native support for animation-timeline/view-timeline/scroll-timeline, and
+// there's no reliably polyfilling that (see git history), so browsers
+// without it get the JS variant instead - it computes the same
+// scale/opacity/translate itself on scroll rather than delegating to a
+// native scroll-driven animation. Tagging the wrapper with
+// data-effect="js" (not just returning jsEffect) also keeps it correctly
+// excluded from the animation-timeline/scroll-timeline rules in main.css,
+// which key off that same attribute.
+//
+// Reads index.html's pre-recorded answer rather than calling
+// CSS.supports("animation-timeline: --works") again here - the polyfill,
+// once loaded, patches CSS.supports to always report that as supported (see
+// index.html), so a fresh call made from here, after it's had a chance to
+// load, would always say "yes" whether or not it actually is.
+const supportsScrollDrivenAnimations = window.__supportsScrollDrivenAnimations ?? CSS.supports("animation-timeline: --works");
+
+function getScrubberEffect(wrapper) {
+  if (!supportsScrollDrivenAnimations) {
+    wrapper.dataset.effect = "js";
+    return jsEffect;
+  }
+  return cssEffect;
+}
+
 function randomDimension(min, max) {
   return Math.floor(Math.random() * (max - min + 1) + min) + "px";
 }
@@ -82,12 +109,14 @@ document.addEventListener("DOMContentLoaded", function () {
   if (scrubberMainWrapper && scrubberStripWrapper) {
     const mainCarousel = createCarousel(scrubberMainWrapper, {
       itemCount: 30,
-      effect: getEffect(scrubberMainWrapper),
+      effect: getScrubberEffect(scrubberMainWrapper),
       createItem: createPlaceholderItem(scrubberMainWrapper)
     });
     carousels.push(mainCarousel);
 
-    const { scrubber, link } = attachThumbnailScrubber(mainCarousel, scrubberStripWrapper);
+    const { scrubber, link } = attachThumbnailScrubber(mainCarousel, scrubberStripWrapper, {
+      effect: getScrubberEffect(scrubberStripWrapper)
+    });
     carousels.push(scrubber);
 
     document.querySelectorAll("[data-link-direction]").forEach((select) => {

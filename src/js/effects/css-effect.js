@@ -27,22 +27,54 @@ import {
 // treatment (see computeTranslationBreakpoints in carousel-math.js for why
 // it's exactly representable this way too), just off a second, wrapper-level
 // scroll-timeline instead of the per-item view-timeline - see main.css.
+// Item ids just need to be unique site-wide (they're used in a
+// `[data-item-id="N"]` selector - see below), so this counter alone stays
+// module-global; it never needs resetting.
 let nextItemId = 0;
-const currentKeyframeRules = new Map();
-let currentKeyframeStyleEl = null;
-const translateKeyframeRules = new Map();
-let translateKeyframeStyleEl = null;
-// The scroll-timeline polyfill (Safari) doesn't support animation-timeline
-// et al. set as inline styles - it works by parsing real stylesheet rules
-// for those properties and matching their selectors against the DOM (see
-// getAnimationTimelineOptions in vendor/scroll-timeline.js), the same way
-// it discovers everything else here. Inline styles are invisible to it.
-// So every item's animation-name/-timeline/-range also gets a generated
-// selector rule here, in addition to the inline styles below (which native
-// engines read directly, and which win in the CSSOM anyway - same values,
-// so no conflict).
-const positionRules = new Map();
-let positionStyleEl = null;
+
+// Everything else - the generated keyframe/position rules and the <style>
+// elements holding them - is kept one-per-wrapper (via this WeakMap) rather
+// than as module-level singletons. With a single shared set, every
+// cssEffect-driven carousel on the page (there can be several at once - see
+// thumbnail-scrubber.js, which runs two more alongside the main carousel)
+// would flush the exact same 3 <style> elements on every one of their setup()
+// calls, so each carousel's own resize/alignment churn forces a full
+// teardown-and-reinsert of every OTHER carousel's rules too. The
+// scroll-timeline polyfill (see below) only (re)parses a <style> element at
+// the moment it's inserted, so that churn means it's constantly re-discovering
+// rules for items whose animations may already be running - a window where a
+// freshly-(re)dispatched animationstart can race the polyfill's own
+// MutationObserver-driven parse of the very rule it needs, permanently
+// missing the timeline hijack for whichever items lose that race. Scoping
+// the rules/style-elements per wrapper means one carousel's churn no longer
+// touches another's.
+const stateByWrapper = new WeakMap();
+
+function getWrapperState(wrapper) {
+  let state = stateByWrapper.get(wrapper);
+  if (!state) {
+    state = {
+      currentKeyframeRules: new Map(),
+      currentKeyframeStyleEl: null,
+      translateKeyframeRules: new Map(),
+      translateKeyframeStyleEl: null,
+      // The scroll-timeline polyfill (Safari) doesn't support
+      // animation-timeline et al. set as inline styles - it works by parsing
+      // real stylesheet rules for those properties and matching their
+      // selectors against the DOM (see getAnimationTimelineOptions in
+      // vendor/scroll-timeline.js), the same way it discovers everything
+      // else here. Inline styles are invisible to it. So every item's
+      // animation-name/-timeline/-range also gets a generated selector rule
+      // here, in addition to the inline styles below (which native engines
+      // read directly, and which win in the CSSOM anyway - same values, so
+      // no conflict).
+      positionRules: new Map(),
+      positionStyleEl: null
+    };
+    stateByWrapper.set(wrapper, state);
+  }
+  return state;
+}
 
 // Only builds the rule text and points the item at it - doesn't touch the
 // shared stylesheets' textContent. Setting textContent is a full
@@ -51,9 +83,9 @@ let positionStyleEl = null;
 // instead of n times (was O(n^2) - the likely cause of the jank/freezing
 // seen resizing the window, since resize has no debounce and calls setup()
 // on every native 'resize' event).
-function setItemCurrentKeyframes(item, peakX, range, translateStops, scrollAxis) {
+function setItemCurrentKeyframes(state, item, peakX, range, translateStops, scrollAxis) {
   const currentName = `item-current-${item.dataset.itemId}`;
-  currentKeyframeRules.set(
+  state.currentKeyframeRules.set(
     currentName,
     `@keyframes ${currentName} {
       0% { scale: var(--noncurrent-scale); opacity: var(--noncurrent-opacity); }
@@ -69,7 +101,7 @@ function setItemCurrentKeyframes(item, peakX, range, translateStops, scrollAxis)
       return `${percent}% { translate: ${translateValue}; }`;
     })
     .join("\n      ");
-  translateKeyframeRules.set(translateName, `@keyframes ${translateName} {\n      ${stops}\n    }`);
+  state.translateKeyframeRules.set(translateName, `@keyframes ${translateName} {\n      ${stops}\n    }`);
 
   const animationName = `${currentName}, ${translateName}`;
   const animationTimeline = "--item-reveal, --carousel-scroll";
@@ -79,7 +111,7 @@ function setItemCurrentKeyframes(item, peakX, range, translateStops, scrollAxis)
   item.style.animationTimeline = animationTimeline;
   item.style.animationRange = animationRange;
 
-  positionRules.set(
+  state.positionRules.set(
     item.dataset.itemId,
     `.carousel-item[data-item-id="${item.dataset.itemId}"] {
       animation-name: ${animationName};
@@ -104,13 +136,16 @@ function replaceStyleEl(prevEl, cssText) {
   return nextEl;
 }
 
-function flushKeyframeStyles() {
-  currentKeyframeStyleEl = replaceStyleEl(currentKeyframeStyleEl, [...currentKeyframeRules.values()].join("\n"));
-  translateKeyframeStyleEl = replaceStyleEl(
-    translateKeyframeStyleEl,
-    [...translateKeyframeRules.values()].join("\n")
+function flushKeyframeStyles(state) {
+  state.currentKeyframeStyleEl = replaceStyleEl(
+    state.currentKeyframeStyleEl,
+    [...state.currentKeyframeRules.values()].join("\n")
   );
-  positionStyleEl = replaceStyleEl(positionStyleEl, [...positionRules.values()].join("\n"));
+  state.translateKeyframeStyleEl = replaceStyleEl(
+    state.translateKeyframeStyleEl,
+    [...state.translateKeyframeRules.values()].join("\n")
+  );
+  state.positionStyleEl = replaceStyleEl(state.positionStyleEl, [...state.positionRules.values()].join("\n"));
 }
 
 function onItemCreated(item) {
@@ -154,6 +189,7 @@ function setup(ctx) {
     getScrollPadding,
     getNoncurrentScale
   } = ctx;
+  const state = getWrapperState(wrapper);
   const items = wrapper.querySelectorAll(".carousel-item");
   const alignment = getAlignmentFraction(wrapper);
   const scrollPadding = getScrollPadding(wrapper);
@@ -193,9 +229,9 @@ function setup(ctx) {
       percent: percentFor(bp.scrollAnchor),
       value: bp.translations[i]
     }));
-    setItemCurrentKeyframes(item, ranges[i].peakX, ranges[i], translateStops, scrollAxis);
+    setItemCurrentKeyframes(state, item, ranges[i].peakX, ranges[i], translateStops, scrollAxis);
   });
-  flushKeyframeStyles();
+  flushKeyframeStyles(state);
 } // End setup function
 
 // Scale/opacity/translate are all driven entirely by the CSS scroll-driven

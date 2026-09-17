@@ -75,7 +75,15 @@
   </main>
 
   <script>
-    if (!CSS.supports("animation-timeline: --works")) {
+    // Recorded before the polyfill below has a chance to load: it patches
+    // CSS.supports itself (so feature-detection *in the page's own CSS*
+    // doesn't see through it and skip declaring animation-timeline etc.) -
+    // by the time main.js could call CSS.supports("animation-timeline:
+    // --works") itself, it would always get back `true`, polyfilled or not.
+    // main.js's thumbnail-scrubber fallback (the one non-demo consumer that
+    // needs a real answer, not the polyfilled one) reads this instead.
+    window.__supportsScrollDrivenAnimations = CSS.supports("animation-timeline: --works");
+    if (!window.__supportsScrollDrivenAnimations) {
       const s = document.createElement("script");
       s.src = "js/vendor/scroll-timeline.js";
       s.async = false;

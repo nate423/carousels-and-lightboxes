@@ -343,7 +343,6 @@ body {
   height: 100px;
   --noncurrent-scale: 0.6;
   --noncurrent-opacity: 0.6;
-  cursor: grab;
 }
 
 .thumbnail-scrubber-strip::-webkit-scrollbar,
