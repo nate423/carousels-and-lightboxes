@@ -161,19 +161,29 @@ body {
   isolation: isolate;
 }
 
-/* The scroll-driven animation is opted OUT of for the data-effect="js"
-   comparison carousel, which computes scale/opacity itself on every scroll
-   event instead - see adjustStylesBasedOnProgressJS in main.js. Both
-   data-effect="css" and data-effect="origin" (origin-effect.js) share this
-   --item-reveal view-timeline scaffolding and override animation-name/-range
-   per item themselves; data-effect="origin" just never uses the
-   --carousel-scroll timeline declared below, since it needs no translate. */
-.carousel-wrapper:not([data-effect="js"]) .carousel-item {
+/* Every rule below is gated on data-scroll-timelines, NOT on data-effect.
+   The two are different questions: data-effect picks which effect module
+   main.js constructs, while this scaffolding asks whether the wrapper drives
+   its items with native CSS scroll-driven animations at all. They used to be
+   conflated behind :not([data-effect="js"]), which forced any wrapper that
+   wanted out of these rules to claim data-effect="js" whether or not it
+   actually used js-effect.js - see ios-thumbnail-scrubber.js, which runs
+   ios-scrubber-effect.js and was mislabelled purely to land on this side of
+   the selector.
+
+   Opted out: js-effect.js (computes scale/opacity itself on every scroll
+   event) and ios-scrubber-effect.js (its "current item" look is padding and
+   width, driven from JS). Opted in: css-effect.js and origin-effect.js,
+   which share this --item-reveal view-timeline scaffolding and override
+   animation-name/-range per item themselves; origin-effect.js just never
+   uses the --carousel-scroll timeline declared below, since it needs no
+   translate. */
+.carousel-wrapper:not([data-scroll-timelines="off"]) .carousel-item {
   view-timeline-name: --item-reveal;
   view-timeline-axis: inline;
 
-  /* animation-range is computed and set per item in JS (updateAnimationRanges
-     in main.js), from the same anchor/alignment math as everything else in
+  /* animation-range is computed and set per item in JS
+     (setItemCurrentKeyframes in css-effect.js), from the same anchor/alignment math as everything else in
      carousel-math.js - keyword ranges (entry/exit/contain) don't track a
      custom alignment anchor point across items of wildly different sizes. */
   animation-name: item-current;
@@ -193,7 +203,7 @@ body {
    tracking every carousel's timeline on the inline axis regardless of
    data-scroll-axis="y" - the vertical demo's items never got a non-zero
    timeline progress since inline-axis (x) scroll never changes there. */
-.carousel-wrapper[data-scroll-axis="y"]:not([data-effect="js"]) .carousel-item {
+.carousel-wrapper[data-scroll-axis="y"]:not([data-scroll-timelines="off"]) .carousel-item {
   view-timeline-name: --item-reveal;
   view-timeline-axis: block;
   animation-name: item-current;
@@ -216,7 +226,7 @@ body {
    "auto"-into-scroll-padding, so it never had this bug and doesn't need
    (or need to safely parse) this override. */
 @supports (animation-timeline: --works) {
-  .carousel-wrapper:not([data-effect="js"]) .carousel-item {
+  .carousel-wrapper:not([data-scroll-timelines="off"]) .carousel-item {
     view-timeline-inset: 0px;
   }
 }
@@ -229,7 +239,7 @@ body {
    - see setItemCurrentKeyframes in css-effect.js for the generated per-item
    @keyframes and computeTranslationBreakpoints in carousel-math.js for why
    this is exactly reconstructable rather than sampled. */
-.carousel-wrapper:not([data-effect="js"]) {
+.carousel-wrapper:not([data-scroll-timelines="off"]) {
   scroll-timeline-name: --carousel-scroll;
   scroll-timeline-axis: inline;
 }
@@ -237,7 +247,7 @@ body {
 /* Same reasoning as the view-timeline-axis override above - the polyfill's
    parser needs scroll-timeline-name in the same rule as the axis it's
    overriding, or it never sees the override at all. */
-.carousel-wrapper[data-scroll-axis="y"]:not([data-effect="js"]) {
+.carousel-wrapper[data-scroll-axis="y"]:not([data-scroll-timelines="off"]) {
   scroll-timeline-name: --carousel-scroll;
   scroll-timeline-axis: block;
 }

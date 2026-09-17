@@ -29,10 +29,13 @@ export function attachIosThumbnailScrubber(mainCarousel, scrubberWrapper, option
 
   // Opts this wrapper out of the native scroll-driven item-current
   // scale/opacity animation main.css otherwise applies to every
-  // .carousel-item (see the `:not([data-effect="js"])` rules there) - this
-  // style's "current item" look is entirely padding/width, driven by
-  // ios-scrubber-effect.js instead.
-  scrubberWrapper.dataset.effect = "js";
+  // .carousel-item (see the `:not([data-scroll-timelines="off"])` rules
+  // there) - this style's "current item" look is entirely padding/width,
+  // driven by ios-scrubber-effect.js instead. Note this says nothing about
+  // which effect module runs here; that's data-effect, and this wrapper
+  // isn't configured through it at all (the navigator passes
+  // iosScrubberEffect to createCarousel directly).
+  scrubberWrapper.dataset.scrollTimelines = "off";
 
   function createItem(item, index) {
     item.style.height = itemHeight + "px";

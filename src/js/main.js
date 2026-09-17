@@ -23,9 +23,10 @@ function getEffect(wrapper) {
 // without it get the JS variant instead - it computes the same
 // scale/opacity/translate itself on scroll rather than delegating to a
 // native scroll-driven animation. Tagging the wrapper with
-// data-effect="js" (not just returning jsEffect) also keeps it correctly
-// excluded from the animation-timeline/scroll-timeline rules in main.css,
-// which key off that same attribute.
+// data-scroll-timelines="off" (not just returning jsEffect) also keeps it
+// correctly excluded from the animation-timeline/scroll-timeline rules in
+// main.css, which key off that attribute; data-effect is set alongside it so
+// the wrapper still says honestly which effect module is running on it.
 //
 // Reads index.html's pre-recorded answer rather than calling
 // CSS.supports("animation-timeline: --works") again here - the polyfill,
@@ -34,11 +35,16 @@ function getEffect(wrapper) {
 // load, would always say "yes" whether or not it actually is.
 const supportsScrollDrivenAnimations = window.__supportsScrollDrivenAnimations ?? CSS.supports("animation-timeline: --works");
 
-function getScrubberEffect(wrapper) {
+// Named for the fact that it configures the wrapper as well as choosing -
+// the two have to happen together, since the chosen module and the CSS
+// scaffolding the wrapper declares must agree.
+function configureScrubberEffect(wrapper) {
   if (!supportsScrollDrivenAnimations) {
     wrapper.dataset.effect = "js";
+    wrapper.dataset.scrollTimelines = "off";
     return jsEffect;
   }
+  wrapper.dataset.effect = "css";
   return cssEffect;
 }
 
@@ -114,13 +120,13 @@ document.addEventListener("DOMContentLoaded", function () {
   if (scrubberMainWrapper && scrubberStripWrapper) {
     const mainCarousel = createCarousel(scrubberMainWrapper, {
       itemCount: 30,
-      effect: getScrubberEffect(scrubberMainWrapper),
+      effect: configureScrubberEffect(scrubberMainWrapper),
       createItem: createPlaceholderItem(scrubberMainWrapper)
     });
     carousels.push(mainCarousel);
 
     const { scrubber, link } = attachThumbnailScrubber(mainCarousel, scrubberStripWrapper, {
-      effect: getScrubberEffect(scrubberStripWrapper)
+      effect: configureScrubberEffect(scrubberStripWrapper)
     });
     carousels.push(scrubber);
 
@@ -140,7 +146,7 @@ document.addEventListener("DOMContentLoaded", function () {
   if (iosScrubberMainWrapper && iosScrubberStripWrapper) {
     const mainCarousel = createCarousel(iosScrubberMainWrapper, {
       itemCount: 30,
-      effect: getScrubberEffect(iosScrubberMainWrapper),
+      effect: configureScrubberEffect(iosScrubberMainWrapper),
       createItem: createPlaceholderItem(iosScrubberMainWrapper)
     });
     carousels.push(mainCarousel);
