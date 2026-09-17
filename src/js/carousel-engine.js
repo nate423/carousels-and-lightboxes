@@ -19,6 +19,9 @@ const DEFAULT_ALIGNMENT = "center";
 // ms of no further direct writes before scroll-snap is handed back - see
 // suspendScrollSnap below.
 const SNAP_RESTORE_DELAY = 150;
+// Strength reported for any input that is unambiguously deliberate - see
+// lastInputStrength below.
+const DECISIVE_INPUT = Infinity;
 
 // Native `scroll` can fire more than once per animation frame (trackpads in
 // particular), and both `resize` and ResizeObserver behave the same way
@@ -90,16 +93,20 @@ export function createCarousel(wrapper, options = {}) {
   // scroll event's own handler runs.
   let scrollSource = "self";
 
-  // How forceful the most recent direct input on this carousel was. Only
-  // wheel deltas are measured; every other input type is unconditionally
-  // decisive, since the ambiguity this exists to capture is specific to
-  // wheels - macOS/Chrome dispatch a flick's decaying momentum ticks to
+  // How forceful the most recent direct input on this carousel was. Note
+  // this is genuinely "the last input seen", not "what caused the scroll
+  // being handled right now" - nothing resets it, so a carousel scrolling
+  // under its own momentum still reports whatever last landed on it. That's
+  // the intent (a flick's opening delta is exactly what should authorize the
+  // coast that follows), but it does mean the value is only meaningful for a
+  // carousel something has actually touched or commanded. Only wheel deltas
+  // are measured; every other input type is unconditionally decisive, since
+  // the ambiguity this exists to capture is specific to wheels - macOS/Chrome dispatch a flick's decaying momentum ticks to
   // wherever the cursor happens to sit rather than where the gesture
   // started, so a real but tiny wheel tick can land on a carousel nobody
   // touched. A finger on the glass or a press on the scrollbar has no such
   // analog. Read only by carousel-link.js, to decide whether an input is
   // deliberate enough to interrupt a carousel that's still coasting.
-  const DECISIVE_INPUT = Infinity;
   let lastInputStrength = 0;
 
   function markSelfDriven(event) {
@@ -213,7 +220,17 @@ export function createCarousel(wrapper, options = {}) {
     // items, a page dot, a realignment - not an echo of somebody driving it.
     // Marking it here is what lets those commands propagate through a link
     // even when the last thing to touch this carousel was a direct write.
+    //
+    // Decisive by definition, too: a command is an explicit "go to this
+    // item", never the ambiguous decaying tick lastInputStrength exists to
+    // catch, so it must not be second-guessed by a strength test. Without
+    // this, a command arriving on a carousel whose wrapper has had no direct
+    // input of its own - a page dot (which lives outside the wrapper, so no
+    // pointerdown ever lands on it), setAlignment, any programmatic caller -
+    // is measured at strength 0 and gets suppressed by carousel-link.js
+    // whenever the other side happens to still be coasting.
     scrollSource = "self";
+    lastInputStrength = DECISIVE_INPUT;
 
     const scrollTarget = computeScrollTarget(
       wrapper,
