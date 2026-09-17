@@ -1,6 +1,7 @@
 import { createCarousel } from "./carousel-engine.js";
 import { attachPageControls } from "./navigators/page-controls.js";
 import { attachThumbnailScrubber } from "./navigators/thumbnail-scrubber.js";
+import { attachIosThumbnailScrubber } from "./navigators/ios-thumbnail-scrubber.js";
 import { cssEffect } from "./effects/css-effect.js";
 import { jsEffect } from "./effects/js-effect.js";
 import { originEffect } from "./effects/origin-effect.js";
@@ -72,12 +73,16 @@ function createPlaceholderItem(wrapper) {
 document.addEventListener("DOMContentLoaded", function () {
   const carousels = [];
 
-  // The thumbnail-scrubber demo's pair of wrappers (main + filmstrip) are
-  // built explicitly below, in order, since the strip needs its source
-  // carousel already populated first - excluded here so this generic loop
-  // doesn't also set them up as independent top-level carousels.
+  // The thumbnail-scrubber demos' wrapper pairs (main + filmstrip, for both
+  // styles) are built explicitly below, in order, since each strip needs its
+  // source carousel already populated first - excluded here so this generic
+  // loop doesn't also set them up as independent top-level carousels. Note
+  // .thumbnail-scrubber-main is shared by both styles' main carousel (same
+  // role, same look); only the strip markup/class differs per style.
   document
-    .querySelectorAll(".carousel-wrapper:not(.thumbnail-scrubber-main):not(.thumbnail-scrubber-strip)")
+    .querySelectorAll(
+      ".carousel-wrapper:not(.thumbnail-scrubber-main):not(.thumbnail-scrubber-strip):not(.ios-thumbnail-scrubber-strip)"
+    )
     .forEach((wrapper) => {
       if (
         !wrapper.classList.contains("placeholder-boxes") &&
@@ -124,6 +129,24 @@ document.addEventListener("DOMContentLoaded", function () {
         link.setMode(select.dataset.linkDirection, select.value);
       });
     });
+  }
+
+  // Same pairing as above, but with the iOS-style strip - also a real
+  // carousel-engine instance (see navigators/ios-thumbnail-scrubber.js), so
+  // both its main carousel and the strip itself go into `carousels` for the
+  // alignment radios, same as the classic scrubber pair above.
+  const iosScrubberMainWrapper = document.getElementById("h-scroll-ios-scrubber-main");
+  const iosScrubberStripWrapper = document.getElementById("h-scroll-ios-scrubber-strip");
+  if (iosScrubberMainWrapper && iosScrubberStripWrapper) {
+    const mainCarousel = createCarousel(iosScrubberMainWrapper, {
+      itemCount: 30,
+      effect: getScrubberEffect(iosScrubberMainWrapper),
+      createItem: createPlaceholderItem(iosScrubberMainWrapper)
+    });
+    carousels.push(mainCarousel);
+
+    const { scrubber } = attachIosThumbnailScrubber(mainCarousel, iosScrubberStripWrapper);
+    carousels.push(scrubber);
   }
 
   document.querySelectorAll('input[name="scroll-alignment"]').forEach((radio) => {

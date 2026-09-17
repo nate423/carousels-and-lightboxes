@@ -346,8 +346,49 @@ body {
 }
 
 .thumbnail-scrubber-strip::-webkit-scrollbar,
-.thumbnail-scrubber-main::-webkit-scrollbar {
+.thumbnail-scrubber-main::-webkit-scrollbar,
+.ios-thumbnail-scrubber-strip::-webkit-scrollbar {
   display: none;
+}
+
+/* The other filmstrip-navigator style (see navigators/ios-thumbnail-scrubber.js)
+   - fixed-size thumbnails at a constant gap, where only the item nearest
+   the center is bigger, instead of thumbnail-scrubber-strip's "every item
+   scales continuously toward the center". A real carousel-engine wrapper
+   like any other (native scroll + scroll-snap, from the shared
+   .carousel-wrapper rules) - no custom drag/transform here. Height matches
+   the (constant) item height exactly - unlike thumbnail-scrubber-strip,
+   nothing here ever grows taller, only wider, so no extra headroom is
+   needed. */
+.ios-thumbnail-scrubber-strip {
+  height: 30px;
+}
+
+.ios-thumbnail-scrubber-item {
+  flex: 0 0 auto;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-inline: 0;
+  /* Always on, not toggled from JS - ios-scrubber-effect.js just writes a
+     continuous target value every scroll frame (how close this item is to
+     "current" right now); this transition is what turns that stream of
+     targets into motion. It doubles as the mechanism that keeps a fast
+     flick from visibly popping every item it sweeps past on its way to
+     wherever it actually lands: each intermediate item's target is
+     overwritten by the next one before this transition can catch up to it,
+     so only the item the scroll actually comes to rest on ever gets the
+     full duration to arrive. */
+  transition: padding-inline 130ms ease;
+}
+
+.ios-thumbnail-scrubber-thumb {
+  width: var(--ios-item-width);
+  height: 100%;
+  border-radius: 3px;
+  transition: width 130ms ease;
+  background-color: hsl(220, 14%, 70%);
 }
 
 .spacer {

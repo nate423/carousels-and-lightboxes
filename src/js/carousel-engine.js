@@ -230,8 +230,21 @@ export function createCarousel(wrapper, options = {}) {
 
   window.addEventListener("resize", refreshGeometry);
 
-  const itemResizeObserver = new ResizeObserver(refreshGeometry);
-  getItems().forEach((item) => itemResizeObserver.observe(item));
+  // Recovers from an item's size changing for reasons outside this module's
+  // own control (e.g. a placeholder image finishing its load mid-scroll).
+  // Effects that resize items themselves as their normal scroll-driven
+  // behavior (see ios-scrubber-effect.js) opt out via
+  // effect.skipItemResizeObserver - without that, every write the effect
+  // makes would itself be observed here as "an item's size changed
+  // unexpectedly", re-triggering refreshGeometry (and so effect.apply
+  // again) on the very next frame regardless of whether the wrapper's own
+  // scroll actually moved - a self-sustaining cascade of redundant,
+  // slightly-stale re-renders that reads as items flickering their
+  // position.
+  if (!effect.skipItemResizeObserver) {
+    const itemResizeObserver = new ResizeObserver(refreshGeometry);
+    getItems().forEach((item) => itemResizeObserver.observe(item));
+  }
 
   // Re-points the wrapper at a new alignment: keeps whichever item is
   // currently "current" under the cursor of the new alignment (no smooth
