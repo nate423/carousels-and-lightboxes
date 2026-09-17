@@ -5,8 +5,8 @@
       "name": "carousels-and-lightboxes",
       "runtimeExecutable": "npx",
       "runtimeArgs": ["serve", "src"],
-      "port": 5173,
-      "autoPort": true
+      "port": 56576,
+      "autoPort": false
     }
   ]
 }
