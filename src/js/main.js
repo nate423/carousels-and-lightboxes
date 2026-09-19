@@ -154,7 +154,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
     const { scrubber } = attachIosThumbnailScrubber(mainCarousel, iosScrubberStripWrapper);
     carousels.push(scrubber);
-    attachScrollEventProbe(iosScrubberStripWrapper, "iOS strip — scroll events");
+    attachScrollEventProbe(scrubber, "iOS thumbnail strip (not the main carousel)");
   }
 
   document.querySelectorAll('input[name="scroll-alignment"]').forEach((radio) => {
