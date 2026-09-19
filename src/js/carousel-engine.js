@@ -289,6 +289,16 @@ export function createCarousel(wrapper, options = {}) {
     );
     const scrollAnchor = computeScrollAnchorForProgress(anchors, progress);
     wrapper[scrollDistance] = scrollAnchor - wrapperAnchor(wrapper[offsetLength], alignment, scrollPadding);
+
+    // Render here rather than waiting for the scroll event this write usually
+    // causes, because it does not always cause one: a scroll position is
+    // quantised to whole pixels, so when a short scroller is driven by a much
+    // longer one most frames resolve to the pixel it is already on, emit
+    // nothing, and would otherwise hold the previous frame's render. That is
+    // what makes a slow drag on the driver look like it steps rather than
+    // glides. Effects are free to re-run - they compute from current state
+    // rather than accumulating - so the echo, when it does arrive, is harmless.
+    effect.apply(ctx);
   }
 
   function populateItems() {

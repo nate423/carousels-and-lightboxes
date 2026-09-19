@@ -8,6 +8,11 @@
 // Everything it samples is a cheap read - scrollLeft and inline style strings,
 // never offsetLeft/offsetWidth - because it runs on every scroll frame and a
 // forced layout here would add exactly the kind of jank it exists to measure.
+// Bumped by hand whenever the scrubber's motion changes, so a capture taken on
+// a phone says which build produced it - otherwise a stale page and a fixed one
+// are indistinguishable from the log alone.
+const LOG_VERSION = 3;
+
 const BUFFER_LIMIT = 900;
 const TAIL_LINES = 7;
 
@@ -23,7 +28,7 @@ function createPanel(title) {
   const bar = document.createElement("div");
   bar.style.cssText = "display:flex;align-items:center;gap:8px;margin-bottom:4px";
   const label = document.createElement("b");
-  label.textContent = title;
+  label.textContent = `${title} · v${LOG_VERSION}`;
   label.style.cssText = "flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap";
   bar.append(label);
 
@@ -46,7 +51,12 @@ function createPanel(title) {
   }
 
   function allText() {
-    return [`# ${title}`, `# ${navigator.userAgent}`, `# native scroll-driven animations: ${!!window.__supportsScrollDrivenAnimations}`, ...lines].join("\n");
+    return [
+      `# ${title} - log v${LOG_VERSION}`,
+      `# ${navigator.userAgent}`,
+      `# native scroll-driven animations: ${!!window.__supportsScrollDrivenAnimations}`,
+      ...lines
+    ].join("\n");
   }
 
   // Always present, hidden until needed: a phone loading this page over the
