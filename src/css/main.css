@@ -374,13 +374,21 @@ body {
   height: 30px;
 }
 
+/* Fixed width, always - the current item's expansion is drawn as overflow
+   and a transform, never as a bigger box, so that this scroller's layout
+   (and therefore its snap points, and the offsetLeft/offsetWidth reads
+   carousel-math derives progress from) can't move as a side effect of what
+   ios-scrubber-effect.js paints. See that file's header for what went wrong
+   when it could. overflow is visible for the same reason: the expanded
+   thumb is deliberately wider than the box it lives in. */
 .ios-thumbnail-scrubber-item {
   flex: 0 0 auto;
+  width: var(--ios-item-width);
   height: 100%;
+  overflow: visible;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding-inline: 0;
   /* Always on, not toggled from JS - ios-scrubber-effect.js just writes a
      continuous target value every scroll frame (how close this item is to
      "current" right now); this transition is what turns that stream of
@@ -390,14 +398,16 @@ body {
      overwritten by the next one before this transition can catch up to it,
      so only the item the scroll actually comes to rest on ever gets the
      full duration to arrive. */
-  transition: padding-inline 130ms ease;
+  transition: transform 130ms ease;
 }
 
 .ios-thumbnail-scrubber-thumb {
+  /* Never shrink to fit the (narrower) fixed item box around it. */
+  flex: 0 0 auto;
   width: var(--ios-item-width);
   height: 100%;
   border-radius: 3px;
-  transition: width 130ms ease;
+  transition: width 130ms ease, transform 130ms ease;
   background-color: hsl(220, 14%, 70%);
 }
 

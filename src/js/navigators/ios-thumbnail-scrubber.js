@@ -37,26 +37,8 @@ export function attachIosThumbnailScrubber(mainCarousel, scrubberWrapper, option
   // iosScrubberEffect to createCarousel directly).
   scrubberWrapper.dataset.scrollTimelines = "off";
 
-  function createItem(item, index) {
+  function createItem(item) {
     item.style.height = itemHeight + "px";
-
-    // The engine sizes this wrapper's edge spacers (updateSpacers, called
-    // once populateItems finishes creating every item) from whatever size
-    // each item already has *right now* - before ios-scrubber-effect.js
-    // ever runs a frame. If every item starts at its plain collapsed size
-    // and the effect only expands index 0 (the initial "current" item)
-    // afterward, on its first apply() call, the spacer ends up sized for
-    // the collapsed width it measured, while item 0 is actually wider -
-    // scrollLeft 0 then no longer lines up with progress 0 (off by
-    // roughly half the expand amount), which reads as a dead zone right at
-    // the start of the strip where scrolling doesn't move progress at all.
-    // Pre-expanding index 0 here, before updateSpacers runs, means it
-    // measures the *real* initial width and the two stay in sync from the
-    // very first frame.
-    if (index === 0) {
-      item.style.paddingInline = expandedPadding + "px";
-      item.firstElementChild.style.width = expandedWidth + "px";
-    }
   }
 
   const scrubber = createCarousel(scrubberWrapper, {

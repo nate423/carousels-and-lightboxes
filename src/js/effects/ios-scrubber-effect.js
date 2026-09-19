@@ -2,7 +2,27 @@
 // navigators/ios-thumbnail-scrubber.js) - not a general-purpose effect like
 // css/js/origin-effect.js; purpose-built for this navigator's specific DOM
 // (the .ios-thumbnail-scrubber-thumb child every item gets, set up in
-// onItemCreated) and fixed-size items.
+// onItemCreated) and horizontal axis.
+//
+// The load-bearing invariant here is that *every item's layout box is a
+// fixed, identical width, always* - the expansion is drawn entirely with
+// overflow and transforms, which layout can't see. An earlier version grew
+// the current item for real (padding-inline on the item, width on the
+// thumb, both animated every scroll frame), and that made the scroller's own
+// geometry a function of this effect's output: carousel-math's
+// getItemMetrics derives progress by reading item.offsetLeft/offsetWidth, so
+// progress determined the widths and the widths determined progress.
+// Measured on the demo page, an item's offsetLeft moved by 30px - more than
+// a full 23px item pitch - purely depending on where the expansion currently
+// sat. Two symptoms, one cause:
+//   - the strip visibly juddered while the main carousel drove it, because
+//     each frame's scroll write was inverted against anchors the previous
+//     frame's write had already moved;
+//   - it would get stuck collapsed, because the settle test below asks how
+//     far the resting position is from an item's own anchor, and that
+//     distance was meaningless while the anchors moved under it.
+// With the box fixed, anchors are constant for the lifetime of a setup()
+// - which is also why they're cached there rather than re-read per frame.
 //
 // Two genuinely different rendering paths, chosen fresh every apply() call
 // - not one "clever" mechanism trying to serve both (an earlier version
@@ -13,37 +33,31 @@
 //
 //  - Driven by the main carousel's own live scroll (linkCarousels'
 //    "continuous" aToB mode, via direct writeToDest calls): every item's
-//    padding/width is written *untransitioned*, straight from live
-//    progress, every frame - a plain triangle centered on this item's own
-//    index (1 exactly at its own progress, 0 a full item-step either side;
-//    the same shape css-effect.js's own item-current keyframe already uses
-//    for the original scrubber). Zero JS-introduced lag, so it tracks the
-//    source's scroll pixel-for-pixel, matching the original scrubber's own
+//    closeness is written *untransitioned*, straight from live progress,
+//    every frame - a plain triangle centered on this item's own index (1
+//    exactly at its own progress, 0 a full item-step either side; the same
+//    shape css-effect.js's own item-current keyframe already uses for the
+//    original scrubber). Zero JS-introduced lag, so it tracks the source's
+//    scroll pixel-for-pixel, matching the original scrubber's own
 //    continuous feel.
 //  - Dragged/flicked on this strip directly: nothing continuous at all -
-//    on every apply() call, this path works out what *should* be expanded
-//    right now (the nearest item, but only if progress is actually within
-//    UNSETTLE_EPSILON of it - otherwise nothing) and, if that differs from
-//    what's currently rendered as expanded, animates the handoff via the
-//    permanent CSS transition (see main.css). Not "expand on any discrete
-//    index change" (an earlier version tracked *changes* to the rounded
-//    index specifically, which has a real gap: a flick that overshoots its
-//    landing item and gets pulled back by native scroll-snap correction
-//    re-enters the *same* rounded index it had already "changed into" on
-//    the way past - so nothing there ever counted as a new change, and the
-//    item it actually settles on stayed collapsed forever). Recomputing
-//    "what should be expanded" from scratch each time, instead of
-//    diffing against the last change, means arriving back at the same
-//    index after overshooting it is handled the same as arriving at any
-//    other index - both are just "the target differs from what's
-//    currently shown". A slow drag around inside one item's zone reads as
-//    fully collapsed the entire time it's away from that item's own exact
-//    position - matching "should not be treating this as settled unless
-//    progress is a whole number" - and a fast flick through several items
-//    never lets an intermediate one finish animating in, since the next
-//    target overwrites its transition before it arrives; interrupting and
-//    redirecting an in-flight CSS transition is native browser behavior,
-//    nothing this module has to implement.
+//    everything stays collapsed until the gesture comes to rest, and the
+//    item it rests on then animates in via the permanent CSS transition
+//    (see main.css). Collapsing and expanding are driven by deliberately
+//    different things - see the settle block at the bottom of apply() and
+//    the listeners in setup() for which, and why. A slow drag around inside
+//    one item's zone reads as fully collapsed the entire time it's away
+//    from that item's own resting position, and a fast flick through
+//    several items never lets an intermediate one finish animating in,
+//    since the next target overwrites its transition before it arrives;
+//    interrupting and redirecting an in-flight CSS transition is native
+//    browser behavior, nothing this module has to implement.
+//
+// Note what falls out of the fixed box for the drag path specifically:
+// with every item collapsed, each one's rendered footprint is exactly its
+// layout box, so every translation is 0 and a drag is pure native scrolling
+// at the real 23px item pitch - finger and thumbnails move together, with
+// no JS-computed positions involved at all until it settles.
 //
 // Which path applies comes straight from the engine's own scroll
 // attribution (ctx.getScrollSource - see the scroll-attribution block in
@@ -59,7 +73,14 @@
 // after the last relayed write - so grabbing the strip right as the main
 // carousel stopped driving it rendered the first moments of a genuine drag
 // on the driven path. Attribution flips the instant a real input lands.)
-import { getItemMetrics, computeCurrentProgress, computeCurrentIndex } from "../carousel-math.js";
+import {
+  getItemMetrics,
+  computeCurrentProgress,
+  computeCurrentIndex,
+  computeItemProgress,
+  computeScrollAnchorForProgress,
+  wrapperAnchor
+} from "../carousel-math.js";
 
 // Same DEBUG/debugLog shape as carousel-link.js, so logs from both read the
 // same way side by side while tuning this. Flip off (or delete) once
@@ -77,16 +98,18 @@ function debugLog(label, data) {
 const stateByWrapper = new WeakMap();
 // Tracked separately from stateByWrapper, which setup() replaces wholesale
 // on every call (init, resize, alignment change) - this must survive those
-// replacements so the 'scrollend' listener below is only ever attached
-// once per wrapper, not once per setup() call.
-const scrollendListenerAttached = new WeakSet();
+// replacements so the settle listeners below are only ever attached once
+// per wrapper, not once per setup() call.
+const settleListenersAttached = new WeakSet();
 
-// How far (in index-steps) progress may drift from the settled item before
-// that counts as "actively moving away from it" - not 0, since a resting
-// scrollLeft can read back a sub-pixel-different progress than whatever it
-// last settled on; small enough that any real, deliberate drag still
-// collapses it effectively immediately.
-const UNSETTLE_EPSILON = 0.02;
+// How far the scroll position may sit from an item's own anchor and still
+// count as resting on it. In pixels, deliberately, rather than the
+// fraction-of-an-item-step this used to be: scrollLeft settles to
+// fractional pixel values, and at this strip's 23px item pitch the old
+// 0.02 index-steps worked out to under half a pixel - tighter than the
+// resting position can actually be trusted to. Anything a real drag does
+// clears 2px on its first frame.
+const SETTLE_TOLERANCE_PX = 2;
 
 function onItemCreated(item) {
   item.classList.add("ios-thumbnail-scrubber-item");
@@ -96,132 +119,264 @@ function onItemCreated(item) {
 }
 
 function setup(ctx) {
-  const { wrapper } = ctx;
+  const { wrapper, scrollDistance, offsetLength, offsetFromStart, getAlignmentFraction, getScrollPadding } = ctx;
   const items = [...wrapper.querySelectorAll(".carousel-item")];
   const style = getComputedStyle(wrapper);
+  const itemWidth = parseFloat(style.getPropertyValue("--ios-item-width")) || 20;
+  const expandedWidth = parseFloat(style.getPropertyValue("--ios-expanded-width")) || 30;
+  const expandedPadding = parseFloat(style.getPropertyValue("--ios-expanded-padding")) || 10;
+  const alignment = getAlignmentFraction(wrapper);
+  const scrollPadding = getScrollPadding(wrapper);
   const previous = stateByWrapper.get(wrapper);
+
+  // Read once per setup rather than per frame: item boxes are a fixed width
+  // that nothing this effect does can change (see the header), so these
+  // can only move on the events that call setup() in the first place -
+  // init, resize, alignment change. apply() then needs no layout reads at
+  // all, just wrapper.scrollLeft.
+  const { anchors } = getItemMetrics(
+    wrapper,
+    items,
+    offsetFromStart,
+    offsetLength,
+    scrollDistance,
+    alignment,
+    scrollPadding
+  );
+
   stateByWrapper.set(wrapper, {
     items,
-    itemWidth: parseFloat(style.getPropertyValue("--ios-item-width")) || 20,
-    expandedWidth: parseFloat(style.getPropertyValue("--ios-expanded-width")) || 30,
-    expandedPadding: parseFloat(style.getPropertyValue("--ios-expanded-padding")) || 10,
+    anchors,
+    // Only used by the parked 'scrollsnapchange' fallback above. What a
+    // SnapEvent's snapTargetInline points at is the .carousel-item-snap-fix
+    // wrapper carousel-engine puts around every item (that's where
+    // scroll-snap-align lives), not the item itself, so this is how the
+    // browser's answer maps back to an index.
+    snapTargets: items.map((item) => item.parentElement),
+    wrapperAnchorPoint: wrapperAnchor(wrapper[offsetLength], alignment, scrollPadding),
+    alignment,
+    gap: parseFloat(style.gap) || 0,
+    itemWidth,
+    // How much wider the thumb itself gets when fully expanded...
+    thumbGrowth: expandedWidth - itemWidth,
+    // ...versus how much room the expanded item takes from its neighbors,
+    // which also includes the breathing space either side of it. Both are
+    // drawn as overflow around the item's own fixed box, so only this
+    // second number decides how far the neighbors get pushed away.
+    footprintGrowth: expandedWidth - itemWidth + 2 * expandedPadding,
     // Which item the own-drag path currently renders as expanded (closeness
-    // 1) - null when nothing is (progress isn't within UNSETTLE_EPSILON of
-    // any whole index right now). Starts null so the very first apply()
-    // call - wherever progress happens to start - still counts as a change
-    // and paints an initial current item.
-    expandedIndex: previous ? previous.expandedIndex : null,
+    // 1) - null when nothing is, i.e. whenever the strip isn't resting on an
+    // item. Deliberately not carried over from a previous state: the
+    // settleToNearest() at the end of setup() re-derives it against the
+    // geometry just measured, and inheriting it would let that call
+    // no-op on an unchanged index while the render it skipped was the one
+    // that needed redoing.
+    expandedIndex: null,
     // Whether the *previous* apply() call took the driven (untransitioned)
-    // path - lets the own-drag path notice the handoff back and clear any
-    // inline transition:none it left behind, just once, instead of every
-    // call.
+    // path - lets each path notice the handoff and toggle the inline
+    // transition override just once, rather than rewriting it every frame.
     wasDriven: previous ? previous.wasDriven : false
   });
 
-  // A scrolling container's default "scroll anchoring" watches content near
-  // the top of the scrollport and nudges scrollLeft to compensate whenever
-  // that content resizes - built for e.g. a chat log that shouldn't jump
-  // when older messages above the viewport load in. It doesn't know this
-  // wrapper's own content is resizing *because of its own current scroll
-  // position* (every padding/width write below); left on, each write it
-  // "corrects" for triggers a real scroll event, which triggers apply()
-  // again, which writes again - a feedback loop. Disabling it for this
-  // scroller is the correct fix since every element in it is a
-  // self-resizing participant.
-  wrapper.style.overflowAnchor = "none";
-
-  // Safety net for the own-drag path, not a settle-detection timer: a real
-  // drag/flick's native momentum and any trailing scroll-snap correction
-  // can go fully quiet - no further 'scroll' event ever firing - right as
-  // it reaches its exact final resting position, if the last event
-  // delivered before that happened to land a hair short of it. apply()
-  // only ever runs off 'scroll' events, so nothing would otherwise notice
-  // the true final progress and expand whatever it landed on - observed as
-  // the settled item just staying collapsed until something unrelated (the
-  // main carousel driving this strip, say) forces another apply() call.
-  // 'scrollend' fires exactly once an actual scroll operation - gesture,
-  // momentum, and snap-correction together - is over, so triggering one
-  // more apply() here doesn't risk calling anything "settled" early; it's
-  // strictly a chance to catch up to a position that was already, truly,
-  // final.
-  if (!scrollendListenerAttached.has(wrapper) && "onscrollend" in window) {
-    scrollendListenerAttached.add(wrapper);
-    wrapper.addEventListener("scrollend", () => apply(ctx));
+  // Expanding happens here and nowhere else: 'scrollend' fires once a whole
+  // scroll operation - gesture, momentum and snap correction together - is
+  // genuinely over, which is exactly and only when this style wants the
+  // centered item to grow. Nothing else needs to infer it.
+  //
+  // Ignored while something else is driving this wrapper: a relayed write
+  // suspends scroll-snap and the browser re-snaps when it's handed back,
+  // which ends a "scroll operation" that was our own doing rather than
+  // anything the user did.
+  if (!settleListenersAttached.has(wrapper)) {
+    settleListenersAttached.add(wrapper);
+    wrapper.addEventListener("scrollend", () => {
+      if (ctx.getScrollSource() === "driven") return;
+      settleToNearest(ctx);
+    });
   }
+
+  // No scrollend fires for a carousel that has never moved, so the initial
+  // current item needs painting directly. setup() only ever runs at rest
+  // (init, resize, alignment change), so "whatever is nearest right now" is
+  // the settled answer every time.
+  settleToNearest(ctx);
 }
 
-function renderItem(item, closeness, itemWidth, expandedWidth, expandedPadding) {
-  item.style.paddingInline = (closeness * expandedPadding).toFixed(2) + "px";
-  item.firstElementChild.style.width = (itemWidth + closeness * (expandedWidth - itemWidth)).toFixed(2) + "px";
+// --- Parked alternatives -------------------------------------------------
+// Both of these were expand triggers alongside 'scrollend', and both made it
+// expand too eagerly mid-drag. Kept for now only because they're the
+// fallbacks that matter for browsers without 'scrollend' (Safari before
+// 26.2, i.e. iOS 18) - see attachSettleFallbacks' call site, which is
+// currently commented out.
+//
+//   - 'scrollsnapchange' (Chrome 129+, Safari 18.2+) fires when an operation
+//     finishes on a *different* snap target than it started on, and carries
+//     the target element. Strictly better than the position check below, but
+//     it fires for short intra-drag operations too, which is the eagerness.
+//   - The position check is the last resort where neither event exists: it
+//     expands as soon as a scroll frame lands within tolerance of an item's
+//     anchor, which during a slow drag happens every time you pass over one.
+//
+// function attachSettleFallbacks(ctx) {
+//   const { wrapper } = ctx;
+//   if ("onscrollsnapchange" in window) {
+//     wrapper.addEventListener("scrollsnapchange", (event) => {
+//       if (ctx.getScrollSource() === "driven") return;
+//       const state = stateByWrapper.get(wrapper);
+//       const index = state.snapTargets.indexOf(event.snapTargetInline);
+//       if (index !== -1) setExpanded(ctx, index);
+//     });
+//   }
+// }
+//
+// ...and in apply()'s own settle block, as the expand half of it:
+//
+//   } else {
+//     const nearestIndex = computeCurrentIndex(currentProgress, items.length);
+//     if (Math.abs(scrollAnchor - state.anchors[nearestIndex]) <= SETTLE_TOLERANCE_PX) {
+//       setExpanded(ctx, nearestIndex);
+//     }
+//   }
+// -------------------------------------------------------------------------
+
+// Expands whichever item the strip is currently resting on. Only ever called
+// from a position known to be at rest, so it doesn't second-guess that with
+// a tolerance check - with mandatory scroll-snap, "nearest" at rest is the
+// item the browser has snapped to.
+function settleToNearest(ctx) {
+  const { wrapper, scrollDistance } = ctx;
+  const state = stateByWrapper.get(wrapper);
+  const scrollAnchor = wrapper[scrollDistance] + state.wrapperAnchorPoint;
+  const currentProgress = computeCurrentProgress(state.anchors, scrollAnchor);
+  setExpanded(ctx, computeCurrentIndex(currentProgress, state.items.length));
+}
+
+// Lays the items out a second time, in pure visual terms - each one
+// occupying its real rendered footprint at the real gap, rather than the
+// uniform fixed box the scroller actually contains - and moves each item by
+// the difference between where that visual layout wants it and where its
+// box already is. Anchored so that whichever (fractional) item position the
+// scroll is currently at lands on the wrapper's anchor point, which is the
+// same thing the box layout is doing, so the two agree exactly whenever
+// every footprint equals its box (i.e. everything collapsed: no transforms
+// at all) and diverge smoothly as one item expands.
+function render(state, closenesses, currentProgress, scrollAnchor) {
+  const { items, anchors, alignment, gap, itemWidth, thumbGrowth, footprintGrowth } = state;
+
+  const visualAnchors = new Array(items.length);
+  let visualStart = 0;
+  for (let i = 0; i < items.length; i++) {
+    const footprint = itemWidth + closenesses[i] * footprintGrowth;
+    visualAnchors[i] = visualStart + footprint * alignment;
+    visualStart += footprint + gap;
+  }
+
+  // Same inverse-interpolation the box layout's own anchor went through
+  // (computeCurrentProgress is what produced currentProgress from
+  // scrollAnchor), so both sides of the subtraction below are "where the
+  // current position sits" in their respective layouts.
+  const visualAnchorAtProgress = computeScrollAnchorForProgress(visualAnchors, currentProgress);
+
+  items.forEach((item, i) => {
+    const translation =
+      visualAnchors[i] - visualAnchorAtProgress - (anchors[i] - scrollAnchor);
+    item.style.transform = `translate3d(${translation.toFixed(2)}px, 0, 0)`;
+
+    const thumb = item.firstElementChild;
+    thumb.style.width = (itemWidth + closenesses[i] * thumbGrowth).toFixed(2) + "px";
+    // The thumb grows symmetrically around its box's center (the item is a
+    // centering flex container), but the anchor point the visual layout
+    // above places each footprint by is alignment-dependent. At center
+    // alignment those coincide and this is 0; at start/end alignment it
+    // re-centers the thumb inside the footprint the neighbors actually
+    // made room for, instead of leaving it half-overlapping one side.
+    const thumbOffset = closenesses[i] * footprintGrowth * (0.5 - alignment);
+    thumb.style.transform = `translate3d(${thumbOffset.toFixed(2)}px, 0, 0)`;
+  });
+}
+
+// Overriding the permanent CSS transition (see main.css) is a per-path
+// toggle, not a per-frame write: the driven path is continuous already (a
+// new, only-slightly-different target every frame), so transitioning each of
+// those tiny steps would just be the lag/jerkiness this split was built to
+// remove - but re-asserting "none" on every item on every frame is a style
+// write per item per frame that changes nothing.
+function setTransitionsEnabled(items, enabled) {
+  const value = enabled ? "" : "none";
+  items.forEach((item) => {
+    item.style.transition = value;
+    item.firstElementChild.style.transition = value;
+  });
+}
+
+// The one way the own-drag path ever changes what's expanded, shared by the
+// snap-event listeners and by apply()'s own fallback check so both can't
+// drift apart. `index` of null means "nothing expanded" - a one-hot map
+// against null is simply all zeros, which is the collapsed state.
+function setExpanded(ctx, index) {
+  const { wrapper, scrollDistance } = ctx;
+  const state = stateByWrapper.get(wrapper);
+  if (index === state.expandedIndex) return;
+  state.expandedIndex = index;
+
+  const scrollAnchor = wrapper[scrollDistance] + state.wrapperAnchorPoint;
+  render(
+    state,
+    state.items.map((_, i) => (i === index ? 1 : 0)),
+    computeCurrentProgress(state.anchors, scrollAnchor),
+    scrollAnchor
+  );
 }
 
 function apply(ctx) {
-  const { wrapper, getScrollSource, onProgress } = ctx;
+  const { wrapper, scrollDistance, getScrollSource, onProgress } = ctx;
   const state = stateByWrapper.get(wrapper);
-  const { items, itemWidth, expandedWidth, expandedPadding } = state;
+  const { items, anchors, wrapperAnchorPoint } = state;
 
-  const currentProgress = readProgress(ctx, items);
+  const scrollAnchor = wrapper[scrollDistance] + wrapperAnchorPoint;
+  const currentProgress = computeCurrentProgress(anchors, scrollAnchor);
   const isDriven = getScrollSource() === "driven";
 
   if (isDriven) {
-    items.forEach((item, i) => {
-      const closeness = Math.max(0, 1 - Math.abs(currentProgress - i));
-      // Overrides the permanent CSS transition per-write - this path is
-      // continuous already (a new, only-slightly-different target every
-      // frame), so transitioning each of those tiny steps would just be
-      // the lag/jerkiness this split was built to remove.
-      item.style.transition = "none";
-      item.firstElementChild.style.transition = "none";
-      renderItem(item, closeness, itemWidth, expandedWidth, expandedPadding);
-    });
-    state.wasDriven = true;
+    if (!state.wasDriven) {
+      setTransitionsEnabled(items, false);
+      state.wasDriven = true;
+      // The tent below renders every item's closeness directly off live
+      // progress, never off "which one is expanded", so expandedIndex would
+      // otherwise sit here stale for the whole drive and then be diffed
+      // against on the way out.
+      state.expandedIndex = null;
+    }
+    render(
+      state,
+      items.map((_, i) => computeItemProgress(currentProgress, i)),
+      currentProgress,
+      scrollAnchor
+    );
   } else {
     if (state.wasDriven) {
-      // Handoff back from the driven path - clear the transition:none it
-      // left on every item so the permanent CSS transition governs again
-      // for whatever this path does next. The driven path's tent function
-      // never touches state.expandedIndex (it renders every item's
-      // closeness directly off live progress, not off "which one is
-      // expanded"), so state.expandedIndex is whatever it was *before*
-      // driving started - stale, and not necessarily the item the tent
-      // function actually left with nonzero closeness on screen. Diffing
-      // the target below against that stale value would collapse the wrong
-      // item (or none at all) while leaving the real one stuck expanded.
-      // Unconditionally collapsing every item here - now, with the
-      // transition just restored, so it's animated - and resetting
-      // state.expandedIndex to null gives the diff logic below a clean,
-      // accurate slate to compute the real target from, and doubles as the
-      // "collapse the instant you start dragging the thumb" behavior.
-      items.forEach((item) => {
-        item.style.transition = "";
-        item.firstElementChild.style.transition = "";
-        renderItem(item, 0, itemWidth, expandedWidth, expandedPadding);
-      });
-      state.expandedIndex = null;
+      // Handoff back from the driven path: restore the transition, then
+      // collapse everything so the diff below starts from a clean, accurate
+      // slate. Doubles as the "collapse the instant you start dragging the
+      // thumb" behavior.
+      setTransitionsEnabled(items, true);
       state.wasDriven = false;
+      render(state, items.map(() => 0), currentProgress, scrollAnchor);
     }
 
-    // What *should* be expanded right now, recomputed from scratch every
-    // call rather than diffed against the last change - null unless
-    // progress is genuinely within UNSETTLE_EPSILON of the nearest item, in
-    // which case that item. Arriving back at the same item after
-    // overshooting it (a real flick's momentum carrying past it, then
-    // native scroll-snap correction pulling it back) computes the exact
-    // same target as arriving at it from a standing start - there's no
-    // separate "did the rounded index change" state to fall out of sync
-    // with the actual position.
-    const nearestIndex = computeCurrentIndex(currentProgress, items.length);
-    const targetExpandedIndex =
-      Math.abs(currentProgress - nearestIndex) <= UNSETTLE_EPSILON ? nearestIndex : null;
-
-    if (targetExpandedIndex !== state.expandedIndex) {
-      if (state.expandedIndex !== null) {
-        renderItem(items[state.expandedIndex], 0, itemWidth, expandedWidth, expandedPadding);
-      }
-      if (targetExpandedIndex !== null) {
-        renderItem(items[targetExpandedIndex], 1, itemWidth, expandedWidth, expandedPadding);
-      }
-      state.expandedIndex = targetExpandedIndex;
+    // Collapsing only. Expanding belongs to 'scrollend' (see setup()) - this
+    // runs on every scroll frame, and anything that expands from here
+    // necessarily expands mid-gesture.
+    //
+    // Measured against whatever is *currently* expanded: once the scroll has
+    // moved off that item's own anchor, it isn't resting on it any more.
+    // Position is the right question here precisely because it has to be
+    // answered on the very first frame of a drag, before any event exists.
+    if (
+      state.expandedIndex !== null &&
+      Math.abs(scrollAnchor - state.anchors[state.expandedIndex]) > SETTLE_TOLERANCE_PX
+    ) {
+      setExpanded(ctx, null);
     }
   }
 
@@ -234,24 +389,9 @@ function apply(ctx) {
   onProgress?.(computeCurrentIndex(currentProgress, items.length), currentProgress);
 }
 
-function readProgress(ctx, items) {
-  const { wrapper, scrollDistance, offsetLength, offsetFromStart, getAlignmentFraction, getScrollPadding } = ctx;
-  const { anchors, scrollAnchor } = getItemMetrics(
-    wrapper,
-    items,
-    offsetFromStart,
-    offsetLength,
-    scrollDistance,
-    getAlignmentFraction(wrapper),
-    getScrollPadding(wrapper)
-  );
-  return computeCurrentProgress(anchors, scrollAnchor);
-}
-
-// Every item's padding/width is this effect's own doing, every frame - not
-// something that needs recovering from via carousel-engine's item-level
-// ResizeObserver (see that observer's own comment). Left unset, it would
-// treat each of this effect's writes as an unexpected resize and
-// re-trigger a full refresh because of it - a second, independent feedback
-// loop on top of the scroll-anchoring one described above.
+// This effect owns every item's rendering, and none of what it writes
+// (transforms, and a width on the thumb inside a fixed-width box) changes
+// an item's own border box - so carousel-engine's item-level ResizeObserver
+// has nothing real to recover here, and running its full refresh off one
+// would just be churn.
 export const iosScrubberEffect = { onItemCreated, setup, apply, skipItemResizeObserver: true };

@@ -5,6 +5,7 @@ import { attachIosThumbnailScrubber } from "./navigators/ios-thumbnail-scrubber.
 import { cssEffect } from "./effects/css-effect.js";
 import { jsEffect } from "./effects/js-effect.js";
 import { originEffect } from "./effects/origin-effect.js";
+import { attachScrollEventProbe } from "./scroll-event-probe.js";
 
 // Which variant a wrapper uses is just a data attribute - each effect
 // module implements the same { onItemCreated, setup, apply } shape, so
@@ -153,6 +154,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
     const { scrubber } = attachIosThumbnailScrubber(mainCarousel, iosScrubberStripWrapper);
     carousels.push(scrubber);
+    attachScrollEventProbe(iosScrubberStripWrapper, "iOS strip — scroll events");
   }
 
   document.querySelectorAll('input[name="scroll-alignment"]').forEach((radio) => {
