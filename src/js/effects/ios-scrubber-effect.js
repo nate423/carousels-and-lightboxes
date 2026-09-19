@@ -82,19 +82,6 @@ import {
   wrapperAnchor
 } from "../carousel-math.js";
 
-// Same DEBUG/debugLog shape as carousel-link.js, so logs from both read the
-// same way side by side while tuning this. Flip off (or delete) once
-// things feel settled.
-const DEBUG = true;
-let lastLogAt = null;
-function debugLog(label, data) {
-  if (!DEBUG) return;
-  const now = performance.now();
-  const sinceLast = lastLogAt === null ? null : Math.round(now - lastLogAt);
-  lastLogAt = now;
-  console.log(`[ios-scrubber-effect] ${label}`, { sinceLastLogMs: sinceLast, ...data });
-}
-
 const stateByWrapper = new WeakMap();
 // Tracked separately from stateByWrapper, which setup() replaces wholesale
 // on every call (init, resize, alignment change) - this must survive those
@@ -336,12 +323,6 @@ function apply(ctx) {
       setExpanded(ctx, null);
     }
   }
-
-  debugLog("apply", {
-    isDriven,
-    progress: currentProgress,
-    expandedIndex: state.expandedIndex
-  });
 
   onProgress?.(computeCurrentIndex(currentProgress, items.length), currentProgress);
 }

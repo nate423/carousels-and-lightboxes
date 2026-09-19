@@ -19,9 +19,6 @@ const DEFAULT_ALIGNMENT = "center";
 // ms of no further direct writes before scroll-snap is handed back - see
 // suspendScrollSnap below.
 const SNAP_RESTORE_DELAY = 150;
-// Strength reported for any input that is unambiguously deliberate - see
-// lastInputStrength below.
-const DECISIVE_INPUT = Infinity;
 
 // Native `scroll` can fire more than once per animation frame (trackpads in
 // particular), and both `resize` and ResizeObserver behave the same way
@@ -93,48 +90,23 @@ export function createCarousel(wrapper, options = {}) {
   // scroll event's own handler runs.
   let scrollSource = "self";
 
-  // How forceful the most recent direct input on this carousel was, in raw
-  // wheel-delta pixels (see wheelStrength below). Note
-  // this is genuinely "the last input seen", not "what caused the scroll
-  // being handled right now" - nothing resets it, so a carousel scrolling
-  // under its own momentum still reports whatever last landed on it. That's
-  // the intent (a flick's opening delta is exactly what should authorize the
-  // coast that follows), but it does mean the value is only meaningful for a
-  // carousel something has actually touched or commanded. Only wheel deltas
-  // are measured; every other input type is unconditionally decisive, since
-  // the ambiguity this exists to capture is specific to wheels - macOS/Chrome dispatch a flick's decaying momentum ticks to
-  // wherever the cursor happens to sit rather than where the gesture
-  // started, so a real but tiny wheel tick can land on a carousel nobody
-  // touched. A finger on the glass or a press on the scrollbar has no such
-  // analog. Read only by carousel-link.js, to decide whether an input is
-  // deliberate enough to interrupt a carousel that's still coasting.
-  let lastInputStrength = 0;
+  // Whether this carousel is currently scrolling for its own reasons, and when
+  // that stretch of movement began. Both are derived from real scroll events
+  // rather than from input events, which is the only way to get this right:
+  // the browser latches a wheel gesture to whichever scroller it started on,
+  // but keeps dispatching the wheel events themselves to whatever is under the
+  // cursor. Move the cursor to another carousel mid-flick and its wheel
+  // handlers fire while the original scroller is the one actually moving, so
+  // anything that reads input to decide who is in charge names the wrong one.
+  let movingItself = false;
+  let selfScrollStartedAt = 0;
 
-  function markSelfDriven(event) {
+  function markSelfDriven() {
     scrollSource = "self";
-    lastInputStrength = event.type === "wheel" ? wheelStrength(event) : DECISIVE_INPUT;
-  }
-
-  // deltaMode other than DOM_DELTA_PIXEL (0) reports lines or pages rather
-  // than pixels, and comes from a classic notched mouse wheel. Those are
-  // unconditionally decisive: a notch is a discrete, deliberate act, and
-  // nothing about it coasts, so it can't be the decaying momentum residue
-  // this measurement exists to recognize. This is the case a plain pixel
-  // threshold really did get wrong - Firefox reporting deltaY: 3 for three
-  // lines scored 3, under any sane pixel threshold, so a line-mode wheel
-  // could never steal at all.
-  //
-  // Pixel deltas are reported raw, deliberately NOT normalized against the
-  // carousel's own size. Momentum magnitude is a property of the input
-  // device and the flick that started it - it has nothing to do with how
-  // wide the carousel happens to be, so dividing by wrapper length doesn't
-  // remove a device dependency, it just swaps in a layout one that also
-  // moves when the window resizes. (Tried that; on a 1024px wrapper it
-  // raised the effective threshold from 15 to 20.5 and the steal audibly
-  // lost its snap.)
-  function wheelStrength(event) {
-    if (event.deltaMode !== 0) return DECISIVE_INPUT;
-    return Math.abs(event.deltaX) + Math.abs(event.deltaY);
+    // This carousel is the user's again, so any suspension left over from a
+    // drive is finished - see restoreScrollSnap for why it can't be left to
+    // expire on its own.
+    restoreScrollSnap();
   }
 
   // touchmove/pointerdown cover fingers and scrollbar drags; keydown covers
@@ -144,17 +116,25 @@ export function createCarousel(wrapper, options = {}) {
   );
 
   // scroll-snap-type: mandatory (every carousel-engine wrapper has it) tries
-  // to correct exactly what a direct write looks like to it: a scroll
-  // position that isn't part of an active native gesture. Suspending it for
-  // the duration of a drive, and handing it back once writes stop, keeps the
-  // browser's own resnap from fighting setProgressDirect.
+  // to correct exactly what a direct write looks like to it: a scroll position
+  // that isn't part of an active native gesture. Suspending it for the
+  // duration of a drive keeps the browser's own resnap from fighting
+  // setProgressDirect.
   //
-  // Only writes the style when it isn't already "none" - a style write
-  // followed by a geometry read (offsetLeft/offsetWidth, in setProgressDirect
-  // right after) on the same element forces a synchronous layout
-  // recalculation. Re-writing "none" to "none" every frame of a live drive
-  // was exactly that: a no-op value change that still re-armed the forced
-  // reflow every frame.
+  // Handing it back is timer-based only because a drive has no natural end
+  // event - but the timer must never be what hands it back mid-gesture. Snap
+  // returning while the browser still has the driven position latched makes it
+  // resnap to that position rather than to wherever the gesture has since got
+  // to, which reads as the carousel scrolling normally and then, up to a
+  // second later, jumping back to where it started. restoreScrollSnap is
+  // therefore also called the instant real input reclaims this carousel, while
+  // the scroll position is still exactly on the anchor the last write put it
+  // on, so re-enabling snap there corrects nothing.
+  //
+  // Both functions only write the style when it would actually change - a style
+  // write followed by a geometry read (offsetLeft/offsetWidth, in
+  // setProgressDirect right after) on the same element forces a synchronous
+  // layout recalculation, and re-writing an unchanged value still re-arms it.
   let snapRestoreTimer = null;
 
   function suspendScrollSnap() {
@@ -162,9 +142,14 @@ export function createCarousel(wrapper, options = {}) {
       wrapper.style.scrollSnapType = "none";
     }
     clearTimeout(snapRestoreTimer);
-    snapRestoreTimer = setTimeout(() => {
+    snapRestoreTimer = setTimeout(restoreScrollSnap, SNAP_RESTORE_DELAY);
+  }
+
+  function restoreScrollSnap() {
+    clearTimeout(snapRestoreTimer);
+    if (wrapper.style.scrollSnapType !== "") {
       wrapper.style.scrollSnapType = "";
-    }, SNAP_RESTORE_DELAY);
+    }
   }
 
   const scrollListeners = new Set();
@@ -236,21 +221,10 @@ export function createCarousel(wrapper, options = {}) {
     const item = items[index];
     if (!item) return;
 
-    // A deliberate navigation of this carousel - a click on one of its own
-    // items, a page dot, a realignment - not an echo of somebody driving it.
-    // Marking it here is what lets those commands propagate through a link
-    // even when the last thing to touch this carousel was a direct write.
-    //
-    // Decisive by definition, too: a command is an explicit "go to this
-    // item", never the ambiguous decaying tick lastInputStrength exists to
-    // catch, so it must not be second-guessed by a strength test. Without
-    // this, a command arriving on a carousel whose wrapper has had no direct
-    // input of its own - a page dot (which lives outside the wrapper, so no
-    // pointerdown ever lands on it), setAlignment, any programmatic caller -
-    // is measured at strength 0 and gets suppressed by carousel-link.js
-    // whenever the other side happens to still be coasting.
+    // An explicit command to this carousel, not an echo of something driving
+    // it, so the scrolling it is about to do counts as this carousel moving
+    // for its own reasons and propagates through a link.
     scrollSource = "self";
-    lastInputStrength = DECISIVE_INPUT;
 
     const scrollTarget = computeScrollTarget(
       wrapper,
@@ -356,6 +330,17 @@ export function createCarousel(wrapper, options = {}) {
   // downstream reads it. `source` is sampled once rather than per listener:
   // it can only change on a real input event, which can't interleave with
   // this synchronous loop.
+  // 'scrollend' fires once a scroll operation - gesture, momentum and any snap
+  // correction together - is over, which is what bounds a stretch of movement.
+  wrapper.addEventListener("scroll", () => {
+    const nowMovingItself = scrollSource === "self";
+    if (nowMovingItself && !movingItself) selfScrollStartedAt = performance.now();
+    movingItself = nowMovingItself;
+  });
+  wrapper.addEventListener("scrollend", () => {
+    movingItself = false;
+  });
+
   wrapper.addEventListener(
     "scroll",
     rafThrottle(() => {
@@ -427,7 +412,8 @@ export function createCarousel(wrapper, options = {}) {
     setProgressDirect,
     setAlignment,
     getScrollSource: () => scrollSource,
-    getLastInputStrength: () => lastInputStrength,
+    isMovingItself: () => movingItself,
+    selfScrollStartedAt: () => selfScrollStartedAt,
     // Notified once per scroll frame, after effect.apply, with the
     // attribution of that scroll - see the scroll-attribution block above.
     // Returns an unsubscribe function.

@@ -1,62 +1,73 @@
-// Live-gesture mirroring between two carousel-engine instances: whichever
-// one is actively being scrolled drives the other, in real time, off its own
-// currentProgress - never via a native wrapper.scrollTo() for a moving
-// target, since the source progress is itself continuously changing during a
-// live scroll/drag and native smooth-scroll only makes sense against a fixed
-// destination.
+// Live-gesture mirroring between two carousel-engine instances: whichever one
+// is actively being scrolled drives the other in real time, off its own
+// currentProgress. Never via wrapper.scrollTo(), since the source's progress
+// changes continuously during a live gesture and native smooth-scroll only
+// makes sense against a fixed destination.
 //
-// Per direction, configurable between two response modes:
-//   - "continuous": the driven side is a direct 1:1 read of the source's
-//     live, fractional progress, written every frame - it visibly tracks the
-//     source's scroll pixel-for-pixel, in lock-step, the whole time it's
-//     moving.
-//   - "instant": the driven side doesn't move at all until the source's
-//     *discrete* current item actually changes (crosses the 50% threshold to
-//     a neighbor) - at that moment it jumps straight to showing the new item
-//     as current, with no motion in between.
-// (An earlier third mode eased the driven side toward the source's progress
-// over several frames instead of matching either of the above exactly -
-// dropped entirely: scroll-snap kept fighting the deliberately-unsettled
-// in-between position it relied on holding, which read as a flicker rather
-// than an ease no matter how that fight was mitigated.)
+// Each direction is independently configurable between two response modes:
+//   - "continuous": the driven side is a 1:1 read of the source's live,
+//     fractional progress, written every frame, so it tracks the source's
+//     scroll in lock-step the whole time it moves.
+//   - "instant": the driven side stays put until the source's discrete
+//     current item changes (crossing the 50% threshold to a neighbour), then
+//     jumps straight to it with no motion in between.
 //
-// This module deliberately touches no DOM of its own. Deciding whether a
-// given scroll is the user's doing or an echo of a write we just made used
-// to live here, reconstructed from wheel/touchmove listeners on each
-// wrapper; it belongs to carousel-engine.js now, which knows first-hand
-// which of its own movements it caused (see the scroll-attribution block
-// there). Everything below works purely off the two controllers' public
-// surface: onScroll's `source`, getScrollSource, getLastInputStrength,
-// getCurrentProgress and setProgressDirect.
+// This module touches no DOM of its own. Whether a given scroll is the user's
+// doing or an echo of a write we just made is carousel-engine's to answer -
+// see the scroll-attribution block there. Everything below works off the two
+// controllers' public surface: onScroll's `source`, getScrollSource,
+// isMovingItself, selfScrollStartedAt, getCurrentProgress and setProgressDirect.
 import { computeCurrentIndex } from "./carousel-math.js";
 
-const LIVENESS_MS = 50; // ~3 dropped frames at 60fps - how stale the other carousel's last accepted scroll can be and still count as "still actively moving" (see the interrupt check below)
-// Wheel-delta pixels an input must reach to interrupt a carousel that's
-// still live. Hand-tuned for a macOS trackpad, where momentum ticks decay
-// into the single digits while a deliberate flick or drag opens well above
-// this. A notched mouse wheel clears it on every tick, which is correct:
-// notched wheels don't coast, so there's no residue to filter out.
-//
-// Not normalized against carousel size - see wheelStrength in
-// carousel-engine.js for why that's the wrong axis. The honest remaining
-// limitation is that this is one number tuned for one device class; the
-// device-independent version would compare a tick against this carousel's
-// own recent deltas, since momentum decays monotonically and a fresh
-// gesture is a step back up.
-const MIN_STEAL_STRENGTH = 15;
-
 // Temporary - flip off (or delete this whole block and its call sites below)
-// once things feel settled. Logs each scroll-driven decision this link makes
-// with a timestamp and how long the write itself took, so a slow/irregular
-// frame cadence shows up directly in the console instead of being guessed at.
+// once things feel settled. Every decision this link makes goes into a ring
+// buffer as well as the console; run __linkTrace() in the console to dump the
+// whole thing as text.
 const DEBUG = true;
+const trace = [];
 let lastLogAt = null;
+
+function record(entry) {
+  trace.push(entry);
+  if (trace.length > 600) trace.shift();
+}
+
 function debugLog(directionKey, label, data) {
   if (!DEBUG) return;
   const now = performance.now();
   const sinceLast = lastLogAt === null ? null : Math.round(now - lastLogAt);
   lastLogAt = now;
-  console.log(`[carousel-link] ${directionKey} ${label}`, { sinceLastLogMs: sinceLast, ...data });
+  const entry = { t: Math.round(now), ms: sinceLast, dir: directionKey, label, ...data };
+  record(entry);
+  console.log(`[carousel-link] ${directionKey} ${label}`, entry);
+}
+
+if (DEBUG) {
+  // Which element each wheel tick is dispatched to, and how big it is. Note
+  // this is NOT which carousel the tick actually scrolls: the browser latches
+  // a gesture to the scroller it began on and keeps scrolling that one, while
+  // dispatching the events to whatever the cursor has since moved over. Useful
+  // for spotting that divergence, not for deciding anything.
+  document.addEventListener(
+    "wheel",
+    (event) => {
+      const wrapper = event.target.closest?.(".carousel-wrapper");
+      record({
+        t: Math.round(performance.now()),
+        label: "wheel",
+        on: wrapper ? wrapper.id || "(unnamed wrapper)" : "(outside any carousel)",
+        delta: Math.round(Math.abs(event.deltaX) + Math.abs(event.deltaY)),
+        deltaMode: event.deltaMode
+      });
+    },
+    { capture: true, passive: true }
+  );
+
+  window.__linkTrace = () => {
+    const text = trace.map((entry) => JSON.stringify(entry)).join("\n");
+    console.log(text);
+    return text;
+  };
 }
 
 function currentIndexOf(carousel) {
@@ -69,61 +80,46 @@ export function linkCarousels(a, b, { aToB = "continuous", bToA = "instant" } = 
   // tearing down and re-registering the scroll subscriptions below.
   const modes = { aToB, bToA };
 
-  // Per-side link state. The carousels themselves own everything about who
-  // is moving them; all this layer adds is when each side was last seen
-  // moving under its own steam, which is what the interrupt check needs.
-  const sides = {
-    a: { carousel: a, lastAcceptedScrollAt: null },
-    b: { carousel: b, lastAcceptedScrollAt: null }
-  };
-
   function wire(source, dest, directionKey) {
-    source.carousel.onScroll(({ source: scrollSource }) => {
-      const handlerStart = performance.now();
+    // Cheap enough to attach to every log line: scrollLeft is already being
+    // read this frame, so unlike getCurrentProgress this forces no layout.
+    const snapshot = () => ({
+      srcAttr: source.getScrollSource(),
+      dstAttr: dest.getScrollSource(),
+      srcMoving: source.isMovingItself(),
+      dstMoving: dest.isMovingItself(),
+      srcStartedAgoMs: Math.round(performance.now() - source.selfScrollStartedAt()),
+      dstStartedAgoMs: Math.round(performance.now() - dest.selfScrollStartedAt()),
+      srcSL: Math.round(source.wrapper.scrollLeft),
+      dstSL: Math.round(dest.wrapper.scrollLeft)
+    });
 
+    source.onScroll(({ source: scrollSource }) => {
       if (scrollSource === "driven") {
         // This carousel is being written to by us; everything it emits until
         // something moves it for its own reasons is an echo of that write.
-        debugLog(directionKey, "ignored (driven by us, not yet reclaimed)");
         return;
       }
-      source.lastAcceptedScrollAt = handlerStart;
-
-      // `dest` is the only other carousel in this link. If it's currently
-      // moving under its own steam (not because we're driving it - exclude
-      // that with its own attribution, or our echo chain into it would look
-      // "alive" here too), don't let a weak tick fight it.
+      // `source` is moving for its own reasons, or we'd have returned above.
+      // It may drive unless `dest` is also moving for its own reasons and
+      // started doing so more recently - flick one carousel hard, then flick
+      // the other while the first is still coasting, and both are genuinely
+      // moving at once; without a rule each wire writes the other every frame
+      // and they settle disagreeing.
       //
-      // Liveness alone isn't enough, though: during a hard flick's momentum
-      // tail, dest keeps refreshing lastAcceptedScrollAt every ~8-16ms for
-      // as long as it coasts, so a pure liveness check would suppress a
-      // genuinely deliberate quick-flick-to-take-over for that whole
-      // stretch - directly against wanting whichever side you actually
-      // touch most recently to win immediately. A decisive input (a real
-      // flick or drag's opening delta, a finger, a scrollbar press - much
-      // bigger than the late, decaying residue of someone else's momentum
-      // tail) bypasses the liveness check entirely and takes over right
-      // away; only a weak one gets held back while dest is still genuinely
-      // moving. See getLastInputStrength in carousel-engine.js for why only
-      // wheel input can ever be weak.
-      const destStillLive =
-        dest.carousel.getScrollSource() !== "driven" &&
-        dest.lastAcceptedScrollAt !== null &&
-        handlerStart - dest.lastAcceptedScrollAt < LIVENESS_MS;
-      const inputStrength = source.carousel.getLastInputStrength();
-      if (destStillLive && inputStrength < MIN_STEAL_STRENGTH) {
-        debugLog(directionKey, "suppressed (dest still live, weak input)", { inputStrength });
+      // Both facts come from real scroll events, never from input events. The
+      // browser latches a wheel gesture to the scroller it began on while
+      // still dispatching wheel events to whatever is under the cursor, so
+      // input says nothing reliable about which carousel is actually moving.
+      if (dest.isMovingItself() && dest.selfScrollStartedAt() > source.selfScrollStartedAt()) {
+        debugLog(directionKey, "yielded (dest started moving more recently)", snapshot());
         return;
       }
 
-      const progress = source.carousel.getCurrentProgress();
+      const progress = source.getCurrentProgress();
 
       if (modes[directionKey] === "continuous") {
         writeToDest(progress);
-        debugLog(directionKey, "continuous frame", {
-          progress,
-          handlerDurationMs: +(performance.now() - handlerStart).toFixed(2)
-        });
         return;
       }
 
@@ -140,27 +136,35 @@ export function linkCarousels(a, b, { aToB = "continuous", bToA = "instant" } = 
       // still believes the strip is on 0, so scrubbing it back to 0 reads as
       // "no change" and the main carousel never follows. Asking dest where
       // it actually is can't drift, and self-corrects after any desync.
-      const index = computeCurrentIndex(progress, source.carousel.getItems().length);
-      const destIndex = currentIndexOf(dest.carousel);
-      if (index === destIndex) {
-        debugLog(directionKey, "instant no-op (dest already current)", { index });
-        return;
-      }
+      const index = computeCurrentIndex(progress, source.getItems().length);
+      const destIndex = currentIndexOf(dest);
+      if (index === destIndex) return;
       writeToDest(index);
     });
 
     function writeToDest(progress) {
+      // Sampled before the write, since setProgressDirect immediately marks
+      // dest as driven. Writing to a dest that was moving under its own steam
+      // is the case worth seeing: both wires are then writing each other, and
+      // they can end up disagreeing.
+      const destWasMovingItself = dest.getScrollSource() === "self";
+
       // setProgressDirect handles its own scroll-snap suspension and marks
       // dest as driven, so the echo it's about to emit is already correctly
       // attributed by the time dest's own subscription sees it.
-      const t0 = performance.now();
-      dest.carousel.setProgressDirect(progress);
-      debugLog(directionKey, "writeToDest", { progress, writeDurationMs: +(performance.now() - t0).toFixed(2) });
+      dest.setProgressDirect(progress);
+
+      if (destWasMovingItself) {
+        debugLog(directionKey, "CONTESTED write (dest was moving itself)", {
+          wrote: +progress.toFixed(2),
+          ...snapshot()
+        });
+      }
     }
   }
 
-  wire(sides.a, sides.b, "aToB");
-  wire(sides.b, sides.a, "bToA");
+  wire(a, b, "aToB");
+  wire(b, a, "bToA");
 
   return {
     setMode(directionKey, mode) {
