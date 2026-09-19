@@ -147,12 +147,6 @@ function setup(ctx) {
   stateByWrapper.set(wrapper, {
     items,
     anchors,
-    // Only used by the parked 'scrollsnapchange' fallback above. What a
-    // SnapEvent's snapTargetInline points at is the .carousel-item-snap-fix
-    // wrapper carousel-engine puts around every item (that's where
-    // scroll-snap-align lives), not the item itself, so this is how the
-    // browser's answer maps back to an index.
-    snapTargets: items.map((item) => item.parentElement),
     wrapperAnchorPoint: wrapperAnchor(wrapper[offsetLength], alignment, scrollPadding),
     alignment,
     gap: parseFloat(style.gap) || 0,
@@ -201,43 +195,6 @@ function setup(ctx) {
   // the settled answer every time.
   settleToNearest(ctx);
 }
-
-// --- Parked alternatives -------------------------------------------------
-// Both of these were expand triggers alongside 'scrollend', and both made it
-// expand too eagerly mid-drag. Kept for now only because they're the
-// fallbacks that matter for browsers without 'scrollend' (Safari before
-// 26.2, i.e. iOS 18) - see attachSettleFallbacks' call site, which is
-// currently commented out.
-//
-//   - 'scrollsnapchange' (Chrome 129+, Safari 18.2+) fires when an operation
-//     finishes on a *different* snap target than it started on, and carries
-//     the target element. Strictly better than the position check below, but
-//     it fires for short intra-drag operations too, which is the eagerness.
-//   - The position check is the last resort where neither event exists: it
-//     expands as soon as a scroll frame lands within tolerance of an item's
-//     anchor, which during a slow drag happens every time you pass over one.
-//
-// function attachSettleFallbacks(ctx) {
-//   const { wrapper } = ctx;
-//   if ("onscrollsnapchange" in window) {
-//     wrapper.addEventListener("scrollsnapchange", (event) => {
-//       if (ctx.getScrollSource() === "driven") return;
-//       const state = stateByWrapper.get(wrapper);
-//       const index = state.snapTargets.indexOf(event.snapTargetInline);
-//       if (index !== -1) setExpanded(ctx, index);
-//     });
-//   }
-// }
-//
-// ...and in apply()'s own settle block, as the expand half of it:
-//
-//   } else {
-//     const nearestIndex = computeCurrentIndex(currentProgress, items.length);
-//     if (Math.abs(scrollAnchor - state.anchors[nearestIndex]) <= SETTLE_TOLERANCE_PX) {
-//       setExpanded(ctx, nearestIndex);
-//     }
-//   }
-// -------------------------------------------------------------------------
 
 // Expands whichever item the strip is currently resting on. Only ever called
 // from a position known to be at rest, so it doesn't second-guess that with
