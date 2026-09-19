@@ -31,7 +31,7 @@
 //     itself. 'scrollend' is therefore NOT a "the user finished" signal on
 //     a scroller something else is driving, which is exactly why
 //     ios-scrubber-effect.js gates it on the engine's scroll attribution.
-const PROBE_ENABLED = true;
+const PROBE_ENABLED = false;
 
 const TAIL_LENGTH = 8;
 
