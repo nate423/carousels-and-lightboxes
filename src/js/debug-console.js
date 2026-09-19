@@ -8,10 +8,11 @@
 // Everything it samples is a cheap read - scrollLeft and inline style strings,
 // never offsetLeft/offsetWidth - because it runs on every scroll frame and a
 // forced layout here would add exactly the kind of jank it exists to measure.
+
 // Bumped by hand whenever the scrubber's motion changes, so a capture taken on
 // a phone says which build produced it - otherwise a stale page and a fixed one
 // are indistinguishable from the log alone.
-const LOG_VERSION = 3;
+const LOG_VERSION = 4;
 
 const BUFFER_LIMIT = 900;
 const TAIL_LINES = 7;
@@ -132,11 +133,23 @@ function thumbWidthOf(item) {
   return parseFloat(item.firstElementChild.style.width) || 0;
 }
 
-// Samples one line per scroll frame of the main carousel, following the chain
-// the position travels along: the main carousel's own scroll, the scroll
-// position that gets relayed onto the strip, and the transforms the strip's
-// effect paints from it. Whichever of those three stops moving smoothly is
-// where the jitter is introduced.
+// Samples a line per scroll frame from BOTH carousels, following the chain the
+// position travels along: the main carousel's own scroll, the scroll position
+// relayed onto the strip, and the transforms the strip's effect paints from it.
+// Whichever of those stops moving smoothly is where the jitter is introduced.
+//
+// Sampling the strip too, not just the carousel driving it, is what catches the
+// strip moving when nothing is driving it - a snap correction after the gesture
+// ends, say, which produces no main scroll event at all and so leaves no trace
+// in a log keyed only to the driver.
+//
+// Each line is tagged with what triggered it and how the strip's scroll is
+// attributed at that moment:
+//   M     - the main carousel scrolled
+//   S/own - the strip scrolled for its own reasons
+//   S/drv - the strip scrolled as an echo of a relayed write
+// followed by the strip's scroll-snap state, since snap being handed back is
+// itself able to move the strip.
 export function watchScrubberJitter(mainCarousel, scrubber, title = "main scroll -> strip render") {
   const panel = createPanel(title);
   const items = [...scrubber.getItems()];
@@ -144,27 +157,30 @@ export function watchScrubberJitter(mainCarousel, scrubber, title = "main scroll
   const pitch = items.length > 1 ? items[1].offsetLeft - items[0].offsetLeft : 1;
   let previous = null;
 
-  mainCarousel.onScroll(() => {
+  function sample(tag) {
     const now = performance.now();
     const mainScroll = mainCarousel.wrapper.scrollLeft;
     const stripScroll = scrubber.wrapper.scrollLeft;
+    const snap = scrubber.wrapper.style.scrollSnapType === "none" ? "snap-off" : "snap-on ";
     const index = Math.max(0, Math.min(items.length - 2, Math.round(stripScroll / pitch)));
     const near = translateOf(items[index]);
-    const next = translateOf(items[index + 1]);
 
     const deltas = previous
       ? ` | d main ${signed(mainScroll - previous.mainScroll)} strip ${signed(stripScroll - previous.stripScroll)}` +
-        (index === previous.index ? ` i${index} ${signed(near - previous.near)}` : " (item changed)")
+        (index === previous.index ? ` t ${signed(near - previous.near)}` : " (item changed)")
       : "";
 
     panel.log(
-      `${pad(Math.round(now - (previous ? previous.now : now)), 3)}ms ` +
-        `main ${fixed(mainScroll, 8)} strip ${fixed(stripScroll, 7)} ` +
-        `i${pad(index, 2)} t ${fixed(near, 7)} w ${fixed(thumbWidthOf(items[index]), 5)} ` +
-        `i${pad(index + 1, 2)} t ${fixed(next, 7)} w ${fixed(thumbWidthOf(items[index + 1]), 5)}` +
+      `${pad(Math.round(now - (previous ? previous.now : now)), 4)}ms ${tag} ` +
+        `main ${fixed(mainScroll, 8)} strip ${fixed(stripScroll, 7)} ${snap} ` +
+        `i${pad(index, 2)} t ${fixed(near, 7)} w ${fixed(thumbWidthOf(items[index]), 5)}` +
         deltas
     );
 
     previous = { now, mainScroll, stripScroll, index, near };
-  });
+  }
+
+  mainCarousel.onScroll(() => sample("M    "));
+  scrubber.onScroll(({ source }) => sample(source === "driven" ? "S/drv" : "S/own"));
+  scrubber.wrapper.addEventListener("scrollend", () => sample("S/end"));
 }
