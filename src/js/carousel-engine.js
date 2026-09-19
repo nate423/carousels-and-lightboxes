@@ -101,6 +101,14 @@ export function createCarousel(wrapper, options = {}) {
   let movingItself = false;
   let selfScrollStartedAt = 0;
 
+  // The exact progress the last setProgressDirect was asked for. Worth keeping
+  // because it cannot be recovered afterwards: writing it moves scrollLeft,
+  // and a scroll position is quantised - WebKit reports whole pixels - so
+  // reading it back returns a coarser value than went in. An effect rendering
+  // a driven carousel should use this rather than measure the scroll position
+  // it was just handed.
+  let lastDrivenProgress = 0;
+
   function markSelfDriven() {
     scrollSource = "self";
     // This carousel is the user's again, so any suspension left over from a
@@ -264,6 +272,7 @@ export function createCarousel(wrapper, options = {}) {
   // only makes sense against a fixed destination. See carousel-link.js.
   function setProgressDirect(progress) {
     scrollSource = "driven";
+    lastDrivenProgress = progress;
     suspendScrollSnap();
 
     const items = getItems();
@@ -316,6 +325,7 @@ export function createCarousel(wrapper, options = {}) {
     getScrollPadding,
     getNoncurrentScale,
     getScrollSource: () => scrollSource,
+    getDrivenProgress: () => lastDrivenProgress,
     onProgress: undefined
   };
 

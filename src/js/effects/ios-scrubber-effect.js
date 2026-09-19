@@ -273,13 +273,26 @@ function setExpanded(ctx, index) {
 }
 
 function apply(ctx) {
-  const { wrapper, scrollDistance, getScrollSource, onProgress } = ctx;
+  const { wrapper, scrollDistance, getScrollSource, getDrivenProgress, onProgress } = ctx;
   const state = stateByWrapper.get(wrapper);
   const { items, anchors, wrapperAnchorPoint } = state;
 
   const scrollAnchor = wrapper[scrollDistance] + wrapperAnchorPoint;
-  const currentProgress = computeCurrentProgress(anchors, scrollAnchor);
   const isDriven = getScrollSource() === "driven";
+
+  // While driven, take the progress from the driver rather than measuring the
+  // scroll position it just wrote. A scroll position is quantised to whole
+  // pixels, and this strip's whole range is several times shorter than the
+  // carousel driving it, so one of its pixels is worth several of the other's:
+  // measured on an iPhone, the main carousel advancing 1px per frame left
+  // scrollLeft here unchanged for four frames and then jumped it by a whole
+  // one. Deriving progress from that turns the smooth tent below into a
+  // staircase, stepping every item's translate by ~0.65px at a time, which is
+  // the visible flicker. The scroll position is still the right thing to
+  // measure on the drag path, where it is what the finger actually moved.
+  const currentProgress = isDriven
+    ? getDrivenProgress()
+    : computeCurrentProgress(anchors, scrollAnchor);
 
   if (isDriven) {
     if (!state.wasDriven) {
