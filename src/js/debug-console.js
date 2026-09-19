@@ -1,9 +1,12 @@
-// Temporary - delete this file and its import in main.js once the scrubber's
-// motion is settled.
+// Off by default - flip CONSOLE_ENABLED on to bring the panel back.
 //
 // An on-screen console for debugging on devices where a real one isn't
 // practical, which in this project means iOS. Shows a live tail and copies the
 // whole buffer on demand.
+//
+// Kept rather than deleted because it attaches from outside: it reads the two
+// carousels through their public surface and touches nothing they do, so
+// switching it off costs nothing and switching it back on needs no rebuilding.
 //
 // Everything it samples is a cheap read - scrollLeft and inline style strings,
 // never offsetLeft/offsetWidth - because it runs on every scroll frame and a
@@ -14,6 +17,7 @@
 // are indistinguishable from the log alone.
 const LOG_VERSION = 4;
 
+const CONSOLE_ENABLED = false;
 const BUFFER_LIMIT = 900;
 const TAIL_LINES = 7;
 
@@ -151,6 +155,8 @@ function thumbWidthOf(item) {
 // followed by the strip's scroll-snap state, since snap being handed back is
 // itself able to move the strip.
 export function watchScrubberJitter(mainCarousel, scrubber, title = "main scroll -> strip render") {
+  if (!CONSOLE_ENABLED) return;
+
   const panel = createPanel(title);
   const items = [...scrubber.getItems()];
   // One layout read, at setup, so the per-frame path needs none.

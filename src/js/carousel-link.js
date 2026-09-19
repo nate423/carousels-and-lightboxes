@@ -19,57 +19,6 @@
 // isMovingItself, selfScrollStartedAt, getCurrentProgress and setProgressDirect.
 import { computeCurrentIndex } from "./carousel-math.js";
 
-// Temporary - flip off (or delete this whole block and its call sites below)
-// once things feel settled. Every decision this link makes goes into a ring
-// buffer as well as the console; run __linkTrace() in the console to dump the
-// whole thing as text.
-const DEBUG = true;
-const trace = [];
-let lastLogAt = null;
-
-function record(entry) {
-  trace.push(entry);
-  if (trace.length > 600) trace.shift();
-}
-
-function debugLog(directionKey, label, data) {
-  if (!DEBUG) return;
-  const now = performance.now();
-  const sinceLast = lastLogAt === null ? null : Math.round(now - lastLogAt);
-  lastLogAt = now;
-  const entry = { t: Math.round(now), ms: sinceLast, dir: directionKey, label, ...data };
-  record(entry);
-  console.log(`[carousel-link] ${directionKey} ${label}`, entry);
-}
-
-if (DEBUG) {
-  // Which element each wheel tick is dispatched to, and how big it is. Note
-  // this is NOT which carousel the tick actually scrolls: the browser latches
-  // a gesture to the scroller it began on and keeps scrolling that one, while
-  // dispatching the events to whatever the cursor has since moved over. Useful
-  // for spotting that divergence, not for deciding anything.
-  document.addEventListener(
-    "wheel",
-    (event) => {
-      const wrapper = event.target.closest?.(".carousel-wrapper");
-      record({
-        t: Math.round(performance.now()),
-        label: "wheel",
-        on: wrapper ? wrapper.id || "(unnamed wrapper)" : "(outside any carousel)",
-        delta: Math.round(Math.abs(event.deltaX) + Math.abs(event.deltaY)),
-        deltaMode: event.deltaMode
-      });
-    },
-    { capture: true, passive: true }
-  );
-
-  window.__linkTrace = () => {
-    const text = trace.map((entry) => JSON.stringify(entry)).join("\n");
-    console.log(text);
-    return text;
-  };
-}
-
 function currentIndexOf(carousel) {
   return computeCurrentIndex(carousel.getCurrentProgress(), carousel.getItems().length);
 }
@@ -81,19 +30,6 @@ export function linkCarousels(a, b, { aToB = "continuous", bToA = "instant" } = 
   const modes = { aToB, bToA };
 
   function wire(source, dest, directionKey) {
-    // Cheap enough to attach to every log line: scrollLeft is already being
-    // read this frame, so unlike getCurrentProgress this forces no layout.
-    const snapshot = () => ({
-      srcAttr: source.getScrollSource(),
-      dstAttr: dest.getScrollSource(),
-      srcMoving: source.isMovingItself(),
-      dstMoving: dest.isMovingItself(),
-      srcStartedAgoMs: Math.round(performance.now() - source.selfScrollStartedAt()),
-      dstStartedAgoMs: Math.round(performance.now() - dest.selfScrollStartedAt()),
-      srcSL: Math.round(source.wrapper.scrollLeft),
-      dstSL: Math.round(dest.wrapper.scrollLeft)
-    });
-
     source.onScroll(({ source: scrollSource }) => {
       if (scrollSource === "driven") {
         // This carousel is being written to by us; everything it emits until
@@ -112,7 +48,6 @@ export function linkCarousels(a, b, { aToB = "continuous", bToA = "instant" } = 
       // still dispatching wheel events to whatever is under the cursor, so
       // input says nothing reliable about which carousel is actually moving.
       if (dest.isMovingItself() && dest.selfScrollStartedAt() > source.selfScrollStartedAt()) {
-        debugLog(directionKey, "yielded (dest started moving more recently)", snapshot());
         return;
       }
 
@@ -143,23 +78,10 @@ export function linkCarousels(a, b, { aToB = "continuous", bToA = "instant" } = 
     });
 
     function writeToDest(progress) {
-      // Sampled before the write, since setProgressDirect immediately marks
-      // dest as driven. Writing to a dest that was moving under its own steam
-      // is the case worth seeing: both wires are then writing each other, and
-      // they can end up disagreeing.
-      const destWasMovingItself = dest.getScrollSource() === "self";
-
       // setProgressDirect handles its own scroll-snap suspension and marks
       // dest as driven, so the echo it's about to emit is already correctly
       // attributed by the time dest's own subscription sees it.
       dest.setProgressDirect(progress);
-
-      if (destWasMovingItself) {
-        debugLog(directionKey, "CONTESTED write (dest was moving itself)", {
-          wrote: +progress.toFixed(2),
-          ...snapshot()
-        });
-      }
     }
   }
 
