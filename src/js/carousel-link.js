@@ -31,13 +31,19 @@
 import { computeCurrentIndex } from "./carousel-math.js";
 
 const LIVENESS_MS = 50; // ~3 dropped frames at 60fps - how stale the other carousel's last accepted scroll can be and still count as "still actively moving" (see the interrupt check below)
-// How hard an input has to be to interrupt a carousel that's still live,
-// as a fraction of that carousel's own length - i.e. a tick that tries to
-// move it by less than 2% of its width is treated as momentum residue rather
-// than a deliberate grab. A ratio rather than a pixel count on purpose; see
-// wheelStrength in carousel-engine.js for why raw wheel deltas can't be
-// compared against a fixed number across devices.
-const MIN_STEAL_FRACTION = 0.02;
+// Wheel-delta pixels an input must reach to interrupt a carousel that's
+// still live. Hand-tuned for a macOS trackpad, where momentum ticks decay
+// into the single digits while a deliberate flick or drag opens well above
+// this. A notched mouse wheel clears it on every tick, which is correct:
+// notched wheels don't coast, so there's no residue to filter out.
+//
+// Not normalized against carousel size - see wheelStrength in
+// carousel-engine.js for why that's the wrong axis. The honest remaining
+// limitation is that this is one number tuned for one device class; the
+// device-independent version would compare a tick against this carousel's
+// own recent deltas, since momentum decays monotonically and a fresh
+// gesture is a step back up.
+const MIN_STEAL_STRENGTH = 15;
 
 // Temporary - flip off (or delete this whole block and its call sites below)
 // once things feel settled. Logs each scroll-driven decision this link makes
@@ -105,7 +111,7 @@ export function linkCarousels(a, b, { aToB = "continuous", bToA = "instant" } = 
         dest.lastAcceptedScrollAt !== null &&
         handlerStart - dest.lastAcceptedScrollAt < LIVENESS_MS;
       const inputStrength = source.carousel.getLastInputStrength();
-      if (destStillLive && inputStrength < MIN_STEAL_FRACTION) {
+      if (destStillLive && inputStrength < MIN_STEAL_STRENGTH) {
         debugLog(directionKey, "suppressed (dest still live, weak input)", { inputStrength });
         return;
       }

@@ -93,8 +93,8 @@ export function createCarousel(wrapper, options = {}) {
   // scroll event's own handler runs.
   let scrollSource = "self";
 
-  // How forceful the most recent direct input on this carousel was, as a
-  // fraction of the carousel's own length (see wheelStrength below). Note
+  // How forceful the most recent direct input on this carousel was, in raw
+  // wheel-delta pixels (see wheelStrength below). Note
   // this is genuinely "the last input seen", not "what caused the scroll
   // being handled right now" - nothing resets it, so a carousel scrolling
   // under its own momentum still reports whatever last landed on it. That's
@@ -115,29 +115,26 @@ export function createCarousel(wrapper, options = {}) {
     lastInputStrength = event.type === "wheel" ? wheelStrength(event) : DECISIVE_INPUT;
   }
 
-  // A wheel tick's strength as a fraction of this carousel's own visible
-  // length, so the threshold comparing against it can be a dimensionless
-  // ratio. A raw delta can't be: WheelEvent deltas are not a portable unit -
-  // Chrome on Windows emits ~100-120 per mouse notch where a macOS trackpad
-  // emits single digits per frame, so any fixed pixel threshold means
-  // "everything is decisive" on one and "half of a deliberate scroll is
-  // weak" on the other. Asking instead how far the tick tried to move *this*
-  // carousel is the same question on every device.
-  //
   // deltaMode other than DOM_DELTA_PIXEL (0) reports lines or pages rather
   // than pixels, and comes from a classic notched mouse wheel. Those are
   // unconditionally decisive: a notch is a discrete, deliberate act, and
   // nothing about it coasts, so it can't be the decaying momentum residue
-  // this whole measurement exists to recognize. (Converting lines to pixels
-  // instead would need a made-up px-per-line factor to compare against a
-  // threshold that never applies to it.)
+  // this measurement exists to recognize. This is the case a plain pixel
+  // threshold really did get wrong - Firefox reporting deltaY: 3 for three
+  // lines scored 3, under any sane pixel threshold, so a line-mode wheel
+  // could never steal at all.
+  //
+  // Pixel deltas are reported raw, deliberately NOT normalized against the
+  // carousel's own size. Momentum magnitude is a property of the input
+  // device and the flick that started it - it has nothing to do with how
+  // wide the carousel happens to be, so dividing by wrapper length doesn't
+  // remove a device dependency, it just swaps in a layout one that also
+  // moves when the window resizes. (Tried that; on a 1024px wrapper it
+  // raised the effective threshold from 15 to 20.5 and the steal audibly
+  // lost its snap.)
   function wheelStrength(event) {
     if (event.deltaMode !== 0) return DECISIVE_INPUT;
-    // Read during input dispatch, before this frame's style writes, so it's
-    // a cached read rather than a forced layout.
-    const wrapperLength = wrapper[offsetLength];
-    if (!wrapperLength) return DECISIVE_INPUT;
-    return (Math.abs(event.deltaX) + Math.abs(event.deltaY)) / wrapperLength;
+    return Math.abs(event.deltaX) + Math.abs(event.deltaY);
   }
 
   // touchmove/pointerdown cover fingers and scrollbar drags; keydown covers
