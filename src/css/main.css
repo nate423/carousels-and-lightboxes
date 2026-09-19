@@ -74,6 +74,14 @@ body {
   cursor: pointer;
 }
 
+/* Filled in by main.js - see showBuildStamp there for what it reports. */
+.build-stamp {
+  align-self: center;
+  font: 11px/1 ui-monospace, monospace;
+  color: var(--bg-offset-60);
+  opacity: 0.7;
+}
+
 .link-mode-controls {
   display: flex;
   gap: 16px;
