@@ -153,9 +153,10 @@ document.addEventListener("DOMContentLoaded", function () {
     });
     carousels.push(scrubber);
 
-    document.querySelectorAll("[data-link-direction]").forEach((select) => {
+    const linkedCarousels = { main: mainCarousel, strip: scrubber };
+    document.querySelectorAll("[data-link-follower]").forEach((select) => {
       select.addEventListener("change", () => {
-        link.setMode(select.dataset.linkDirection, select.value);
+        link.setResponse(linkedCarousels[select.dataset.linkFollower], select.value);
       });
     });
   }

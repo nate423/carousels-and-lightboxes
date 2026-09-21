@@ -51,17 +51,17 @@
         <h2>Thumbnail scrubber (filmstrip navigator instead of dots)</h2>
         <div class="link-mode-controls">
           <label>
-            Main → Strip
-            <select data-link-direction="aToB">
-              <option value="instant">Instant</option>
-              <option value="continuous" selected>Continuous</option>
+            Main, while following
+            <select data-link-follower="main">
+              <option value="instant" selected>Instant</option>
+              <option value="continuous">Continuous</option>
             </select>
           </label>
           <label>
-            Strip → Main
-            <select data-link-direction="bToA">
-              <option value="instant" selected>Instant</option>
-              <option value="continuous">Continuous</option>
+            Strip, while following
+            <select data-link-follower="strip">
+              <option value="instant">Instant</option>
+              <option value="continuous" selected>Continuous</option>
             </select>
           </label>
         </div>

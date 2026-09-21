@@ -4,13 +4,22 @@
 // changes continuously during a live gesture and native smooth-scroll only
 // makes sense against a fixed destination.
 //
-// Each direction is independently configurable between two response modes:
-//   - "continuous": the driven side is a 1:1 read of the source's live,
-//     fractional progress, written every frame, so it tracks the source's
+// How a carousel comes along is a property of that carousel while it is the
+// one following, not of the direction an update happens to travel. Each side
+// of the link carries its own:
+//   - "continuous": the following side is a 1:1 read of the leader's live,
+//     fractional progress, written every frame, so it tracks the leader's
 //     scroll in lock-step the whole time it moves.
-//   - "instant": the driven side stays put until the source's discrete
+//   - "instant": the following side stays put until the leader's discrete
 //     current item changes (crossing the 50% threshold to a neighbour), then
 //     jumps straight to it with no motion in between.
+//
+// Kept per carousel per link, rather than once per carousel, so a carousel
+// linked to more than one other can follow each of them differently - "b
+// follows a continuously but follows c instantly" - which a single property
+// on b could not say. Nothing here makes either side primary: whichever
+// carousel is moving for its own reasons leads, and the other one's own
+// setting decides how it follows.
 //
 // This module touches no DOM of its own. Whether a given scroll is the user's
 // doing or an echo of a write we just made is carousel-engine's to answer -
@@ -23,13 +32,19 @@ function currentIndexOf(carousel) {
   return computeCurrentIndex(carousel.getCurrentProgress(), carousel.getItems().length);
 }
 
-export function linkCarousels(a, b, { aToB = "continuous", bToA = "instant" } = {}) {
-  // Mutable, not captured per-wire - setMode() (see the returned controller)
-  // can flip either direction's mode live, e.g. from a debug control, without
-  // tearing down and re-registering the scroll subscriptions below.
-  const modes = { aToB, bToA };
+export function linkCarousels(a, b, { aWhileFollowing = "instant", bWhileFollowing = "continuous" } = {}) {
+  // Keyed by the carousel itself rather than by a position in this call's
+  // arguments, so nothing downstream has to know which one was passed first -
+  // there is no "a role" and "b role" here, only two carousels. Mutable and
+  // read at write time, not captured per-wire, so setResponse() (see the
+  // returned controller) can change either side live, e.g. from a debug
+  // control, without tearing down and re-registering the subscriptions below.
+  const whileFollowing = new Map([
+    [a, aWhileFollowing],
+    [b, bWhileFollowing]
+  ]);
 
-  function wire(source, dest, directionKey) {
+  function wire(source, dest) {
     source.onScroll(({ source: scrollSource }) => {
       if (scrollSource === "driven") {
         // This carousel is being written to by us; everything it emits until
@@ -53,7 +68,9 @@ export function linkCarousels(a, b, { aToB = "continuous", bToA = "instant" } = 
 
       const progress = source.getCurrentProgress();
 
-      if (modes[directionKey] === "continuous") {
+      // `dest` is the one being written, so it is the one following, so its
+      // setting is the one that applies.
+      if (whileFollowing.get(dest) === "continuous") {
         writeToDest(progress);
         return;
       }
@@ -85,12 +102,12 @@ export function linkCarousels(a, b, { aToB = "continuous", bToA = "instant" } = 
     }
   }
 
-  wire(a, b, "aToB");
-  wire(b, a, "bToA");
+  wire(a, b);
+  wire(b, a);
 
   return {
-    setMode(directionKey, mode) {
-      modes[directionKey] = mode;
+    setResponse(carousel, response) {
+      whileFollowing.set(carousel, response);
     }
   };
 }

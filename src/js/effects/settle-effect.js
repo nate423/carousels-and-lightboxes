@@ -13,8 +13,8 @@
 // settle, since every high-frequency write would restart the transition's
 // easing curve from scratch.
 //
-//  - Driven by another carousel's own live scroll (linkCarousels'
-//    "continuous" aToB mode, via direct writeToDest calls): every item's
+//  - Driven by another carousel's own live scroll (this strip following
+//    continuously, via linkCarousels' direct writeToDest calls): every item's
 //    itemProgress is handed to the look *untransitioned*, straight from live
 //    progress, every frame - a plain triangle centered on this item's own
 //    index (1 exactly at its own progress, 0 a full item-step either side;
