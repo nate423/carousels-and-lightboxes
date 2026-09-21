@@ -46,6 +46,7 @@ import {
   getItemMetrics,
   wrapperAnchor
 } from "../carousel-math.js";
+import { replaceStyleEl } from "./style-swap.js";
 
 let nextStripId = 0;
 
@@ -56,17 +57,6 @@ function onItemCreated(item) {
   const thumb = document.createElement("div");
   thumb.classList.add("ios-thumbnail-scrubber-thumb");
   item.appendChild(thumb);
-}
-
-// One <style> per wrapper holding its progress keyframes, replaced wholesale
-// on each setup() - same approach css-effect.js takes, for the same reason:
-// the geometry it encodes changes on resize and alignment.
-function replaceStyleEl(previous, cssText) {
-  const styleEl = document.createElement("style");
-  styleEl.textContent = cssText;
-  document.head.appendChild(styleEl);
-  previous?.remove();
-  return styleEl;
 }
 
 // Where the shared progress comes from depends on who is moving this strip,

@@ -15,6 +15,7 @@ import {
   computeAnimationRanges,
   computeTranslationBreakpoints
 } from "../carousel-math.js";
+import { RuleSheet } from "./style-swap.js";
 
 // `animation-timing-function` (including the linear() control-point syntax)
 // applies independently *within* each keyframe-to-keyframe segment, re-based
@@ -56,10 +57,8 @@ function getWrapperState(wrapper) {
   let state = stateByWrapper.get(wrapper);
   if (!state) {
     state = {
-      currentKeyframeRules: new Map(),
-      currentKeyframeStyleEl: null,
-      translateKeyframeRules: new Map(),
-      translateKeyframeStyleEl: null,
+      currentKeyframeSheet: new RuleSheet(),
+      translateKeyframeSheet: new RuleSheet(),
       // The scroll-timeline polyfill (Safari) doesn't support
       // animation-timeline et al. set as inline styles - it works by parsing
       // real stylesheet rules for those properties and matching their
@@ -70,8 +69,7 @@ function getWrapperState(wrapper) {
       // here, in addition to the inline styles below (which native engines
       // read directly, and which win in the CSSOM anyway - same values, so
       // no conflict).
-      positionRules: new Map(),
-      positionStyleEl: null
+      positionSheet: new RuleSheet()
     };
     stateByWrapper.set(wrapper, state);
   }
@@ -111,7 +109,7 @@ function getWrapperState(wrapper) {
 // depending on c alone.
 function setItemCurrentKeyframes(state, item, peakX, range, translateStops, scrollAxis, usesContrast) {
   const currentName = `item-current-${item.dataset.itemId}`;
-  state.currentKeyframeRules.set(
+  state.currentKeyframeSheet.set(
     currentName,
     usesContrast
       ? `@keyframes ${currentName} {
@@ -134,7 +132,7 @@ function setItemCurrentKeyframes(state, item, peakX, range, translateStops, scro
         : `${percent}% { translate: ${scrollAxis === "x" ? `${value}px 0` : `0 ${value}px`}; }`
     )
     .join("\n      ");
-  state.translateKeyframeRules.set(translateName, `@keyframes ${translateName} {\n      ${stops}\n    }`);
+  state.translateKeyframeSheet.set(translateName, `@keyframes ${translateName} {\n      ${stops}\n    }`);
 
   const animationName = `${currentName}, ${translateName}`;
   const animationTimeline = "--item-reveal, --carousel-scroll";
@@ -144,7 +142,7 @@ function setItemCurrentKeyframes(state, item, peakX, range, translateStops, scro
   item.style.animationTimeline = animationTimeline;
   item.style.animationRange = animationRange;
 
-  state.positionRules.set(
+  state.positionSheet.set(
     item.dataset.itemId,
     `.carousel-item[data-item-id="${item.dataset.itemId}"] {
       animation-name: ${animationName};
@@ -154,31 +152,10 @@ function setItemCurrentKeyframes(state, item, peakX, range, translateStops, scro
   );
 }
 
-// The polyfill only transpiles a <style> element's contents at the moment
-// it's added to the DOM (it watches for HTMLStyleElement nodes appearing
-// via MutationObserver, then rewrites that element's innerHTML once) - a
-// later `.textContent =` on an already-inserted element is just a text-node
-// mutation inside it, which the polyfill never sees. So each flush swaps in
-// a fresh <style> with its final text already set, rather than mutating the
-// previous element's textContent in place.
-function replaceStyleEl(prevEl, cssText) {
-  const nextEl = document.createElement("style");
-  nextEl.textContent = cssText;
-  document.head.appendChild(nextEl);
-  if (prevEl) prevEl.remove();
-  return nextEl;
-}
-
 function flushKeyframeStyles(state) {
-  state.currentKeyframeStyleEl = replaceStyleEl(
-    state.currentKeyframeStyleEl,
-    [...state.currentKeyframeRules.values()].join("\n")
-  );
-  state.translateKeyframeStyleEl = replaceStyleEl(
-    state.translateKeyframeStyleEl,
-    [...state.translateKeyframeRules.values()].join("\n")
-  );
-  state.positionStyleEl = replaceStyleEl(state.positionStyleEl, [...state.positionRules.values()].join("\n"));
+  state.currentKeyframeSheet.flush();
+  state.translateKeyframeSheet.flush();
+  state.positionSheet.flush();
 }
 
 function onItemCreated(item) {

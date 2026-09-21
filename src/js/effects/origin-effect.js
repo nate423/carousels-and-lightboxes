@@ -58,28 +58,19 @@ import {
   computeAnimationRanges,
   wrapperAnchor
 } from "../carousel-math.js";
+import { RuleSheet } from "./style-swap.js";
 
 let nextItemId = 0;
-const keyframeRules = new Map();
-let keyframeStyleEl = null;
-// Same constraint as css-effect.js's positionRules: the scroll-timeline
+const keyframeSheet = new RuleSheet();
+// Same constraint as css-effect.js's positionSheet: the scroll-timeline
 // polyfill only discovers animation-name/-timeline/-range from real
 // stylesheet rules, not inline styles, so every item also gets a generated
 // selector rule pointing at the same keyframes.
-const positionRules = new Map();
-let positionStyleEl = null;
-
-function replaceStyleEl(prevEl, cssText) {
-  const nextEl = document.createElement("style");
-  nextEl.textContent = cssText;
-  document.head.appendChild(nextEl);
-  if (prevEl) prevEl.remove();
-  return nextEl;
-}
+const positionSheet = new RuleSheet();
 
 function flushStyles() {
-  keyframeStyleEl = replaceStyleEl(keyframeStyleEl, [...keyframeRules.values()].join("\n"));
-  positionStyleEl = replaceStyleEl(positionStyleEl, [...positionRules.values()].join("\n"));
+  keyframeSheet.flush();
+  positionSheet.flush();
 }
 
 function onItemCreated(item) {
@@ -94,7 +85,7 @@ function setItemOriginKeyframes(item, range, flipPercent, scrollAxis) {
   const approachOrigin = scrollAxis === "x" ? "100% 50%" : "50% 100%";
   const passedOrigin = scrollAxis === "x" ? "0% 50%" : "50% 0%";
 
-  keyframeRules.set(
+  keyframeSheet.set(
     revealName,
     `@keyframes ${revealName} {
       0% { scale: var(--noncurrent-scale); opacity: var(--noncurrent-opacity); }
@@ -116,7 +107,7 @@ function setItemOriginKeyframes(item, range, flipPercent, scrollAxis) {
       : `0% { transform-origin: ${approachOrigin}; animation-timing-function: steps(1, jump-end); }
          ${flipPercent}% { transform-origin: ${passedOrigin}; }
          100% { transform-origin: ${passedOrigin}; }`;
-  keyframeRules.set(flipName, `@keyframes ${flipName} {\n      ${flipStops}\n    }`);
+  keyframeSheet.set(flipName, `@keyframes ${flipName} {\n      ${flipStops}\n    }`);
 
   const animationName = `${revealName}, ${flipName}`;
   const animationTimeline = "--item-reveal, --carousel-scroll";
@@ -126,7 +117,7 @@ function setItemOriginKeyframes(item, range, flipPercent, scrollAxis) {
   item.style.animationTimeline = animationTimeline;
   item.style.animationRange = animationRange;
 
-  positionRules.set(
+  positionSheet.set(
     item.dataset.itemId,
     `.carousel-item[data-item-id="${item.dataset.itemId}"] {
       animation-name: ${animationName};
