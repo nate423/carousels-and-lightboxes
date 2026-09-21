@@ -25,7 +25,8 @@
 // doing or an echo of a write we just made is carousel-engine's to answer -
 // see the scroll-attribution block there. Everything below works off the two
 // controllers' public surface: onScroll's `source`, getScrollSource,
-// isMovingItself, selfScrollStartedAt, getCurrentProgress and setProgressDirect.
+// isMovingItself, selfScrollStartedAt, getCurrentProgress, setProgressDirect,
+// onScrollEnd and endFollowing.
 import { computeCurrentIndex } from "./carousel-math.js";
 
 function currentIndexOf(carousel) {
@@ -45,6 +46,12 @@ export function linkCarousels(a, b, { aWhileFollowing = "instant", bWhileFollowi
   ]);
 
   function wire(source, dest) {
+    // dest's own "following" motion ends here, off source's real scrollend,
+    // rather than off any scrollend dest itself fires - see endFollowing in
+    // carousel-engine.js for why dest's own native scrollend can't be
+    // trusted for this while it's the one being driven.
+    source.onScrollEnd(() => dest.endFollowing());
+
     source.onScroll(({ source: scrollSource }) => {
       if (scrollSource === "driven") {
         // This carousel is being written to by us; everything it emits until

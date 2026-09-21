@@ -165,9 +165,10 @@ export function createCarousel(wrapper, options = {}) {
   // Attribution is deliberately sticky: it stays "driven" through the whole
   // unbounded tail of echoes and resnap corrections a direct write can
   // provoke, which is what makes it safe to suppress those. Motion is bounded
-  // instead - by 'scrollend' on the way out, and by a real scroll event or a
-  // direct write on the way in - so it can answer "is this thing moving" at
-  // an instant.
+  // instead - by a real scroll event or a direct write on the way in, and on
+  // the way out by 'scrollend' (this wrapper's own for leading, the driving
+  // carousel's, relayed through endFollowing, for following - see there) -
+  // so it can answer "is this thing moving" at an instant.
   //
   // Reading attribution as if it were motion is the trap: "self" is also what
   // a carousel at rest reports, so anything that treats it as "leading"
@@ -176,6 +177,23 @@ export function createCarousel(wrapper, options = {}) {
     if (movingItself) return "leading";
     if (movingDriven) return "following";
     return "idle";
+  }
+
+  // Ends "following", called by the link once the carousel actually driving
+  // this one reports that *its* gesture is over - see onScrollEnd below and
+  // carousel-link.js. Not driven by this wrapper's own 'scrollend': a driven
+  // carousel's scroll position is quantised (setProgressDirect's note above),
+  // so most frames of a slow drive leave it sitting on the same pixel for a
+  // stretch well past what the browser treats as "no longer scrolling",
+  // firing this wrapper's own scrollend while the carousel actually driving
+  // it is still moving. The leader's scrollend has no such problem - it's
+  // real, continuous scroll input - so it's the only reliable end-of-motion
+  // signal for the side being driven.
+  function endFollowing() {
+    if (!movingDriven) return;
+    movingDriven = false;
+    updateContrast();
+    applyIfReady();
   }
 
   // --- Contrast -----------------------------------------------------------
@@ -277,6 +295,7 @@ export function createCarousel(wrapper, options = {}) {
   }
 
   const scrollListeners = new Set();
+  const scrollEndListeners = new Set();
 
   function getAlignment() {
     return wrapper.dataset.scrollAlignment || DEFAULT_ALIGNMENT;
@@ -567,11 +586,21 @@ export function createCarousel(wrapper, options = {}) {
   // rAF-throttled, so the last scroll event's render is still pending when
   // this fires. Rendering once more here is what guarantees the look ends
   // up drawing the position the carousel actually came to rest at.
+  //
+  // Only ends *this* carousel's own leading motion, not driven motion - see
+  // endFollowing above for why the driven side can't trust its own
+  // 'scrollend'. scrollEndListeners only fire on a real leading gesture
+  // ending (wasLeading), so a spurious/early scrollend while merely being
+  // driven, or one with no motion behind it at all, never gets relayed as if
+  // it were the authoritative "the gesture is over" signal.
   wrapper.addEventListener("scrollend", () => {
+    const wasLeading = movingItself;
     movingItself = false;
-    movingDriven = false;
     updateContrast();
     applyIfReady();
+    if (wasLeading) {
+      scrollEndListeners.forEach((listener) => listener());
+    }
   });
 
   wrapper.addEventListener(
@@ -660,6 +689,15 @@ export function createCarousel(wrapper, options = {}) {
       scrollListeners.add(listener);
       return () => scrollListeners.delete(listener);
     },
+    // Notified when this carousel's own gesture - the kind that sets
+    // isMovingItself, not one driven onto it - actually ends. The reliable
+    // end-of-motion signal a link forwards to whatever this carousel is
+    // driving; see endFollowing. Returns an unsubscribe function.
+    onScrollEnd(listener) {
+      scrollEndListeners.add(listener);
+      return () => scrollEndListeners.delete(listener);
+    },
+    endFollowing,
     setOnProgress(onProgress) {
       ctx.onProgress = onProgress;
     },
