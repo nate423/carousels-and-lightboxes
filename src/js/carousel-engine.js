@@ -16,6 +16,20 @@ import {
 } from "./carousel-math.js";
 
 const DEFAULT_ALIGNMENT = "center";
+
+// Which motion states, if any, this carousel drops its contrast in - the
+// four-way choice spelled as the two independent bits it actually is.
+// "Contrast" here means whatever a look does to distinguish the current item
+// from the rest; the engine has no opinion on what that is, only on when it
+// should be showing. Dropping it while leading is the iOS filmstrip's
+// behavior: the thumbnails flatten out under your finger and the one you
+// land on grows once you let go.
+const CONTRAST_REMOVAL = {
+  never: { leading: false, following: false },
+  leading: { leading: true, following: false },
+  following: { leading: false, following: true },
+  always: { leading: true, following: true }
+};
 // ms of no further direct writes before scroll-snap is handed back - see
 // suspendScrollSnap below.
 const SNAP_RESTORE_DELAY = 150;
@@ -59,7 +73,13 @@ function aspectFor(size, index) {
 }
 
 export function createCarousel(wrapper, options = {}) {
-  const { itemCount = 30, effect, createItem = defaultCreateItem, itemSizing } = options;
+  const {
+    itemCount = 30,
+    effect,
+    createItem = defaultCreateItem,
+    itemSizing,
+    removeContrastWhileScrolling = "never"
+  } = options;
 
   wrapper.dataset.scrollAlignment ||= DEFAULT_ALIGNMENT;
 
@@ -156,6 +176,29 @@ export function createCarousel(wrapper, options = {}) {
     if (movingItself) return "leading";
     if (movingDriven) return "following";
     return "idle";
+  }
+
+  // --- Contrast -----------------------------------------------------------
+  // Published as an attribute rather than handed to the effect, so that a
+  // look written entirely in CSS needs no JS of its own to honour the
+  // policy - it just declares what data-contrast="off" means for it. The
+  // engine decides *when*; the look decides *what*.
+  //
+  // There is no separate "settle" step and nothing to re-expand on. Coming
+  // to rest is idle, and idle is not a state any policy removes contrast in,
+  // so the attribute goes back on its own. The easing on the way back is the
+  // look's business too - a CSS transition on whatever it derives from this.
+  let contrastRemoval = CONTRAST_REMOVAL[removeContrastWhileScrolling] ?? CONTRAST_REMOVAL.never;
+
+  function updateContrast() {
+    const motionState = getMotionState();
+    const removed = motionState !== "idle" && contrastRemoval[motionState];
+    const next = removed ? "off" : "on";
+    // Only on a real change: this runs on every scroll event, and rewriting
+    // an unchanged attribute still invalidates style for the whole subtree.
+    if (wrapper.dataset.contrast !== next) {
+      wrapper.dataset.contrast = next;
+    }
   }
 
   function markSelfDriven() {
@@ -325,6 +368,7 @@ export function createCarousel(wrapper, options = {}) {
   function setProgressDirect(progress) {
     scrollSource = "driven";
     movingDriven = true;
+    updateContrast();
     lastDrivenProgress = progress;
     suspendScrollSnap();
 
@@ -426,6 +470,7 @@ export function createCarousel(wrapper, options = {}) {
   };
 
   populateItems();
+  updateContrast();
   effect.setup(ctx);
   effect.apply(ctx);
 
@@ -438,14 +483,19 @@ export function createCarousel(wrapper, options = {}) {
   // this synchronous loop.
   // 'scrollend' fires once a scroll operation - gesture, momentum and any snap
   // correction together - is over, which is what bounds a stretch of movement.
+  // Contrast is updated from the unthrottled listener, not the rAF-throttled
+  // one below, so it flips on the first scroll event of a gesture rather
+  // than a frame into it.
   wrapper.addEventListener("scroll", () => {
     const nowMovingItself = scrollSource === "self";
     if (nowMovingItself && !movingItself) selfScrollStartedAt = performance.now();
     movingItself = nowMovingItself;
+    updateContrast();
   });
   wrapper.addEventListener("scrollend", () => {
     movingItself = false;
     movingDriven = false;
+    updateContrast();
   });
 
   wrapper.addEventListener(
@@ -520,6 +570,12 @@ export function createCarousel(wrapper, options = {}) {
     setAlignment,
     getScrollSource: () => scrollSource,
     getMotionState,
+    // Which motion states drop contrast, changeable live (e.g. from a demo
+    // control) - the policy is read fresh on every update, not captured.
+    setContrastRemoval(mode) {
+      contrastRemoval = CONTRAST_REMOVAL[mode] ?? CONTRAST_REMOVAL.never;
+      updateContrast();
+    },
     isMovingItself: () => movingItself,
     selfScrollStartedAt: () => selfScrollStartedAt,
     // Notified once per scroll frame, after effect.apply, with the
