@@ -196,10 +196,22 @@ export function createCarousel(wrapper, options = {}) {
     const next = removed ? "off" : "on";
     // Only on a real change: this runs on every scroll event, and rewriting
     // an unchanged attribute still invalidates style for the whole subtree.
-    if (wrapper.dataset.contrast !== next) {
-      wrapper.dataset.contrast = next;
-    }
+    if (wrapper.dataset.contrast === next) return false;
+    wrapper.dataset.contrast = next;
+    return true;
   }
+
+  // A look painted in CSS redraws itself when the attribute changes; one
+  // painted in JS only draws from apply(). Both places below are ones where
+  // a JS look would otherwise be left holding a stale frame, since neither
+  // is a scroll.
+  function applyIfReady() {
+    if (ready) effect.apply(ctx);
+  }
+
+  // effect.apply reads state that effect.setup builds, so nothing may call
+  // it before the first setup below has run.
+  let ready = false;
 
   function markSelfDriven() {
     scrollSource = "self";
@@ -473,6 +485,7 @@ export function createCarousel(wrapper, options = {}) {
   updateContrast();
   effect.setup(ctx);
   effect.apply(ctx);
+  ready = true;
 
   // A single rAF-throttled pass per scroll frame, shared by the effect and
   // every onScroll subscriber, so a link and an effect watching the same
@@ -492,10 +505,16 @@ export function createCarousel(wrapper, options = {}) {
     movingItself = nowMovingItself;
     updateContrast();
   });
+  // Unconditionally, not just when contrast changed: this is where a
+  // gesture's final position becomes final, and the apply below is
+  // rAF-throttled, so the last scroll event's render is still pending when
+  // this fires. Rendering once more here is what guarantees the look ends
+  // up drawing the position the carousel actually came to rest at.
   wrapper.addEventListener("scrollend", () => {
     movingItself = false;
     movingDriven = false;
     updateContrast();
+    applyIfReady();
   });
 
   wrapper.addEventListener(
@@ -574,7 +593,7 @@ export function createCarousel(wrapper, options = {}) {
     // control) - the policy is read fresh on every update, not captured.
     setContrastRemoval(mode) {
       contrastRemoval = CONTRAST_REMOVAL[mode] ?? CONTRAST_REMOVAL.never;
-      updateContrast();
+      if (updateContrast()) applyIfReady();
     },
     isMovingItself: () => movingItself,
     selfScrollStartedAt: () => selfScrollStartedAt,
