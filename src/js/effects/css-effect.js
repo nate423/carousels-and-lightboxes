@@ -5,6 +5,9 @@
 // scroll-timeline (see main.css). This module only precomputes that
 // animation geometry (setup); apply() just derives the current index for
 // the page dots, which is the one thing no timeline can hand back to JS.
+// The same look computed by hand, item by item, on every scroll frame
+// instead of once as @keyframes, lives in looks/scale-fade-look.js and runs
+// through js-effect.js.
 import {
   computeCurrentProgress,
   computeCurrentIndex,
