@@ -20,14 +20,23 @@ import { cssEffect } from "../effects/css-effect.js";
 import { linkCarousels } from "../carousel-link.js";
 
 export function attachThumbnailScrubber(mainCarousel, scrubberWrapper, options = {}) {
-  const { thumbnailHeight = 32, effect = cssEffect } = options;
+  const { thumbnailCrossSize = 32, effect = cssEffect } = options;
   const sourceItems = mainCarousel.getItems();
+
+  // Mirrors carousel-engine.js's own scrollAxis derivation, so a vertical
+  // strip fixes its width (crossSize) and derives height (the main axis,
+  // the one items scroll along) from the source aspect ratio, instead of
+  // always fixing height as if the strip were horizontal.
+  const scrollAxis = scrubberWrapper.getAttribute("data-scroll-axis") || "x";
+  const crossSide = scrollAxis === "x" ? "height" : "width";
+  const mainSide = scrollAxis === "x" ? "width" : "height";
 
   function createItem(item, index) {
     const sourceItem = sourceItems[index];
     const aspect = sourceItem.offsetWidth / sourceItem.offsetHeight || 1;
-    item.style.height = thumbnailHeight + "px";
-    item.style.width = Math.round(thumbnailHeight * aspect) + "px";
+    const mainSize = scrollAxis === "x" ? thumbnailCrossSize * aspect : thumbnailCrossSize / aspect;
+    item.style[crossSide] = thumbnailCrossSize + "px";
+    item.style[mainSide] = Math.round(mainSize) + "px";
   }
 
   const scrubber = createCarousel(scrubberWrapper, {
