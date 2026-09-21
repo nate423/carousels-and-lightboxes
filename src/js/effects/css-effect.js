@@ -79,10 +79,11 @@ function getWrapperState(wrapper) {
 // Only builds the rule text and points the item at it - doesn't touch the
 // shared stylesheets' textContent. Setting textContent is a full
 // reparse/recalc of every rule in it, so setup() batches all n items' rules
-// and writes each stylesheet exactly once after its items.forEach loop
-// instead of n times (was O(n^2) - the likely cause of the jank/freezing
-// seen resizing the window, since resize has no debounce and calls setup()
-// on every native 'resize' event).
+// and writes each stylesheet exactly once after its items.forEach loop.
+// Writing per-item instead would reparse the whole, growing rule set on
+// every one of the n writes - O(n^2) - which would show up as jank or
+// freezing on window resize, since resize has no debounce and calls setup()
+// on every native 'resize' event.
 function setItemCurrentKeyframes(state, item, peakX, range, translateStops, scrollAxis) {
   const currentName = `item-current-${item.dataset.itemId}`;
   state.currentKeyframeRules.set(
