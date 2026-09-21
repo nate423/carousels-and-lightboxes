@@ -150,8 +150,8 @@ export function computeScrollAnchorForProgress(anchors, progress) {
   return transition(progress - i, anchors[i], anchors[i + 1]);
 }
 
-// Triangular falloff: 1 exactly at this item's own index, down to 0 by the
-// time currentProgress reaches either neighboring index.
+// How current item i is, 0 to 1: 1 exactly when currentProgress lands on
+// i, down to 0 by the time currentProgress reaches either adjacent index.
 export function computeItemProgress(currentProgress, i) {
   return Math.min(Math.max(1 - Math.abs(currentProgress - i), 0), 1);
 }
@@ -164,13 +164,13 @@ export function computeItemProgress(currentProgress, i) {
 // leading-edge position `x` sits at cover-percent
 // `(wrapperLength - x) / (wrapperLength + itemLength)`.
 //
-// The falloff window has to be asymmetric, sized independently to the real
-// pixel gap to each neighboring anchor (falling back to the item's own
-// length at the carousel's edges, where there's only one neighbor) -
-// otherwise the falloff doesn't reach exactly 0 at the moment a neighbor
-// actually becomes current, leaving either a dead zone (real gap wider than
-// the window) or a lag (real gap narrower) on whichever side isn't sized to
-// match, visible as the adjacent item's own falloff starting or finishing
+// The how-current-is-it window has to be asymmetric, sized independently to
+// the real pixel gap to each neighboring anchor (falling back to the item's
+// own length at the carousel's edges, where there's only one neighbor) -
+// otherwise it doesn't reach exactly 0 at the moment a neighbor actually
+// becomes current, leaving either a dead zone (real gap wider than the
+// window) or a lag (real gap narrower) on whichever side isn't sized to
+// match, visible as the adjacent item's own window starting or finishing
 // late relative to this one's.
 //
 // But an asymmetric range means the item's own peak (where it's genuinely
@@ -185,9 +185,9 @@ export function computeItemProgress(currentProgress, i) {
 // generated `@keyframes` rule with the "scale: 1" stop placed directly at
 // `peakX%` - the only way to put a keyframe value at an arbitrary per-item
 // position. (The gap-compensating translate math below doesn't need peakX
-// at all: computeCurrentProgress + computeItemProgress already reduce to
-// the same anchor-based tent shape this asymmetric range encodes, just
-// derived directly from real anchor distances instead of by way of
+// at all: computeCurrentProgress + computeItemProgress already produce the
+// same how-current-is-it curve this asymmetric range encodes, just derived
+// directly from real anchor distances instead of by way of
 // cover-percent/peakX.)
 export function computeAnimationRanges(anchors, lengths, wrapperLength, alignment, scrollPadding) {
   const n = anchors.length;
@@ -253,7 +253,7 @@ export function computeTranslations(anchors, lengths, scales, currentProgress) {
 
 // Precomputes the per-item data computeTranslationsAt needs to evaluate
 // computeTranslations' result at an arbitrary currentProgress in O(1) per
-// item instead of O(n): computeItemProgress's falloff is exactly 0 outside a
+// item instead of O(n): computeItemProgress is exactly 0 outside a
 // fixed +/-1 window around currentProgress, so every item's scaleDiff
 // (lengths[i] * (1 - scales[i])) equals a currentProgress-independent
 // baseline - lengths[i] * (1 - noncurrentScale) - except for at most the one
@@ -312,8 +312,8 @@ export function computeTranslationsAt(prefix, baseDiff, currentProgress) {
 // output as a native CSS @keyframes curve (one per item, driven by a
 // scroll-timeline spanning the wrapper's whole scrollable range - see
 // css-effect.js). As a function of raw scroll offset, every item's
-// translation is piecewise-linear: computeItemProgress's triangular falloff
-// (derived from the real anchor-to-anchor pixel distances via
+// translation is piecewise-linear: computeItemProgress's how-current-is-it
+// curve (derived from the real anchor-to-anchor pixel distances via
 // computeCurrentProgress, same as it is for the JS effect) reaches exactly 0
 // right as scrollAnchor crosses a neighboring anchor, so each item's
 // scaleDiff only bends at its own neighbors' anchors - meaning the anchors

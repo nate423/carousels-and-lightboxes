@@ -185,18 +185,18 @@ export function settleEffect(look) {
     // the other's: measured on an iPhone, the main carousel advancing 1px
     // per frame left scrollLeft here unchanged for four frames and then
     // jumped it by a whole one. Deriving progress from that turns the smooth
-    // tent below into a staircase, stepping every item's translate by
-    // ~0.65px at a time, which is the visible flicker. The scroll position
-    // is still the right thing to measure on the drag path, where it is
-    // what the finger actually moved.
+    // itemProgress curve below into a staircase, stepping every item's
+    // translate by ~0.65px at a time, which is the visible flicker. The
+    // scroll position is still the right thing to measure on the drag path,
+    // where it is what the finger actually moved.
     const currentProgress = isDriven ? getDrivenProgress() : computeCurrentProgress(anchors, scrollAnchor);
 
     if (isDriven) {
       if (!state.wasDriven) {
         look.setTransitionsEnabled(ctx, false);
         state.wasDriven = true;
-        // The tent below renders every item's itemProgress directly off live
-        // progress, never off "which one is expanded", so expandedIndex
+        // The render below computes every item's itemProgress directly off
+        // live progress, never off "which one is expanded", so expandedIndex
         // would otherwise sit here stale for the whole drive and then be
         // diffed against on the way out.
         state.expandedIndex = null;
