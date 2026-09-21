@@ -23,33 +23,30 @@ export function attachThumbnailScrubber(mainCarousel, scrubberWrapper, options =
   const { thumbnailCrossSize = 32, effect = cssEffect } = options;
   const sourceItems = mainCarousel.getItems();
 
-  // Mirrors carousel-engine.js's own scrollAxis derivation, so a vertical
-  // strip fixes its width (crossSize) and derives height (the main axis,
-  // the one items scroll along) from the source aspect ratio, instead of
-  // always fixing height as if the strip were horizontal.
-  const scrollAxis = scrubberWrapper.getAttribute("data-scroll-axis") || "x";
-  const crossSide = scrollAxis === "x" ? "height" : "width";
-  const mainSide = scrollAxis === "x" ? "width" : "height";
-
-  function createItem(item, index) {
-    const sourceItem = sourceItems[index];
-    const aspect = sourceItem.offsetWidth / sourceItem.offsetHeight || 1;
-    const mainSize = scrollAxis === "x" ? thumbnailCrossSize * aspect : thumbnailCrossSize / aspect;
-    item.style[crossSide] = thumbnailCrossSize + "px";
-    item.style[mainSide] = Math.round(mainSize) + "px";
-  }
-
   const scrubber = createCarousel(scrubberWrapper, {
     itemCount: sourceItems.length,
     effect,
-    createItem
+    itemSizing: {
+      crossSize: thumbnailCrossSize,
+      // Each thumbnail keeps the ratio of the item it stands for, so a strip
+      // of them reads as the main carousel in miniature. Measured off the
+      // rendered item, which is why the main carousel has to be populated
+      // and laid out before this runs.
+      size: {
+        origin: (index) => sourceItems[index].offsetWidth / sourceItems[index].offsetHeight || 1
+      }
+    },
+    // Thumbnails are empty boxes - the look is all the content there is.
+    // Passed explicitly because the engine's default fills an item with its
+    // own index as text.
+    createItem: () => {}
   });
 
-  // Defaults match carousel-link.js: scrolling the main item tracks the
-  // strip continuously, scrubbing the strip jumps the main item over the
-  // instant its current item changes. `link` is returned alongside the
-  // scrubber so a caller can flip either direction's mode live (e.g. from a
-  // debug control).
+  // Defaults match carousel-link.js: the strip, while following, comes along
+  // continuously, and the main carousel, while following, jumps the instant
+  // the strip's current item changes. `link` is returned alongside the
+  // scrubber so a caller can change either carousel's response live (e.g.
+  // from a debug control).
   const link = linkCarousels(mainCarousel, scrubber);
 
   return { scrubber, link };

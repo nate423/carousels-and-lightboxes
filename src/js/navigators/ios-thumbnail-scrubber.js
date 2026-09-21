@@ -8,7 +8,8 @@
 // instance - real native scroll + scroll-snap, so dragging/flicking it gets
 // native momentum and snapping for free, not a custom pointer/transform
 // carousel - linked to the main carousel via the same linkCarousels used
-// there (default modes: continuous main->strip, instant strip->main). All
+// there (defaults: this strip follows continuously, the main carousel
+// follows instantly). All
 // of the "only the centered item is bigger" visual logic lives in
 // ios-scrubber-effect.js; this file just wires up fixed-size, non-aspect-
 // ratio-preserving items (unlike the original, whose thumbnails mirror each
@@ -37,14 +38,21 @@ export function attachIosThumbnailScrubber(mainCarousel, scrubberWrapper, option
   // iosScrubberEffect to createCarousel directly).
   scrubberWrapper.dataset.scrollTimelines = "off";
 
-  function createItem(item) {
-    item.style.height = itemHeight + "px";
-  }
-
   const scrubber = createCarousel(scrubberWrapper, {
     itemCount,
     effect: iosScrubberEffect,
-    createItem
+    itemSizing: {
+      crossSize: itemHeight,
+      // One ratio for the whole strip, rather than each thumbnail keeping
+      // its own - this style's thumbnails are deliberately uniform, and only
+      // the centered one departs from that, as overflow rather than as a
+      // bigger box.
+      size: { aspect: itemWidth / itemHeight }
+    },
+    // The thumb the look paints is added in onItemCreated; there is no
+    // per-item content beyond it, and the engine's default would fill each
+    // item with its own index as text.
+    createItem: () => {}
   });
 
   const link = linkCarousels(mainCarousel, scrubber);
