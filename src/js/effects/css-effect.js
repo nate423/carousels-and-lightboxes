@@ -84,23 +84,28 @@ function getWrapperState(wrapper) {
 // every one of the n writes - O(n^2) - which would show up as jank or
 // freezing on window resize, since resize has no debounce and calls setup()
 // on every native 'resize' event.
-function setItemCurrentKeyframes(state, item, peakX, range, translateStops, scrollAxis) {
+function setItemCurrentKeyframes(state, item, peakX, range, translateStops) {
+  // Drives --item-progress rather than scale/opacity directly, so the
+  // contrast policy can scale the whole look with a transition that this
+  // animation does not fight - see the --item-progress block in main.css,
+  // which turns the two values below into what is actually drawn.
   const currentName = `item-current-${item.dataset.itemId}`;
   state.currentKeyframeRules.set(
     currentName,
     `@keyframes ${currentName} {
-      0% { scale: var(--noncurrent-scale); opacity: var(--noncurrent-opacity); }
-      ${peakX * 100}% { scale: 1; opacity: 1; }
-      100% { scale: var(--noncurrent-scale); opacity: var(--noncurrent-opacity); }
+      0% { --item-progress: 0; }
+      ${peakX * 100}% { --item-progress: 1; }
+      100% { --item-progress: 0; }
     }`
   );
 
+  // Likewise a plain length, with which axis it belongs on left to main.css
+  // - the gap it compensates for only exists in proportion to the scaling
+  // that opened it, so it has to scale with contrast too, and it can only
+  // do that from the same side of the split.
   const translateName = `item-translate-${item.dataset.itemId}`;
   const stops = translateStops
-    .map(({ percent, value }) => {
-      const translateValue = scrollAxis === "x" ? `${value}px 0` : `0 ${value}px`;
-      return `${percent}% { translate: ${translateValue}; }`;
-    })
+    .map(({ percent, value }) => `${percent}% { --item-shift: ${value}px; }`)
     .join("\n      ");
   state.translateKeyframeRules.set(translateName, `@keyframes ${translateName} {\n      ${stops}\n    }`);
 
@@ -185,7 +190,6 @@ function setup(ctx) {
     scrollSize,
     offsetSize,
     offsetFromStart,
-    scrollAxis,
     getAlignmentFraction,
     getScrollPadding,
     getNoncurrentScale
@@ -230,7 +234,7 @@ function setup(ctx) {
       percent: percentFor(bp.scrollAnchor),
       value: bp.translations[i]
     }));
-    setItemCurrentKeyframes(state, item, ranges[i].peakX, ranges[i], translateStops, scrollAxis);
+    setItemCurrentKeyframes(state, item, ranges[i].peakX, ranges[i], translateStops);
   });
   flushKeyframeStyles(state);
 } // End setup function

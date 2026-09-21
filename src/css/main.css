@@ -169,6 +169,65 @@ body {
   isolation: isolate;
 }
 
+/* --- What a look draws, and how much of it showing ---------------------
+   Two values every look here speaks in, so the contrast policy can be one
+   mechanism rather than one per look:
+
+     --item-progress  how far this item has come from its noncurrent state
+                      to its current one, 0 to 1 - the same itemProgress
+                      carousel-math.js defines.
+     --item-shift     how far this item is displaced along the scroll axis
+                      by whatever expansion is happening elsewhere.
+
+   Both describe the look at full strength. The contrast multiplier is
+   applied where they are read, not where they are written, and that split
+   is the whole trick: a scroll-driven animation can keep writing them at
+   full strength every frame while the collapse eases independently
+   underneath. Animations beat transitions in the cascade, so a transition
+   on a drawn property itself could never ease away from what an animation
+   is asserting - it would be ignored while the animation ran and snap the
+   moment it stopped.
+
+   Registered so they interpolate at all: an unregistered custom property is
+   an untyped token string, which keyframes and transitions can only swap at
+   the halfway mark. --item-progress inherits so that a look can build an
+   item out of nested elements and have them all see their own item's value
+   (the iOS filmstrip's thumb does exactly this), and starts at 1 rather
+   than 0 so an item whose animation never resolves - the polyfill failing
+   to load, say - degrades to the plain undistorted item rather than to
+   every item stuck at its noncurrent size. Same neutral fallback the
+   .carousel-item rule above states outright, reached the same way. */
+@property --item-progress {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 1;
+}
+
+@property --item-shift {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+/* How much of the look is showing at all: 1 fully, 0 not at all.
+   carousel-engine.js writes data-contrast from the carousel's contrast
+   policy and its motion state, and this is the only place that attribute
+   becomes a number - every look just multiplies by it. Inherited so the
+   transition can run once on the wrapper while items read the value. */
+@property --contrast-amount {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 1;
+}
+
+.carousel-wrapper {
+  transition: --contrast-amount 130ms ease;
+}
+
+.carousel-wrapper[data-contrast="off"] {
+  --contrast-amount: 0;
+}
+
 /* Every rule below is gated on data-scroll-timelines, NOT on data-effect.
    The two are different questions: data-effect picks which effect module
    main.js constructs, while this scaffolding asks whether the wrapper drives
@@ -260,18 +319,41 @@ body {
   scroll-timeline-axis: block;
 }
 
+/* The scale+fade look: the current item at full size and opacity, the rest
+   scaled down and faded, interpolated by --item-progress and faded in and
+   out as a whole by --contrast-amount. At contrast 0 both terms vanish and
+   every item is left exactly as laid out, which is what "no contrast" means
+   here - nothing distinguishing any item from any other. css-effect.js
+   generates the per-item keyframes that drive the two inputs; these rules
+   are the other half of it.
+
+   origin-effect.js shares this scaffolding but overrides scale and opacity
+   from keyframes of its own, and an animation beats these declarations, so
+   it draws as it always has (and does not yet answer to contrast). It
+   writes no translate, and an unset --item-shift is 0, so that line is a
+   no-op there. */
+.carousel-wrapper:not([data-scroll-timelines="off"]) .carousel-item {
+  scale: calc(1 - (1 - var(--noncurrent-scale)) * (1 - var(--item-progress)) * var(--contrast-amount));
+  opacity: calc(1 - (1 - var(--noncurrent-opacity)) * (1 - var(--item-progress)) * var(--contrast-amount));
+  translate: calc(var(--item-shift) * var(--contrast-amount)) 0;
+}
+
+.carousel-wrapper[data-scroll-axis="y"]:not([data-scroll-timelines="off"]) .carousel-item {
+  translate: 0 calc(var(--item-shift) * var(--contrast-amount));
+}
+
+/* The shared default, used until css-effect.js replaces it with a per-item
+   rule whose peak sits where that item's own geometry puts it. Writes the
+   same input the generated ones do. */
 @keyframes item-current {
   0% {
-    scale: var(--noncurrent-scale);
-    opacity: var(--noncurrent-opacity);
+    --item-progress: 0;
   }
   50% {
-    scale: 1;
-    opacity: 1;
+    --item-progress: 1;
   }
   100% {
-    scale: var(--noncurrent-scale);
-    opacity: var(--noncurrent-opacity);
+    --item-progress: 0;
   }
 }
 
@@ -448,24 +530,6 @@ body {
   initial-value: 0;
 }
 
-/* How much of the look is currently showing - 1 fully, 0 flattened
-   completely. Scaling both outputs by it works because this look's
-   collapsed state IS its zero state: every footprint equal means no item
-   displaces any other, so every shift is 0 and every thumb is its base
-   width.
-
-   Keeping it on its own property is what lets the collapse ease while the
-   scroll-driven animation keeps running underneath. Animations beat
-   transitions in the cascade, so a transition declared on transform or
-   width could not ease away from a value the animation is asserting - it
-   would be ignored while the animation ran, and snap the moment it
-   stopped. */
-@property --ios-contrast {
-  syntax: "<number>";
-  inherits: true;
-  initial-value: 1;
-}
-
 .ios-scrubber-css {
   /* Declared here rather than inherited from the generic rule above, which
      is gated on data-scroll-timelines and would also bring the scale/opacity
@@ -478,15 +542,6 @@ body {
   animation-timeline: --carousel-scroll;
   animation-fill-mode: both;
   animation-timing-function: linear;
-
-  transition: --ios-contrast 130ms ease;
-}
-
-/* carousel-engine.js writes this attribute from the contrast policy and the
-   carousel's motion state; all this look has to say is what losing contrast
-   means for it. */
-.ios-scrubber-css[data-contrast="off"] {
-  --ios-contrast: 0;
 }
 
 /* The hand-computed variant's permanent transitions have to go here, and
@@ -496,7 +551,7 @@ body {
    already continuous - they follow --ios-progress, which the animation
    advances - so transitioning them would add real lag to every frame and
    restart the easing curve on each one. All the easing this look needs is
-   on the collapse, and that rides on --ios-contrast. */
+   on the collapse, and that rides on --contrast-amount. */
 .ios-scrubber-css .ios-thumbnail-scrubber-item,
 .ios-scrubber-css .ios-thumbnail-scrubber-thumb {
   transition: none;
@@ -511,32 +566,38 @@ body {
   --lo: clamp(0, calc(1 + var(--u)), 1);
   --hi: clamp(0, var(--u), 1);
 
-  /* How far this item has animated from collapsed to current - the same 0-1
-     itemProgress the JS looks compute, as a triangle centered on its own
-     index, written without abs() by subtracting the two ramps. */
-  --grow: calc((var(--lo) - var(--hi)) * var(--ios-contrast));
+  /* The two shared values every look here speaks in - see their block
+     above. Written at full strength, with --contrast-amount applied at
+     each point of use below, exactly as the scale+fade look does it; the
+     difference is only that these come from a calc() over one shared
+     progress rather than from per-item keyframes.
 
-  /* How far this item is displaced by whatever expansion is happening
-     elsewhere in the strip. At center alignment it is simply half the
-     growth either way, ramping across the two items either side of
-     current. */
-  --shift: calc(
+     --item-progress is a triangle centered on this item's own index,
+     written without abs() by subtracting the two ramps. It inherits, which
+     is what lets the thumb inside the item read its own item's value. */
+  --item-progress: calc(var(--lo) - var(--hi));
+
+  --item-shift: calc(
     var(--ios-footprint-growth) *
       (
         var(--ios-alignment) * var(--lo) + (1 - var(--ios-alignment)) * var(--hi) - var(--ios-alignment) -
           var(--ios-bend)
-      ) * var(--ios-contrast)
+      )
   );
 
-  transform: translate3d(var(--shift), 0, 0);
+  transform: translate3d(calc(var(--item-shift) * var(--contrast-amount)), 0, 0);
 }
 
 .ios-scrubber-css .ios-thumbnail-scrubber-thumb {
-  width: calc(var(--ios-item-width) + var(--grow) * var(--ios-thumb-growth));
+  width: calc(var(--ios-item-width) + var(--item-progress) * var(--contrast-amount) * var(--ios-thumb-growth));
   /* Re-centers the thumb inside the footprint its neighbours made room for
      when the anchor point is not the item's own center. Zero at center
      alignment, same as the JS look's thumbOffset. */
-  transform: translate3d(calc(var(--grow) * var(--ios-footprint-growth) * (0.5 - var(--ios-alignment))), 0, 0);
+  transform: translate3d(
+    calc(var(--item-progress) * var(--contrast-amount) * var(--ios-footprint-growth) * (0.5 - var(--ios-alignment))),
+    0,
+    0
+  );
 }
 
 .spacer {
