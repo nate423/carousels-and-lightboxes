@@ -188,7 +188,16 @@ export function createCarousel(wrapper, options = {}) {
   // to rest is idle, and idle is not a state any policy removes contrast in,
   // so the attribute goes back on its own. The easing on the way back is the
   // look's business too - a CSS transition on whatever it derives from this.
-  let contrastRemoval = CONTRAST_REMOVAL[removeContrastWhileScrolling] ?? CONTRAST_REMOVAL.never;
+  let contrastRemovalMode = removeContrastWhileScrolling in CONTRAST_REMOVAL ? removeContrastWhileScrolling : "never";
+  let contrastRemoval = CONTRAST_REMOVAL[contrastRemovalMode];
+
+  // Whether this carousel's contrast can ever change. A look may be able to
+  // draw itself more cheaply when it cannot - see css-effect.js, which can
+  // hand its whole look to the compositor in that case and cannot when a
+  // multiplier has to be applied to it every frame.
+  function usesContrast() {
+    return contrastRemovalMode !== "never";
+  }
 
   function updateContrast() {
     const motionState = getMotionState();
@@ -525,6 +534,7 @@ export function createCarousel(wrapper, options = {}) {
     // wrong to; what they must not do is read it fresh every frame.
     getGeometry,
     currentScrollAnchor,
+    usesContrast,
     onProgress: undefined
   };
 
@@ -628,7 +638,17 @@ export function createCarousel(wrapper, options = {}) {
     // Which motion states drop contrast, changeable live (e.g. from a demo
     // control) - the policy is read fresh on every update, not captured.
     setContrastRemoval(mode) {
-      contrastRemoval = CONTRAST_REMOVAL[mode] ?? CONTRAST_REMOVAL.never;
+      const next = mode in CONTRAST_REMOVAL ? mode : "never";
+      // Crossing between "never" and anything else can change how a look
+      // draws itself, not just what it draws, so the effect is rebuilt
+      // rather than merely re-rendered.
+      const rebuild = ready && usesContrast() !== (next !== "never");
+      contrastRemovalMode = next;
+      contrastRemoval = CONTRAST_REMOVAL[next];
+      if (rebuild) {
+        effect.setup(ctx);
+        effect.apply(ctx);
+      }
       if (updateContrast()) applyIfReady();
     },
     isMovingItself: () => movingItself,

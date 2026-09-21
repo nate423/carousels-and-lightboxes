@@ -353,11 +353,20 @@ body {
 .carousel-wrapper:not([data-scroll-timelines="off"]) .carousel-item {
   scale: calc(1 - (1 - var(--noncurrent-scale)) * (1 - var(--item-progress)) * var(--contrast-amount));
   opacity: calc(1 - (1 - var(--noncurrent-opacity)) * (1 - var(--item-progress)) * var(--contrast-amount));
-  translate: calc(var(--item-shift) * var(--contrast-amount) + var(--scroll-error)) 0;
+  translate: calc(var(--item-shift) * var(--contrast-amount)) 0;
+
+  /* On its own property rather than folded into the translate above,
+     because a carousel whose contrast never changes has its translate
+     written by the animation itself (see setItemCurrentKeyframes) and
+     nothing can be added to it there. translate and transform compose, so
+     the correction lands either way, and it stays static - and therefore
+     free - on any carousel that is not currently being driven. */
+  transform: translateX(var(--scroll-error));
 }
 
 .carousel-wrapper[data-scroll-axis="y"]:not([data-scroll-timelines="off"]) .carousel-item {
-  translate: 0 calc(var(--item-shift) * var(--contrast-amount) + var(--scroll-error));
+  translate: 0 calc(var(--item-shift) * var(--contrast-amount));
+  transform: translateY(var(--scroll-error));
 }
 
 /* The shared default, used until css-effect.js replaces it with a per-item

@@ -83,28 +83,53 @@ function getWrapperState(wrapper) {
 // every one of the n writes - O(n^2) - which would show up as jank or
 // freezing on window resize, since resize has no debounce and calls setup()
 // on every native 'resize' event.
-function setItemCurrentKeyframes(state, item, peakX, range, translateStops) {
-  // Drives --item-progress rather than scale/opacity directly, so the
-  // contrast policy can scale the whole look with a transition that this
-  // animation does not fight - see the --item-progress block in main.css,
-  // which turns the two values below into what is actually drawn.
+// Two shapes of the same animation, and which one a carousel gets is the
+// difference between the compositor drawing this look and the main thread
+// drawing it.
+//
+// A carousel whose contrast never changes has nothing to multiply its look
+// by, so the keyframes can write scale, opacity and translate outright.
+// Those are properties the compositor understands, so the whole look keeps
+// running when the main thread is busy.
+//
+// A carousel whose contrast can change needs every drawn value multiplied
+// by it, every frame. That has to happen in a calc() reading an animated
+// custom property (main.css turns the two values below into what is drawn),
+// and nothing the compositor can evaluate - the animation has to be
+// resolved by the style engine each frame instead. Verified the hard way:
+// with only this second shape, blocking the main thread for three seconds
+// and scrolling froze the look outright, where it had kept animating
+// before.
+//
+// Contrast could not just be composed on top as a second animation, which
+// would have avoided the split. Transform lists do compose multiplicatively
+// under animation-composition, but what contrast scales is each value's
+// *distance from neutral* - 1 + c * (s - 1) - and that is not any factor
+// depending on c alone.
+function setItemCurrentKeyframes(state, item, peakX, range, translateStops, scrollAxis, usesContrast) {
   const currentName = `item-current-${item.dataset.itemId}`;
   state.currentKeyframeRules.set(
     currentName,
-    `@keyframes ${currentName} {
+    usesContrast
+      ? `@keyframes ${currentName} {
       0% { --item-progress: 0; }
       ${peakX * 100}% { --item-progress: 1; }
       100% { --item-progress: 0; }
     }`
+      : `@keyframes ${currentName} {
+      0% { scale: var(--noncurrent-scale); opacity: var(--noncurrent-opacity); }
+      ${peakX * 100}% { scale: 1; opacity: 1; }
+      100% { scale: var(--noncurrent-scale); opacity: var(--noncurrent-opacity); }
+    }`
   );
 
-  // Likewise a plain length, with which axis it belongs on left to main.css
-  // - the gap it compensates for only exists in proportion to the scaling
-  // that opened it, so it has to scale with contrast too, and it can only
-  // do that from the same side of the split.
   const translateName = `item-translate-${item.dataset.itemId}`;
   const stops = translateStops
-    .map(({ percent, value }) => `${percent}% { --item-shift: ${value}px; }`)
+    .map(({ percent, value }) =>
+      usesContrast
+        ? `${percent}% { --item-shift: ${value}px; }`
+        : `${percent}% { translate: ${scrollAxis === "x" ? `${value}px 0` : `0 ${value}px`}; }`
+    )
     .join("\n      ");
   state.translateKeyframeRules.set(translateName, `@keyframes ${translateName} {\n      ${stops}\n    }`);
 
@@ -194,6 +219,7 @@ function setup(ctx) {
     getNoncurrentScale
   } = ctx;
   const state = getWrapperState(wrapper);
+  const usesContrast = ctx.usesContrast();
   const { items, anchors, sizes, alignment, wrapperAnchorPoint } = ctx.getGeometry();
   const scrollPadding = getScrollPadding(wrapper);
   const ranges = computeAnimationRanges(anchors, sizes, wrapper[offsetSize], alignment, scrollPadding);
@@ -222,7 +248,7 @@ function setup(ctx) {
       percent: percentFor(bp.scrollAnchor),
       value: bp.translations[i]
     }));
-    setItemCurrentKeyframes(state, item, ranges[i].peakX, ranges[i], translateStops);
+    setItemCurrentKeyframes(state, item, ranges[i].peakX, ranges[i], translateStops, ctx.scrollAxis, usesContrast);
   });
   flushKeyframeStyles(state);
 } // End setup function
