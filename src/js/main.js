@@ -4,81 +4,10 @@ import { attachThumbnailScrubber } from "./navigators/thumbnail-scrubber.js";
 import { attachIosThumbnailScrubber } from "./navigators/ios-thumbnail-scrubber.js";
 import { iosScrubberCssEffect } from "./effects/ios-scrubber-css-effect.js";
 import { iosScrubberEffect } from "./effects/ios-scrubber-effect.js";
-import { cssEffect } from "./effects/css-effect.js";
-import { jsEffect } from "./effects/js-effect.js";
-import { originEffect } from "./effects/origin-effect.js";
+import { supportsScrollDrivenAnimations, getEffect, configureScrubberEffect } from "./effect-selection.js";
+import { createPlaceholderItem } from "./demo/placeholder-content.js";
 import { attachScrollEventProbe } from "./scroll-event-probe.js";
 import { watchScrubberJitter } from "./debug-console.js";
-
-// Which variant a wrapper uses is just a data attribute - each effect
-// module implements the same { onItemCreated, setup, apply } shape, so
-// carousel-engine.js is variant-agnostic and works with any of them.
-const EFFECTS = { css: cssEffect, js: jsEffect, origin: originEffect };
-
-function getEffect(wrapper) {
-  return EFFECTS[wrapper.dataset.effect] || cssEffect;
-}
-
-// The thumbnail scrubber (unlike the side-by-side comparison demos above,
-// which are supposed to show each variant as-is, polyfilled or not) is meant
-// to just work, so it skips the polyfill entirely: css-effect.js needs real
-// native support for animation-timeline/view-timeline/scroll-timeline, and
-// there's no reliably polyfilling that (see git history), so browsers
-// without it get the JS variant instead - it computes the same
-// scale/opacity/translate itself on scroll rather than delegating to a
-// native scroll-driven animation. Tagging the wrapper with
-// data-scroll-timelines="off" (not just returning jsEffect) also keeps it
-// correctly excluded from the animation-timeline/scroll-timeline rules in
-// main.css, which key off that attribute; data-effect is set alongside it so
-// the wrapper still says honestly which effect module is running on it.
-//
-// Reads index.html's pre-recorded answer rather than calling
-// CSS.supports("animation-timeline: --works") again here - the polyfill,
-// once loaded, patches CSS.supports to always report that as supported (see
-// index.html), so a fresh call made from here, after it's had a chance to
-// load, would always say "yes" whether or not it actually is.
-const supportsScrollDrivenAnimations = window.__supportsScrollDrivenAnimations ?? CSS.supports("animation-timeline: --works");
-
-// Named for the fact that it configures the wrapper as well as choosing -
-// the two have to happen together, since the chosen module and the CSS
-// scaffolding the wrapper declares must agree.
-function configureScrubberEffect(wrapper) {
-  if (!supportsScrollDrivenAnimations) {
-    wrapper.dataset.effect = "js";
-    wrapper.dataset.scrollTimelines = "off";
-    return jsEffect;
-  }
-  wrapper.dataset.effect = "css";
-  return cssEffect;
-}
-
-function randomDimension(min, max) {
-  return Math.floor(Math.random() * (max - min + 1) + min) + "px";
-}
-
-// Demo-page-specific item content (random/uniform placeholder boxes, or a
-// placeholder image) - this is exactly the kind of thing carousel-engine.js
-// used to know about and no longer does; it just takes a createItem
-// callback.
-function createPlaceholderItem(wrapper) {
-  return function (item, i) {
-    if (wrapper.classList.contains("placeholder-images")) {
-      const img = document.createElement("img");
-      img.src = `https://source.unsplash.com/random?sig=${i}`;
-      item.appendChild(img);
-      item.style.width = "auto";
-      item.style.height = "100%";
-      return;
-    }
-
-    const uniform = wrapper.classList.contains("uniform-size");
-    const itemWidth = uniform ? "100px" : randomDimension(50, 300); /* min <> max width */
-    const itemHeight = uniform ? "100px" : randomDimension(50, 300); /* min <> max height */
-    item.textContent = `Item ${i} (${itemWidth} × ${itemHeight})`;
-    item.style.width = itemWidth;
-    item.style.height = itemHeight;
-  };
-}
 
 // When the page being run was published, shown in the corner so "am I testing
 // the build I just pushed?" is answerable at a glance. GitHub Pages serves with
