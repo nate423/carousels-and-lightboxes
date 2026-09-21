@@ -63,19 +63,36 @@ function replaceStyleEl(previous, cssText) {
   return styleEl;
 }
 
-// `progressDriver` picks where the shared progress comes from. "css" lets
-// the scroll-driven animation read this wrapper's own scroll position, and
-// costs no JS per frame at all. "js" writes it instead, from the exact
-// fractional progress the driver asked for, which is worth having because a
-// scroll position is quantised: this strip's range is several times shorter
-// than the carousel driving it, so one of its pixels is worth several of the
-// other's (measured here: 0.617px of translate per whole pixel of strip
-// scroll). Whether that staircase is visible depends on how finely the
-// browser reports scroll offsets - not at all on a display reporting half
-// pixels, but WebKit on iOS reports whole ones, which is twice as coarse and
-// is where settle-effect.js first hit it. Even the "js" path is one property
-// write per frame against that look's two per item.
-export function iosScrubberCssEffect({ progressDriver = "css" } = {}) {
+// Where the shared progress comes from depends on who is moving this strip,
+// because the two cases have very different resolution.
+//
+// While the strip is the one being scrolled, its own scroll position *is*
+// the ground truth, so the animation reads it directly and this costs no JS
+// per frame at all.
+//
+// While another carousel is driving it, that same position is a lossy
+// retelling of the driver's. A scroll position is quantised, and this strip
+// is far shorter than the carousel driving it: 30 thumbnails at a 23px
+// pitch give it a 667px range against roughly 5300px, so one strip pixel is
+// worth eight of the driver's. In translate that is 0.65px per strip pixel
+// against 0.08px per driver pixel - the strip can only move in steps eight
+// times larger than the motion being asked of it, so it holds still for
+// several frames and then jumps. That is what settle-effect.js's
+// getDrivenProgress exists to avoid, and reading the position back through
+// the timeline walks straight into it.
+//
+// So on that path the animation is switched off and the exact fractional
+// progress is written instead. It is one property write per frame - against
+// sixty for a look that paints each item from JS - and it happens only
+// while something else is driving. The switch is per handoff, not per
+// frame; re-enabling a scroll-driven animation is free, since its progress
+// is the scroll position rather than an elapsed time, so it resumes exactly
+// where the scroll already is.
+//
+// `progressDriver` pins that choice for comparison: "css" always reads the
+// scroll position, "js" always writes progress. The default picks per
+// frame.
+export function iosScrubberCssEffect({ progressDriver = "auto" } = {}) {
   function setup(ctx) {
     const { wrapper, scrollDistance, offsetSize, offsetFromStart, getAlignmentFraction, getScrollPadding } = ctx;
     const items = [...wrapper.querySelectorAll(".carousel-item")];
@@ -104,7 +121,6 @@ export function iosScrubberCssEffect({ progressDriver = "css" } = {}) {
       previous?.styleEl,
       `@keyframes ${animationName} {\n  from { --ios-progress: 0; }\n  to { --ios-progress: ${items.length - 1}; }\n}`
     );
-    wrapper.style.animationName = progressDriver === "css" ? animationName : "none";
 
     const { anchors } = getItemMetrics(
       wrapper,
@@ -119,23 +135,37 @@ export function iosScrubberCssEffect({ progressDriver = "css" } = {}) {
     stateByWrapper.set(wrapper, {
       stripId,
       styleEl,
+      animationName,
       items,
       anchors,
       alignment,
-      wrapperAnchorPoint: wrapperAnchor(wrapper[offsetSize], alignment, getScrollPadding(wrapper))
+      wrapperAnchorPoint: wrapperAnchor(wrapper[offsetSize], alignment, getScrollPadding(wrapper)),
+      // Unset rather than false, so the first apply() always writes which
+      // source is in use instead of assuming the wrapper already agrees.
+      writingProgress: undefined
     });
   }
 
   function apply(ctx) {
     const { wrapper, scrollDistance, getScrollSource, getDrivenProgress, onProgress } = ctx;
-    const { anchors, alignment, wrapperAnchorPoint, items } = stateByWrapper.get(wrapper);
+    const state = stateByWrapper.get(wrapper);
+    const { anchors, alignment, wrapperAnchorPoint, items, animationName } = state;
 
-    const currentProgress =
-      getScrollSource() === "driven"
-        ? getDrivenProgress()
-        : computeCurrentProgress(anchors, wrapper[scrollDistance] + wrapperAnchorPoint);
+    const isDriven = getScrollSource() === "driven";
+    const currentProgress = isDriven
+      ? getDrivenProgress()
+      : computeCurrentProgress(anchors, wrapper[scrollDistance] + wrapperAnchorPoint);
 
-    if (progressDriver === "js") {
+    const writingProgress = progressDriver === "js" || (progressDriver === "auto" && isDriven);
+    if (writingProgress !== state.writingProgress) {
+      state.writingProgress = writingProgress;
+      // An animation outranks an inline custom property, so the two cannot
+      // both be live - handing over means turning the other one off.
+      wrapper.style.animationName = writingProgress ? "none" : animationName;
+      if (!writingProgress) wrapper.style.removeProperty("--ios-progress");
+    }
+
+    if (writingProgress) {
       wrapper.style.setProperty("--ios-progress", currentProgress);
     }
 
