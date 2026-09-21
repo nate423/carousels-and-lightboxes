@@ -101,6 +101,17 @@ export function createCarousel(wrapper, options = {}) {
   let movingItself = false;
   let selfScrollStartedAt = 0;
 
+  // The same question asked about the other source: whether a drive is
+  // currently moving this carousel. Unlike movingItself it cannot be read off
+  // scroll events alone, because a drive does not reliably produce one - a
+  // scroll position is quantised, so when a short scroller is driven by a much
+  // longer one most frames resolve to the pixel it is already on and emit
+  // nothing (see the note in setProgressDirect). setProgressDirect therefore
+  // sets this itself. That is sound where inferring a gesture from input
+  // events would not be: a direct write is this module's own doing, not a
+  // guess about which scroller the browser latched.
+  let movingDriven = false;
+
   // The exact progress the last setProgressDirect was asked for. Worth keeping
   // because it cannot be recovered afterwards: writing it moves scrollLeft,
   // and a scroll position is quantised - WebKit reports whole pixels - so
@@ -109,8 +120,37 @@ export function createCarousel(wrapper, options = {}) {
   // it was just handed.
   let lastDrivenProgress = 0;
 
+  // --- Motion state -------------------------------------------------------
+  // Three states, and the distinction between them is what separates a
+  // carousel that is merely *attributed* to a source from one that is
+  // actually moving:
+  //
+  //   "leading"   - moving for its own reasons, right now.
+  //   "following" - being moved by a driver, right now.
+  //   "idle"      - at rest, whoever moved it last.
+  //
+  // getScrollSource answers a different question and both are worth having.
+  // Attribution is deliberately sticky: it stays "driven" through the whole
+  // unbounded tail of echoes and resnap corrections a direct write can
+  // provoke, which is what makes it safe to suppress those. Motion is bounded
+  // instead - by 'scrollend' on the way out, and by a real scroll event or a
+  // direct write on the way in - so it can answer "is this thing moving" at
+  // an instant.
+  //
+  // Reading attribution as if it were motion is the trap: "self" is also what
+  // a carousel at rest reports, so anything that treats it as "leading"
+  // fires at page load, before a gesture has happened at all.
+  function getMotionState() {
+    if (movingItself) return "leading";
+    if (movingDriven) return "following";
+    return "idle";
+  }
+
   function markSelfDriven() {
     scrollSource = "self";
+    // Whatever a driver was doing to this carousel, it is not what is moving
+    // it any more.
+    movingDriven = false;
     // This carousel is the user's again, so any suspension left over from a
     // drive is finished - see restoreScrollSnap for why it can't be left to
     // expire on its own.
@@ -272,6 +312,7 @@ export function createCarousel(wrapper, options = {}) {
   // only makes sense against a fixed destination. See carousel-link.js.
   function setProgressDirect(progress) {
     scrollSource = "driven";
+    movingDriven = true;
     lastDrivenProgress = progress;
     suspendScrollSnap();
 
@@ -335,6 +376,7 @@ export function createCarousel(wrapper, options = {}) {
     getScrollPadding,
     getNoncurrentScale,
     getScrollSource: () => scrollSource,
+    getMotionState,
     getDrivenProgress: () => lastDrivenProgress,
     onProgress: undefined
   };
@@ -359,6 +401,7 @@ export function createCarousel(wrapper, options = {}) {
   });
   wrapper.addEventListener("scrollend", () => {
     movingItself = false;
+    movingDriven = false;
   });
 
   wrapper.addEventListener(
@@ -432,6 +475,7 @@ export function createCarousel(wrapper, options = {}) {
     setProgressDirect,
     setAlignment,
     getScrollSource: () => scrollSource,
+    getMotionState,
     isMovingItself: () => movingItself,
     selfScrollStartedAt: () => selfScrollStartedAt,
     // Notified once per scroll frame, after effect.apply, with the
