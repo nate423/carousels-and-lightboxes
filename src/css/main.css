@@ -82,7 +82,7 @@ body {
   opacity: 0.7;
 }
 
-.link-mode-controls {
+.carousel-controls {
   display: flex;
   gap: 16px;
   margin-bottom: 12px;
@@ -93,7 +93,7 @@ body {
   width: fit-content;
 }
 
-.link-mode-controls label {
+.carousel-controls label {
   display: flex;
   align-items: center;
   gap: 6px;

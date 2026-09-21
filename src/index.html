@@ -49,7 +49,7 @@
       </div>
       <div class="carousel-comparison">
         <h2>Thumbnail scrubber (filmstrip navigator instead of dots)</h2>
-        <div class="link-mode-controls">
+        <div class="carousel-controls">
           <label>
             Main, while following
             <select data-link-follower="main">
@@ -64,12 +64,64 @@
               <option value="continuous" selected>Continuous</option>
             </select>
           </label>
+          <label>
+            Main, remove contrast
+            <select data-contrast-for="main">
+              <option value="never" selected>Never</option>
+              <option value="leading">Leading</option>
+              <option value="following">Following</option>
+              <option value="always">Always</option>
+            </select>
+          </label>
+          <label>
+            Strip, remove contrast
+            <select data-contrast-for="strip">
+              <option value="never" selected>Never</option>
+              <option value="leading">Leading</option>
+              <option value="following">Following</option>
+              <option value="always">Always</option>
+            </select>
+          </label>
         </div>
         <div class="carousel-wrapper comparison-wrapper placeholder-boxes thumbnail-scrubber-main" id="h-scroll-scrubber-main" data-scroll-axis="x"></div>
         <div class="carousel-wrapper placeholder-boxes thumbnail-scrubber-strip" id="h-scroll-scrubber-strip" data-scroll-axis="x"></div>
       </div>
       <div class="carousel-comparison">
         <h2>Thumbnail scrubber (iOS style - fixed-size thumbnails, only the centered one expands)</h2>
+        <div class="carousel-controls">
+          <label>
+            Main, while following
+            <select data-link-follower="main">
+              <option value="instant" selected>Instant</option>
+              <option value="continuous">Continuous</option>
+            </select>
+          </label>
+          <label>
+            Strip, while following
+            <select data-link-follower="strip">
+              <option value="instant">Instant</option>
+              <option value="continuous" selected>Continuous</option>
+            </select>
+          </label>
+          <label>
+            Main, remove contrast
+            <select data-contrast-for="main">
+              <option value="never" selected>Never</option>
+              <option value="leading">Leading</option>
+              <option value="following">Following</option>
+              <option value="always">Always</option>
+            </select>
+          </label>
+          <label>
+            Strip, remove contrast
+            <select data-contrast-for="strip">
+              <option value="never">Never</option>
+              <option value="leading" selected>Leading</option>
+              <option value="following">Following</option>
+              <option value="always">Always</option>
+            </select>
+          </label>
+        </div>
         <div class="carousel-wrapper comparison-wrapper placeholder-boxes thumbnail-scrubber-main" id="h-scroll-ios-scrubber-main" data-scroll-axis="x"></div>
         <div class="carousel-wrapper ios-thumbnail-scrubber-strip" id="h-scroll-ios-scrubber-strip" data-scroll-axis="x"></div>
       </div>

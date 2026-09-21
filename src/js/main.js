@@ -99,6 +99,28 @@ function showBuildStamp() {
   element.textContent = `build ${day} ${time}`;
 }
 
+// Both scrubber demos carry the same four selects - each carousel's
+// response while following, and each carousel's contrast policy - so the
+// combinations can be tried against each other rather than reasoned about.
+// Scoped to the demo the carousels belong to, since both demos use the same
+// attribute names.
+function attachDemoControls(wrapperInDemo, link, carousels) {
+  const demo = wrapperInDemo.closest(".carousel-comparison");
+  if (!demo) return;
+
+  demo.querySelectorAll("[data-link-follower]").forEach((select) => {
+    select.addEventListener("change", () => {
+      link.setResponse(carousels[select.dataset.linkFollower], select.value);
+    });
+  });
+
+  demo.querySelectorAll("[data-contrast-for]").forEach((select) => {
+    select.addEventListener("change", () => {
+      carousels[select.dataset.contrastFor].setContrastRemoval(select.value);
+    });
+  });
+}
+
 document.addEventListener("DOMContentLoaded", function () {
   showBuildStamp();
 
@@ -155,12 +177,7 @@ document.addEventListener("DOMContentLoaded", function () {
     });
     carousels.push(scrubber);
 
-    const linkedCarousels = { main: mainCarousel, strip: scrubber };
-    document.querySelectorAll("[data-link-follower]").forEach((select) => {
-      select.addEventListener("change", () => {
-        link.setResponse(linkedCarousels[select.dataset.linkFollower], select.value);
-      });
-    });
+    attachDemoControls(scrubberMainWrapper, link, { main: mainCarousel, strip: scrubber });
   }
 
   // Same pairing as above, but with the iOS-style strip - also a real
@@ -184,9 +201,16 @@ document.addEventListener("DOMContentLoaded", function () {
     // needed either way - the native one declares its own timeline under its
     // own class (see main.css), and this wrapper opts out of the generic
     // scaffolding regardless.
-    const { scrubber } = attachIosThumbnailScrubber(mainCarousel, iosScrubberStripWrapper, {
-      effect: supportsScrollDrivenAnimations ? iosScrubberCssEffect() : iosScrubberEffect
+    const { scrubber, link } = attachIosThumbnailScrubber(mainCarousel, iosScrubberStripWrapper, {
+      // ?ios=js forces the hand-computed implementation on a browser that
+      // would otherwise take the native one, so the two can be compared
+      // directly - they are meant to be indistinguishable.
+      effect:
+        supportsScrollDrivenAnimations && new URLSearchParams(location.search).get("ios") !== "js"
+          ? iosScrubberCssEffect()
+          : iosScrubberEffect
     });
+    attachDemoControls(iosScrubberMainWrapper, link, { main: mainCarousel, strip: scrubber });
     carousels.push(scrubber);
     attachScrollEventProbe(scrubber, "iOS thumbnail strip (not the main carousel)");
     watchScrubberJitter(mainCarousel, scrubber);
