@@ -9,6 +9,7 @@ import {
   getItemMetrics,
   computeCurrentProgress,
   computeCurrentIndex,
+  computeScrollAnchorForProgress,
   computeAnimationRanges,
   computeTranslationBreakpoints,
   wrapperAnchor
@@ -243,8 +244,17 @@ function setup(ctx) {
 // animations on .carousel-item; this only computes the discrete current
 // index for the page dots, since no timeline hands that back to JS.
 function apply(ctx) {
-  const { wrapper, scrollDistance, offsetSize, offsetFromStart, getAlignmentFraction, getScrollPadding, onProgress } =
-    ctx;
+  const {
+    wrapper,
+    scrollDistance,
+    offsetSize,
+    offsetFromStart,
+    getAlignmentFraction,
+    getScrollPadding,
+    getScrollSource,
+    getDrivenProgress,
+    onProgress
+  } = ctx;
   const items = wrapper.querySelectorAll(".carousel-item");
   const { anchors, scrollAnchor } = getItemMetrics(
     wrapper,
@@ -256,10 +266,31 @@ function apply(ctx) {
     getScrollPadding(wrapper)
   );
 
-  const currentProgress = computeCurrentProgress(anchors, scrollAnchor);
-  const currentIndex = computeCurrentIndex(currentProgress, items.length);
+  // While something else is driving this carousel, the driver's progress is
+  // the exact one and the scroll position written from it is quantised, so
+  // every item's box sits a fraction of a pixel from where that progress
+  // belongs. Everything the timelines draw is derived from the scroll
+  // position and therefore carries the same error, which is invisible in
+  // scale and opacity - fractions of a percent - and plainly visible in
+  // position, where it makes the whole strip step a whole quantum at a time
+  // instead of gliding. --scroll-error is what the items' translate adds to
+  // land where the driver actually asked for; see its block in main.css.
+  //
+  // Zero, and removed, whenever this carousel is scrolling itself: progress
+  // is derived from the scroll position then, so the two cannot disagree.
+  const isDriven = getScrollSource() === "driven";
+  const currentProgress = isDriven ? getDrivenProgress() : computeCurrentProgress(anchors, scrollAnchor);
 
-  onProgress?.(currentIndex, currentProgress);
+  if (isDriven) {
+    wrapper.style.setProperty(
+      "--scroll-error",
+      (scrollAnchor - computeScrollAnchorForProgress(anchors, currentProgress)).toFixed(3) + "px"
+    );
+  } else if (wrapper.style.getPropertyValue("--scroll-error")) {
+    wrapper.style.removeProperty("--scroll-error");
+  }
+
+  onProgress?.(computeCurrentIndex(currentProgress, items.length), currentProgress);
 } // End apply function
 
 export const cssEffect = { name: "css", onItemCreated, setup, apply };

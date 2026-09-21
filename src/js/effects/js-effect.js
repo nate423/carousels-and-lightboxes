@@ -13,6 +13,7 @@ import {
   computeCurrentProgress,
   computeCurrentIndex,
   computeItemProgress,
+  computeScrollAnchorForProgress,
   computeTranslationPrefixSums,
   computeTranslationsAt,
   wrapperAnchor,
@@ -54,12 +55,27 @@ function setup(ctx) {
 }
 
 function apply(ctx) {
-  const { wrapper, scrollDistance, scrollAxis, onProgress } = ctx;
+  const { wrapper, scrollDistance, scrollAxis, getScrollSource, getDrivenProgress, onProgress } = ctx;
   const { items, anchors, wrapperAnchorPoint, baseDiff, prefix } = stateByWrapper.get(wrapper);
   const scrollAnchor = wrapper[scrollDistance] + wrapperAnchorPoint;
 
-  const currentProgress = computeCurrentProgress(anchors, scrollAnchor);
+  // While another carousel is driving this one, its progress is the exact
+  // one and the scroll position written from it is quantised, so measuring
+  // that position back gives a coarser answer than went in - by enough,
+  // when the driver is much the longer scroller, to make this carousel step
+  // rather than glide. The scroll position is still what to measure on a
+  // real gesture, where it is what the finger moved.
+  const isDriven = getScrollSource() === "driven";
+  const currentProgress = isDriven ? getDrivenProgress() : computeCurrentProgress(anchors, scrollAnchor);
   const currentIndex = computeCurrentIndex(currentProgress, items.length);
+
+  // Having taken progress from the driver, the items' boxes are left where
+  // the quantised scroll position put them, a fraction of a pixel from
+  // where that progress belongs. This is that difference, added back to
+  // every item's translate below so each one lands where it was actually
+  // asked for. Zero while this carousel scrolls itself, since progress is
+  // then derived from the very position being corrected against.
+  const scrollError = isDriven ? scrollAnchor - computeScrollAnchorForProgress(anchors, currentProgress) : 0;
 
   // How much of the look to draw at all, from the carousel's contrast
   // policy - see the contrast block in carousel-engine.js. Read straight
@@ -96,7 +112,10 @@ function apply(ctx) {
   const translations = computeTranslationsAt(prefix, baseDiff, currentProgress);
 
   items.forEach((item, i) => {
-    const translation = translations[i] * contrast;
+    // The correction is added, not scaled by contrast: it is not part of
+    // the look, it is what makes the look land where it was asked to, and a
+    // flattened carousel still has to sit in the right place.
+    const translation = translations[i] * contrast + scrollError;
     const translationAttribute =
       scrollAxis === "x" ? `translate3d(${translation}px, 0, 0)` : `translate3d(0, ${translation}px, 0)`;
 
