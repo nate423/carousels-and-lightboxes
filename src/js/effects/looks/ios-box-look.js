@@ -138,4 +138,15 @@ function setTransitionsEnabled(ctx, enabled) {
 // an item's own border box - so carousel-engine's item-level ResizeObserver
 // has nothing real to recover here, and running its full refresh off one
 // would just be churn.
-export const iosBoxLook = { onItemCreated, setup, render, setTransitionsEnabled, skipItemResizeObserver: true };
+//
+// restProgress: 0 - contrast blends toward every thumbnail collapsed to its
+// base size, which is this look's own undecorated state (see settle-effect.js
+// for what reads this).
+export const iosBoxLook = {
+  onItemCreated,
+  setup,
+  render,
+  setTransitionsEnabled,
+  skipItemResizeObserver: true,
+  restProgress: 0
+};

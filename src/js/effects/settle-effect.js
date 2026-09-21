@@ -1,16 +1,18 @@
 // Turns a "look" - something that knows only how to paint a per-item
-// itemProgress array (see looks/ios-box-look.js for the interface: setup,
-// render, setTransitionsEnabled, onItemCreated, skipItemResizeObserver) -
-// into a full effect, by computing that array every frame. The natively
-// painted implementation of the same look does all of this in CSS instead
-// (see ios-scrubber-css-effect.js and the rules it pairs with); this is
-// what runs where scroll-driven animations are unavailable.
+// itemProgress array (see looks/ios-box-look.js and looks/scale-fade-look.js
+// for the interface: setup, render, restProgress, onItemCreated, and
+// optionally setTransitionsEnabled/skipItemResizeObserver) - into a full
+// effect, by computing that array every frame. js-effect.js and
+// ios-scrubber-effect.js are both just this wrapped around their own look;
+// the natively painted CSS variants do the equivalent of this module's job
+// in the stylesheet instead (see css-effect.js / ios-scrubber-css-effect.js).
 //
 // The array is just the itemProgress triangle around the current position,
-// scaled by how much contrast the carousel is currently showing. Both
-// halves come from somewhere else - computeItemProgress for the shape,
-// carousel-engine.js's contrast policy for the amount - so there is no
-// separate notion here of settling, of which item is "the expanded one",
+// blended toward the look's own restProgress by how much contrast the
+// carousel is currently showing. All three come from somewhere else -
+// computeItemProgress for the shape, the look for which end is its rest
+// state, carousel-engine.js's contrast policy for the amount - so there is
+// no separate notion here of settling, of which item is "the expanded one",
 // or of how far the scroll has drifted from it.
 //
 // That used to be this module's bulk, and the policy subsumed all of it.
@@ -50,7 +52,8 @@ import {
   computeCurrentProgress,
   computeCurrentIndex,
   computeItemProgress,
-  wrapperAnchor
+  wrapperAnchor,
+  transition
 } from "../carousel-math.js";
 
 export function settleEffect(look) {
@@ -102,18 +105,19 @@ export function settleEffect(look) {
     const transitionsEnabled = getMotionState() === "idle" || contrast === 0;
     if (transitionsEnabled !== state.transitionsEnabled) {
       state.transitionsEnabled = transitionsEnabled;
-      look.setTransitionsEnabled(ctx, transitionsEnabled);
+      look.setTransitionsEnabled?.(ctx, transitionsEnabled);
     }
 
-    // Contrast blends toward this look's neutral state, which here is
-    // itemProgress 0: what it draws is the current item departing from the
-    // layout every item otherwise sits at, so "nothing distinguished" is
-    // every item left alone. js-effect.js blends the same value toward 1
-    // instead, because the scale+fade look puts its neutral at the other
-    // end - there the current item is the one drawn as laid out and every
-    // other is pulled back from it.
+    // Contrast blends each item's raw itemProgress toward the look's own
+    // restProgress (0 or 1 - which end of its own range is "undecorated" is
+    // the look's business, not this module's; see looks/ios-box-look.js and
+    // looks/scale-fade-look.js for why they differ). At restProgress 0 this
+    // reduces to itemProgress * contrast; at restProgress 1, to
+    // 1 - (1 - itemProgress) * contrast.
     look.render(ctx, {
-      itemProgresses: Array.from({ length: itemCount }, (_, i) => computeItemProgress(currentProgress, i) * contrast),
+      itemProgresses: Array.from({ length: itemCount }, (_, i) =>
+        transition(contrast, look.restProgress ?? 0, computeItemProgress(currentProgress, i))
+      ),
       currentProgress,
       scrollAnchor
     });
