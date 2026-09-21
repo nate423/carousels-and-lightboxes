@@ -326,6 +326,12 @@ export function createCarousel(wrapper, options = {}) {
       );
       spacer.style[scrollAxis === "x" ? "width" : "height"] = size + "px";
     });
+
+    // Every path that can move an item - init, resize, an item resizing
+    // itself, an alignment change - resizes the spacers on its way through,
+    // so invalidating here covers all of them at once and cannot be
+    // forgotten at a new call site.
+    geometry = null;
   }
 
   // Scroll offset that puts the given item's anchor point at the wrapper's
@@ -356,20 +362,68 @@ export function createCarousel(wrapper, options = {}) {
     });
   }
 
-  // Continuous (fractional) "which item is current" - see
-  // computeCurrentProgress in carousel-math.js.
-  function getCurrentProgress() {
+  // --- Geometry ------------------------------------------------------------
+  // Where every item's anchor point sits, and where the wrapper's own is.
+  // Both are pure layout, and layout only moves on the events that already
+  // rebuild it: the spacers being resized, which every one of those events
+  // goes through. So this is computed once per such event rather than per
+  // frame.
+  //
+  // What makes that safe is that no effect changes an item's border box.
+  // They draw with transforms and with properties confined inside the box
+  // (looks/ios-box-look.js is built around this and says why: letting an
+  // item's box grow feeds the geometry back into the progress derived from
+  // it). offsetLeft and offsetWidth therefore cannot move between rebuilds,
+  // and an effect that did move them would opt out of its own correctness,
+  // not just this cache's.
+  //
+  // Driving one carousel from another used to cost three full passes over
+  // every item per frame - the leader's getCurrentProgress, the follower's
+  // setProgressDirect, and the effect's own apply - each a querySelectorAll
+  // and a layout read per item, to move a single scroll offset. Effects
+  // that cached this themselves (js-effect, ios-box-look, settle-effect)
+  // already avoided their share; this is the same idea where the engine
+  // does it once for everyone, including the effects that did not.
+  //
+  // The scroll position is deliberately not part of it. That is the one
+  // thing here that does change every frame, and it is a single read rather
+  // than one per item.
+  let geometry = null;
+
+  function getGeometry() {
+    if (geometry) return geometry;
+
     const items = getItems();
-    const { anchors, scrollAnchor } = getItemMetrics(
+    const alignment = getAlignmentFraction();
+    const scrollPadding = getScrollPadding();
+    const { anchors, sizes } = getItemMetrics(
       wrapper,
       items,
       offsetFromStart,
       offsetSize,
       scrollDistance,
-      getAlignmentFraction(),
-      getScrollPadding()
+      alignment,
+      scrollPadding
     );
-    return computeCurrentProgress(anchors, scrollAnchor);
+
+    geometry = {
+      items,
+      anchors,
+      sizes,
+      alignment,
+      wrapperAnchorPoint: wrapperAnchor(wrapper[offsetSize], alignment, scrollPadding)
+    };
+    return geometry;
+  }
+
+  function currentScrollAnchor() {
+    return wrapper[scrollDistance] + getGeometry().wrapperAnchorPoint;
+  }
+
+  // Continuous (fractional) "which item is current" - see
+  // computeCurrentProgress in carousel-math.js.
+  function getCurrentProgress() {
+    return computeCurrentProgress(getGeometry().anchors, currentScrollAnchor());
   }
 
   // Manually takes over the scroll position to match an externally-driven
@@ -384,20 +438,8 @@ export function createCarousel(wrapper, options = {}) {
     lastDrivenProgress = progress;
     suspendScrollSnap();
 
-    const items = getItems();
-    const alignment = getAlignmentFraction();
-    const scrollPadding = getScrollPadding();
-    const { anchors } = getItemMetrics(
-      wrapper,
-      items,
-      offsetFromStart,
-      offsetSize,
-      scrollDistance,
-      alignment,
-      scrollPadding
-    );
-    const scrollAnchor = computeScrollAnchorForProgress(anchors, progress);
-    wrapper[scrollDistance] = scrollAnchor - wrapperAnchor(wrapper[offsetSize], alignment, scrollPadding);
+    const { anchors, wrapperAnchorPoint } = getGeometry();
+    wrapper[scrollDistance] = computeScrollAnchorForProgress(anchors, progress) - wrapperAnchorPoint;
 
     // Render here rather than waiting for the scroll event this write usually
     // causes, because it does not always cause one: a scroll position is
@@ -478,6 +520,11 @@ export function createCarousel(wrapper, options = {}) {
     getScrollSource: () => scrollSource,
     getMotionState,
     getDrivenProgress: () => lastDrivenProgress,
+    // Shared rather than measured per effect - see the geometry block
+    // above. Effects that keep their own copy predate this and are not
+    // wrong to; what they must not do is read it fresh every frame.
+    getGeometry,
+    currentScrollAnchor,
     onProgress: undefined
   };
 
@@ -558,20 +605,9 @@ export function createCarousel(wrapper, options = {}) {
   // scroll, so it doesn't fight the user's next scroll gesture), then
   // resizes the spacers and redraws to match.
   function setAlignment(alignment) {
-    const items = getItems();
-    const { anchors, scrollAnchor } = getItemMetrics(
-      wrapper,
-      items,
-      offsetFromStart,
-      offsetSize,
-      scrollDistance,
-      getAlignmentFraction(),
-      getScrollPadding()
-    );
-    const currentIndex = computeCurrentIndex(
-      computeCurrentProgress(anchors, scrollAnchor),
-      items.length
-    );
+    // Read before the change, so this is still the alignment the carousel
+    // is currently laid out under. updateSpacers below drops the cache.
+    const currentIndex = computeCurrentIndex(getCurrentProgress(), getGeometry().items.length);
     wrapper.dataset.scrollAlignment = alignment;
     updateSpacers();
     effect.setup(ctx);

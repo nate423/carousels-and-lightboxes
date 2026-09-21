@@ -6,13 +6,11 @@
 // animation geometry (setup); apply() just derives the current index for
 // the page dots, which is the one thing no timeline can hand back to JS.
 import {
-  getItemMetrics,
   computeCurrentProgress,
   computeCurrentIndex,
   computeScrollAnchorForProgress,
   computeAnimationRanges,
-  computeTranslationBreakpoints,
-  wrapperAnchor
+  computeTranslationBreakpoints
 } from "../carousel-math.js";
 
 // `animation-timing-function` (including the linear() control-point syntax)
@@ -196,18 +194,8 @@ function setup(ctx) {
     getNoncurrentScale
   } = ctx;
   const state = getWrapperState(wrapper);
-  const items = wrapper.querySelectorAll(".carousel-item");
-  const alignment = getAlignmentFraction(wrapper);
+  const { items, anchors, sizes, alignment, wrapperAnchorPoint } = ctx.getGeometry();
   const scrollPadding = getScrollPadding(wrapper);
-  const { anchors, sizes } = getItemMetrics(
-    wrapper,
-    items,
-    offsetFromStart,
-    offsetSize,
-    scrollDistance,
-    alignment,
-    scrollPadding
-  );
   const ranges = computeAnimationRanges(anchors, sizes, wrapper[offsetSize], alignment, scrollPadding);
 
   // Native scroll-timeline progress is 0%/100% at raw scroll offset
@@ -215,7 +203,6 @@ function setup(ctx) {
   // wrapperAnchorPoint (see getItemMetrics), so the reachable scrollAnchor
   // range is [wrapperAnchorPoint, wrapperAnchorPoint + maxScroll]. These are
   // the true breakpoint boundaries (see computeTranslationBreakpoints).
-  const wrapperAnchorPoint = wrapperAnchor(wrapper[offsetSize], alignment, scrollPadding);
   const maxScroll = wrapper[scrollSize] - wrapper[offsetSize];
   const percentFor = (scrollAnchor) =>
     maxScroll <= 0
@@ -244,27 +231,12 @@ function setup(ctx) {
 // animations on .carousel-item; this only computes the discrete current
 // index for the page dots, since no timeline hands that back to JS.
 function apply(ctx) {
-  const {
-    wrapper,
-    scrollDistance,
-    offsetSize,
-    offsetFromStart,
-    getAlignmentFraction,
-    getScrollPadding,
-    getScrollSource,
-    getDrivenProgress,
-    onProgress
-  } = ctx;
-  const items = wrapper.querySelectorAll(".carousel-item");
-  const { anchors, scrollAnchor } = getItemMetrics(
-    wrapper,
-    items,
-    offsetFromStart,
-    offsetSize,
-    scrollDistance,
-    getAlignmentFraction(wrapper),
-    getScrollPadding(wrapper)
-  );
+  const { wrapper, getScrollSource, getDrivenProgress, getGeometry, currentScrollAnchor, onProgress } = ctx;
+  // Shared with the engine and with anything else watching this wrapper,
+  // rather than re-measured here: this runs on every scroll frame, and a
+  // pass over every item is the one thing it must not do per frame.
+  const { items, anchors } = getGeometry();
+  const scrollAnchor = currentScrollAnchor();
 
   // While something else is driving this carousel, the driver's progress is
   // the exact one and the scroll position written from it is quantised, so
