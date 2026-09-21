@@ -2,6 +2,8 @@ import { createCarousel } from "./carousel-engine.js";
 import { attachPageControls } from "./navigators/page-controls.js";
 import { attachThumbnailScrubber } from "./navigators/thumbnail-scrubber.js";
 import { attachIosThumbnailScrubber } from "./navigators/ios-thumbnail-scrubber.js";
+import { iosScrubberCssEffect } from "./effects/ios-scrubber-css-effect.js";
+import { iosScrubberEffect } from "./effects/ios-scrubber-effect.js";
 import { cssEffect } from "./effects/css-effect.js";
 import { jsEffect } from "./effects/js-effect.js";
 import { originEffect } from "./effects/origin-effect.js";
@@ -175,7 +177,16 @@ document.addEventListener("DOMContentLoaded", function () {
     });
     carousels.push(mainCarousel);
 
-    const { scrubber } = attachIosThumbnailScrubber(mainCarousel, iosScrubberStripWrapper);
+    // Same choice configureScrubberEffect makes for the other strips, on the
+    // same pre-recorded answer: this look now has a natively painted
+    // implementation and a hand-computed one, and they are interchangeable.
+    // Unlike those, no data-effect/data-scroll-timelines bookkeeping is
+    // needed either way - the native one declares its own timeline under its
+    // own class (see main.css), and this wrapper opts out of the generic
+    // scaffolding regardless.
+    const { scrubber } = attachIosThumbnailScrubber(mainCarousel, iosScrubberStripWrapper, {
+      effect: supportsScrollDrivenAnimations ? iosScrubberCssEffect() : iosScrubberEffect
+    });
     carousels.push(scrubber);
     attachScrollEventProbe(scrubber, "iOS thumbnail strip (not the main carousel)");
     watchScrubberJitter(mainCarousel, scrubber);

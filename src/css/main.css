@@ -419,6 +419,126 @@ body {
   background-color: hsl(220, 14%, 70%);
 }
 
+/* --- The iOS scrubber look, painted natively ---------------------------
+   Used when effects/ios-scrubber-css-effect.js is the strip's effect; the
+   hand-computed variant (ios-scrubber-effect.js) paints the same look from
+   JS and needs none of this. See that file's header for the derivation
+   these rules are the other half of - it explains why one animation
+   advancing one number is enough for the whole strip.
+
+   Horizontal only, like the look it mirrors: the translates below are
+   written on X. A vertical filmstrip would want the same formula on Y and
+   a block-axis timeline. */
+
+/* Registered so they interpolate. An unregistered custom property is an
+   untyped token string, which keyframes and transitions can only swap at
+   the halfway mark rather than animate through. All three inherit because
+   the wrapper is what animates them and the items are what read them. */
+@property --ios-progress {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0;
+}
+
+/* The shared quadratic correction, nonzero only away from center alignment,
+   written per frame by the effect in that case. */
+@property --ios-bend {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0;
+}
+
+/* How much of the look is currently showing - 1 fully, 0 flattened
+   completely. Scaling both outputs by it works because this look's
+   collapsed state IS its zero state: every footprint equal means no item
+   displaces any other, so every shift is 0 and every thumb is its base
+   width.
+
+   Keeping it on its own property is what lets the collapse ease while the
+   scroll-driven animation keeps running underneath. Animations beat
+   transitions in the cascade, so a transition declared on transform or
+   width could not ease away from a value the animation is asserting - it
+   would be ignored while the animation ran, and snap the moment it
+   stopped. */
+@property --ios-contrast {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 1;
+}
+
+.ios-scrubber-css {
+  /* Declared here rather than inherited from the generic rule above, which
+     is gated on data-scroll-timelines and would also bring the scale/opacity
+     item-current animation this look does not want. */
+  scroll-timeline-name: --carousel-scroll;
+  scroll-timeline-axis: inline;
+
+  /* The one animation driving the entire look. Its @keyframes is generated
+     per wrapper, since it needs the item count. */
+  animation-timeline: --carousel-scroll;
+  animation-fill-mode: both;
+  animation-timing-function: linear;
+
+  transition: --ios-contrast 130ms ease;
+}
+
+/* carousel-engine.js writes this attribute from the contrast policy and the
+   carousel's motion state; all this look has to say is what losing contrast
+   means for it. */
+.ios-scrubber-css[data-contrast="off"] {
+  --ios-contrast: 0;
+}
+
+/* The hand-computed variant's permanent transitions have to go here, and
+   their absence is the point rather than a workaround. There, JS writes a
+   discrete transform/width target per item per frame and the transition is
+   what turns that stream of targets into motion. Here the outputs are
+   already continuous - they follow --ios-progress, which the animation
+   advances - so transitioning them would add real lag to every frame and
+   restart the easing curve on each one. All the easing this look needs is
+   on the collapse, and that rides on --ios-contrast. */
+.ios-scrubber-css .ios-thumbnail-scrubber-item,
+.ios-scrubber-css .ios-thumbnail-scrubber-thumb {
+  transition: none;
+}
+
+.ios-scrubber-css .ios-thumbnail-scrubber-item {
+  /* How many items away this one is from current, signed, and the two
+     clamped ramps both outputs are built from. Split out so the formula
+     below reads like the derivation rather than one long expression, and
+     because the two outputs share them. */
+  --u: calc(var(--ios-index) - var(--ios-progress));
+  --lo: clamp(0, calc(1 + var(--u)), 1);
+  --hi: clamp(0, var(--u), 1);
+
+  /* How far this item has animated from collapsed to current - the same 0-1
+     itemProgress the JS looks compute, as a triangle centered on its own
+     index, written without abs() by subtracting the two ramps. */
+  --grow: calc((var(--lo) - var(--hi)) * var(--ios-contrast));
+
+  /* How far this item is displaced by whatever expansion is happening
+     elsewhere in the strip. At center alignment it is simply half the
+     growth either way, ramping across the two items either side of
+     current. */
+  --shift: calc(
+    var(--ios-footprint-growth) *
+      (
+        var(--ios-alignment) * var(--lo) + (1 - var(--ios-alignment)) * var(--hi) - var(--ios-alignment) -
+          var(--ios-bend)
+      ) * var(--ios-contrast)
+  );
+
+  transform: translate3d(var(--shift), 0, 0);
+}
+
+.ios-scrubber-css .ios-thumbnail-scrubber-thumb {
+  width: calc(var(--ios-item-width) + var(--grow) * var(--ios-thumb-growth));
+  /* Re-centers the thumb inside the footprint its neighbours made room for
+     when the anchor point is not the item's own center. Zero at center
+     alignment, same as the JS look's thumbOffset. */
+  transform: translate3d(calc(var(--grow) * var(--ios-footprint-growth) * (0.5 - var(--ios-alignment))), 0, 0);
+}
+
 .spacer {
   flex: 0 0 auto;
   display: flex;
