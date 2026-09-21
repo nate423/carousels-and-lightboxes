@@ -39,7 +39,13 @@
 // look pins every item's layout box to the same fixed size, so the item
 // pitch is uniform - which is what lets the driving animation be two stops
 // rather than one per item.
-import { computeCurrentProgress, computeCurrentIndex, getItemMetrics, wrapperAnchor } from "../carousel-math.js";
+import {
+  computeCurrentProgress,
+  computeCurrentIndex,
+  computeScrollAnchorForProgress,
+  getItemMetrics,
+  wrapperAnchor
+} from "../carousel-math.js";
 
 let nextStripId = 0;
 
@@ -152,9 +158,8 @@ export function iosScrubberCssEffect({ progressDriver = "auto" } = {}) {
     const { anchors, alignment, wrapperAnchorPoint, items, animationName } = state;
 
     const isDriven = getScrollSource() === "driven";
-    const currentProgress = isDriven
-      ? getDrivenProgress()
-      : computeCurrentProgress(anchors, wrapper[scrollDistance] + wrapperAnchorPoint);
+    const scrollAnchor = wrapper[scrollDistance] + wrapperAnchorPoint;
+    const currentProgress = isDriven ? getDrivenProgress() : computeCurrentProgress(anchors, scrollAnchor);
 
     const writingProgress = progressDriver === "js" || (progressDriver === "auto" && isDriven);
     if (writingProgress !== state.writingProgress) {
@@ -162,11 +167,28 @@ export function iosScrubberCssEffect({ progressDriver = "auto" } = {}) {
       // An animation outranks an inline custom property, so the two cannot
       // both be live - handing over means turning the other one off.
       wrapper.style.animationName = writingProgress ? "none" : animationName;
-      if (!writingProgress) wrapper.style.removeProperty("--ios-progress");
+      if (!writingProgress) {
+        wrapper.style.removeProperty("--ios-progress");
+        wrapper.style.removeProperty("--scroll-error");
+      }
     }
 
     if (writingProgress) {
       wrapper.style.setProperty("--ios-progress", currentProgress);
+      // Where the items' boxes actually are, against where the progress
+      // being painted says they should be. The formula this look draws with
+      // reduces to a function of progress alone precisely by assuming those
+      // agree, which is true of a carousel scrolling itself and false of one
+      // being driven: the progress is exact and the scroll position written
+      // from it is quantised. Without this the thumbnails' expansion is
+      // smooth while the strip they sit on still steps a whole quantum at a
+      // time, which is most of what the judder actually was. The
+      // hand-computed look never had it because it keeps the real scroll
+      // position as a term instead of dividing it out.
+      wrapper.style.setProperty(
+        "--scroll-error",
+        (scrollAnchor - computeScrollAnchorForProgress(anchors, currentProgress)).toFixed(3) + "px"
+      );
     }
 
     // The one term of the formula that isn't a function of an item's own

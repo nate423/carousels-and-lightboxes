@@ -209,6 +209,24 @@ body {
   initial-value: 0px;
 }
 
+/* How far this carousel's real scroll position sits from where the progress
+   currently being painted says it should be. Zero whenever a carousel is
+   scrolling itself, because then its scroll position is what progress was
+   derived from and the two cannot disagree. Nonzero while it is being
+   driven: the driver's progress is exact, and the scroll position written
+   from it is quantised, so the items' boxes end up a fraction of a pixel
+   from where the painted progress belongs.
+
+   Added to what a look draws rather than multiplied into it - this is not
+   part of the look, it is the correction that makes the look land where it
+   was asked to. Which is also why it is outside the contrast multiplier: a
+   flattened strip still has to sit in the right place. */
+@property --scroll-error {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0px;
+}
+
 /* How much of the look is showing at all: 1 fully, 0 not at all.
    carousel-engine.js writes data-contrast from the carousel's contrast
    policy and its motion state, and this is the only place that attribute
@@ -585,7 +603,7 @@ body {
       )
   );
 
-  transform: translate3d(calc(var(--item-shift) * var(--contrast-amount)), 0, 0);
+  transform: translate3d(calc(var(--item-shift) * var(--contrast-amount) + var(--scroll-error)), 0, 0);
 }
 
 .ios-scrubber-css .ios-thumbnail-scrubber-thumb {
