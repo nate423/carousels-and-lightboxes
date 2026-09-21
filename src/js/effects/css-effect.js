@@ -183,7 +183,7 @@ function setup(ctx) {
     wrapper,
     scrollDistance,
     scrollSize,
-    offsetLength,
+    offsetSize,
     offsetFromStart,
     scrollAxis,
     getAlignmentFraction,
@@ -194,24 +194,24 @@ function setup(ctx) {
   const items = wrapper.querySelectorAll(".carousel-item");
   const alignment = getAlignmentFraction(wrapper);
   const scrollPadding = getScrollPadding(wrapper);
-  const { anchors, lengths } = getItemMetrics(
+  const { anchors, sizes } = getItemMetrics(
     wrapper,
     items,
     offsetFromStart,
-    offsetLength,
+    offsetSize,
     scrollDistance,
     alignment,
     scrollPadding
   );
-  const ranges = computeAnimationRanges(anchors, lengths, wrapper[offsetLength], alignment, scrollPadding);
+  const ranges = computeAnimationRanges(anchors, sizes, wrapper[offsetSize], alignment, scrollPadding);
 
   // Native scroll-timeline progress is 0%/100% at raw scroll offset
   // 0/maxScroll, not at wrapperAnchorPoint - scrollAnchor = scrollOffset +
   // wrapperAnchorPoint (see getItemMetrics), so the reachable scrollAnchor
   // range is [wrapperAnchorPoint, wrapperAnchorPoint + maxScroll]. These are
   // the true breakpoint boundaries (see computeTranslationBreakpoints).
-  const wrapperAnchorPoint = wrapperAnchor(wrapper[offsetLength], alignment, scrollPadding);
-  const maxScroll = wrapper[scrollSize] - wrapper[offsetLength];
+  const wrapperAnchorPoint = wrapperAnchor(wrapper[offsetSize], alignment, scrollPadding);
+  const maxScroll = wrapper[scrollSize] - wrapper[offsetSize];
   const percentFor = (scrollAnchor) =>
     maxScroll <= 0
       ? 0
@@ -219,7 +219,7 @@ function setup(ctx) {
 
   const breakpoints = computeTranslationBreakpoints(
     anchors,
-    lengths,
+    sizes,
     getNoncurrentScale(wrapper),
     wrapperAnchorPoint,
     wrapperAnchorPoint + Math.max(maxScroll, 0)
@@ -239,14 +239,14 @@ function setup(ctx) {
 // animations on .carousel-item; this only computes the discrete current
 // index for the page dots, since no timeline hands that back to JS.
 function apply(ctx) {
-  const { wrapper, scrollDistance, offsetLength, offsetFromStart, getAlignmentFraction, getScrollPadding, onProgress } =
+  const { wrapper, scrollDistance, offsetSize, offsetFromStart, getAlignmentFraction, getScrollPadding, onProgress } =
     ctx;
   const items = wrapper.querySelectorAll(".carousel-item");
   const { anchors, scrollAnchor } = getItemMetrics(
     wrapper,
     items,
     offsetFromStart,
-    offsetLength,
+    offsetSize,
     scrollDistance,
     getAlignmentFraction(wrapper),
     getScrollPadding(wrapper)

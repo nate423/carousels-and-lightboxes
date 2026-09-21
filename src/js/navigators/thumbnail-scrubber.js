@@ -11,7 +11,7 @@
 //
 // Defaults to cssEffect - not origin-effect, since thumbnails keep the main
 // carousel's real per-item aspect ratio rather than a uniform size, and
-// origin-effect only produces even gaps when every item is the same length
+// origin-effect only produces even gaps when every item is the same size
 // (see its file header) - but takes the effect as an option rather than
 // importing it directly, so a caller can swap in jsEffect wholesale on
 // browsers without native scroll-driven-animation support (see main.js).

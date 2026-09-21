@@ -106,7 +106,7 @@ export function settleEffect(look) {
   function setup(ctx) {
     look.setup(ctx);
 
-    const { wrapper, scrollDistance, offsetLength, offsetFromStart, getAlignmentFraction, getScrollPadding } = ctx;
+    const { wrapper, scrollDistance, offsetSize, offsetFromStart, getAlignmentFraction, getScrollPadding } = ctx;
     const items = wrapper.querySelectorAll(".carousel-item");
     const alignment = getAlignmentFraction(wrapper);
     const scrollPadding = getScrollPadding(wrapper);
@@ -120,7 +120,7 @@ export function settleEffect(look) {
       wrapper,
       items,
       offsetFromStart,
-      offsetLength,
+      offsetSize,
       scrollDistance,
       alignment,
       scrollPadding
@@ -130,7 +130,7 @@ export function settleEffect(look) {
     stateByWrapper.set(wrapper, {
       itemCount: items.length,
       anchors,
-      wrapperAnchorPoint: wrapperAnchor(wrapper[offsetLength], alignment, scrollPadding),
+      wrapperAnchorPoint: wrapperAnchor(wrapper[offsetSize], alignment, scrollPadding),
       // Which item the own-drag path currently renders as expanded
       // (itemProgress 1) - null when nothing is, i.e. whenever the strip isn't
       // resting on an item. Deliberately not carried over from a previous

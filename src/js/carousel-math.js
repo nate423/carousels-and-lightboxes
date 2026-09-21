@@ -45,9 +45,9 @@ export function transition(p, start, end) {
 // At alignment 0.5 the two insets cancel out (inset - 2*inset*0.5 = 0), so
 // scrollPadding is a no-op for center alignment and doesn't need to be
 // special-cased anywhere that calls this.
-export function wrapperAnchor(wrapperLength, alignment, scrollPadding) {
+export function wrapperAnchor(wrapperSize, alignment, scrollPadding) {
   return (
-    scrollPadding + alignment * (wrapperLength - 2 * scrollPadding)
+    scrollPadding + alignment * (wrapperSize - 2 * scrollPadding)
   );
 }
 
@@ -55,25 +55,25 @@ export function getItemMetrics(
   wrapper,
   items,
   offsetFromStart,
-  offsetLength,
+  offsetSize,
   scrollDistance,
   alignment,
   scrollPadding = 0
 ) {
   const scrollAnchor =
     wrapper[scrollDistance] +
-    wrapperAnchor(wrapper[offsetLength], alignment, scrollPadding);
+    wrapperAnchor(wrapper[offsetSize], alignment, scrollPadding);
   const anchors = [];
-  const lengths = [];
+  const sizes = [];
 
   items.forEach((item) => {
     const itemOffsetFromWrapperStart =
       item[offsetFromStart] - wrapper[offsetFromStart];
-    lengths.push(item[offsetLength]);
-    anchors.push(itemOffsetFromWrapperStart + item[offsetLength] * alignment);
+    sizes.push(item[offsetSize]);
+    anchors.push(itemOffsetFromWrapperStart + item[offsetSize] * alignment);
   });
 
-  return { anchors, lengths, scrollAnchor };
+  return { anchors, sizes, scrollAnchor };
 }
 
 // Scroll offset (relative to the wrapper) that puts this item's anchor point
@@ -83,34 +83,34 @@ export function computeScrollTarget(
   wrapper,
   item,
   offsetFromStart,
-  offsetLength,
+  offsetSize,
   alignment,
   scrollPadding = 0
 ) {
   return (
     item[offsetFromStart] -
     wrapper[offsetFromStart] -
-    (wrapperAnchor(wrapper[offsetLength], alignment, scrollPadding) -
-      item[offsetLength] * alignment)
+    (wrapperAnchor(wrapper[offsetSize], alignment, scrollPadding) -
+      item[offsetSize] * alignment)
   );
 }
 
-// Length of the spacer needed on one edge of the wrapper so that the item
+// Size of the spacer needed on one edge of the wrapper so that the item
 // touching that edge (edgeFraction 0 for the leading spacer, 1 for the
 // trailing one) can still reach the wrapper's anchor point. Generalizes the
-// plain "(wrapperLength - itemLength) * edgeFraction" case (scrollPadding 0)
+// plain "(wrapperSize - itemSize) * edgeFraction" case (scrollPadding 0)
 // with the same inset term as wrapperAnchor.
-export function computeSpacerLength(
-  wrapperLength,
-  itemLength,
+export function computeSpacerSize(
+  wrapperSize,
+  itemSize,
   edgeFraction,
-  gapLength,
+  gapSize,
   scrollPadding = 0
 ) {
   return (
-    wrapperAnchor(wrapperLength, edgeFraction, scrollPadding) -
-    itemLength * edgeFraction -
-    gapLength
+    wrapperAnchor(wrapperSize, edgeFraction, scrollPadding) -
+    itemSize * edgeFraction -
+    gapSize
   );
 }
 
@@ -160,13 +160,13 @@ export function computeItemProgress(currentProgress, i) {
 // scroll-driven scale/opacity keyframe. Native `cover 0%`/`100%` correspond
 // respectively to "item's leading edge at the wrapper's trailing edge" and
 // "item's trailing edge at the wrapper's leading edge", a span of
-// (wrapperLength + itemLength) - from that geometry, an item at on-screen
+// (wrapperSize + itemSize) - from that geometry, an item at on-screen
 // leading-edge position `x` sits at cover-percent
-// `(wrapperLength - x) / (wrapperLength + itemLength)`.
+// `(wrapperSize - x) / (wrapperSize + itemSize)`.
 //
 // The how-current-is-it window has to be asymmetric, sized independently to
 // the real pixel gap to each neighboring anchor (falling back to the item's
-// own length at the carousel's edges, where there's only one neighbor) -
+// own size at the carousel's edges, where there's only one neighbor) -
 // otherwise it doesn't reach exactly 0 at the moment a neighbor actually
 // becomes current, leaving either a dead zone (real gap wider than the
 // window) or a lag (real gap narrower) on whichever side isn't sized to
@@ -189,18 +189,18 @@ export function computeItemProgress(currentProgress, i) {
 // same how-current-is-it curve this asymmetric range encodes, just derived
 // directly from real anchor distances instead of by way of
 // cover-percent/peakX.)
-export function computeAnimationRanges(anchors, lengths, wrapperLength, alignment, scrollPadding) {
+export function computeAnimationRanges(anchors, sizes, wrapperSize, alignment, scrollPadding) {
   const n = anchors.length;
-  const wrapperAnchorPoint = wrapperAnchor(wrapperLength, alignment, scrollPadding);
+  const wrapperAnchorPoint = wrapperAnchor(wrapperSize, alignment, scrollPadding);
 
   return anchors.map((anchor, i) => {
-    const itemLength = lengths[i];
-    const span = wrapperLength + itemLength;
-    const currentLeadingEdge = wrapperAnchorPoint - itemLength * alignment;
-    const peak = (wrapperLength - currentLeadingEdge) / span;
+    const itemSize = sizes[i];
+    const span = wrapperSize + itemSize;
+    const currentLeadingEdge = wrapperAnchorPoint - itemSize * alignment;
+    const peak = (wrapperSize - currentLeadingEdge) / span;
 
-    const deltaPrev = i > 0 ? anchor - anchors[i - 1] : itemLength;
-    const deltaNext = i < n - 1 ? anchors[i + 1] - anchor : itemLength;
+    const deltaPrev = i > 0 ? anchor - anchors[i - 1] : itemSize;
+    const deltaNext = i < n - 1 ? anchors[i + 1] - anchor : itemSize;
 
     const start = clamp(peak - deltaPrev / span, 0, 1);
     const end = clamp(peak + deltaNext / span, 0, 1);
@@ -227,10 +227,10 @@ function clamp(value, min, max) {
 // Anchoring on currentIndex instead would flip at the midpoint between two
 // items, where scaleDiff is generally nonzero on both sides, producing a
 // visible jump.
-export function computeTranslations(anchors, lengths, scales, currentProgress) {
+export function computeTranslations(anchors, sizes, scales, currentProgress) {
   const n = anchors.length;
   const translations = new Array(n).fill(0);
-  const scaleDiff = (i) => lengths[i] * (1 - scales[i]);
+  const scaleDiff = (i) => sizes[i] * (1 - scales[i]);
 
   let acc = 0;
   for (let i = n - 1; i >= 0; i--) {
@@ -255,15 +255,15 @@ export function computeTranslations(anchors, lengths, scales, currentProgress) {
 // computeTranslations' result at an arbitrary currentProgress in O(1) per
 // item instead of O(n): computeItemProgress is exactly 0 outside a
 // fixed +/-1 window around currentProgress, so every item's scaleDiff
-// (lengths[i] * (1 - scales[i])) equals a currentProgress-independent
-// baseline - lengths[i] * (1 - noncurrentScale) - except for at most the one
+// (sizes[i] * (1 - scales[i])) equals a currentProgress-independent
+// baseline - sizes[i] * (1 - noncurrentScale) - except for at most the one
 // or two items straddling currentProgress. Prefix-summing that baseline once
 // here means computeTranslationsAt's running sums are just a prefix-sum
 // lookup plus an O(1) correction at the straddling item(s), rather than
 // walking every item from scratch each time it's called.
-export function computeTranslationPrefixSums(lengths, noncurrentScale) {
-  const n = lengths.length;
-  const baseDiff = lengths.map((length) => length * (1 - noncurrentScale));
+export function computeTranslationPrefixSums(sizes, noncurrentScale) {
+  const n = sizes.length;
+  const baseDiff = sizes.map((size) => size * (1 - noncurrentScale));
   const prefix = new Array(n + 1).fill(0);
   for (let i = 0; i < n; i++) prefix[i + 1] = prefix[i] + baseDiff[i];
   return { baseDiff, prefix };
@@ -276,7 +276,7 @@ export function computeTranslationPrefixSums(lengths, noncurrentScale) {
 // provably piecewise-linear in currentProgress with breaks only at integer
 // indices (see computeTranslationBreakpoints below), and
 // baseDiff(i) * min(|currentProgress - i|, 1) reproduces
-// lengths[i] * (1 - scales[i]) for every i, so scales[] never needs
+// sizes[i] * (1 - scales[i]) for every i, so scales[] never needs
 // computing at all. `m`/`k` are the real items immediately below/above
 // currentProgress (clamped to the valid index range) - the only two items
 // whose scaleDiff can differ from the baseline - so only their two
@@ -331,7 +331,7 @@ export function computeTranslationsAt(prefix, baseDiff, currentProgress) {
 // total, shared by every item - exact, not a sampled approximation.
 export function computeTranslationBreakpoints(
   anchors,
-  lengths,
+  sizes,
   noncurrentScale,
   minScrollAnchor,
   maxScrollAnchor
@@ -344,7 +344,7 @@ export function computeTranslationBreakpoints(
   return breakpointAnchors.map((scrollAnchor) => {
     const currentProgress = computeCurrentProgress(anchors, scrollAnchor);
     const scales = anchors.map((_, i) => transition(computeItemProgress(currentProgress, i), noncurrentScale, 1));
-    const translations = computeTranslations(anchors, lengths, scales, currentProgress);
+    const translations = computeTranslations(anchors, sizes, scales, currentProgress);
 
     return { scrollAnchor, translations };
   });

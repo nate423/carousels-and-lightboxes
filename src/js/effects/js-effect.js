@@ -31,22 +31,22 @@ function onItemCreated() {}
 // directly at the current scroll position instead of recomputing it from
 // scratch.
 function setup(ctx) {
-  const { wrapper, scrollDistance, offsetLength, offsetFromStart, getAlignmentFraction, getScrollPadding } = ctx;
+  const { wrapper, scrollDistance, offsetSize, offsetFromStart, getAlignmentFraction, getScrollPadding } = ctx;
   const items = wrapper.querySelectorAll(".carousel-item");
   const alignment = getAlignmentFraction(wrapper);
   const scrollPadding = getScrollPadding(wrapper);
-  const { anchors, lengths } = getItemMetrics(
+  const { anchors, sizes } = getItemMetrics(
     wrapper,
     items,
     offsetFromStart,
-    offsetLength,
+    offsetSize,
     scrollDistance,
     alignment,
     scrollPadding
   );
 
-  const wrapperAnchorPoint = wrapperAnchor(wrapper[offsetLength], alignment, scrollPadding);
-  const { baseDiff, prefix } = computeTranslationPrefixSums(lengths, NONCURRENT_SCALE);
+  const wrapperAnchorPoint = wrapperAnchor(wrapper[offsetSize], alignment, scrollPadding);
+  const { baseDiff, prefix } = computeTranslationPrefixSums(sizes, NONCURRENT_SCALE);
 
   stateByWrapper.set(wrapper, { items, anchors, wrapperAnchorPoint, baseDiff, prefix });
 }

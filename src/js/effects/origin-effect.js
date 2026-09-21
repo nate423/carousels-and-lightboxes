@@ -10,9 +10,9 @@
 // gap, never shrink into an overlap, with no translate needed at all.
 //
 // This only produces a clean, evenly-spaced result when every item is the
-// same length along the scroll axis - the "no translate needed" property
+// same size along the scroll axis - the "no translate needed" property
 // specifically relies on there being nothing to compensate for between
-// unequal neighbors. computeAnimationRanges still handles uneven lengths
+// unequal neighbors. computeAnimationRanges still handles uneven sizes
 // without error, it just won't look as evenly spaced.
 //
 // The origin needs to flip at the exact instant currentProgress crosses this
@@ -140,29 +140,29 @@ function setItemOriginKeyframes(item, range, flipPercent, scrollAxis) {
 // changes, not on scroll. No translate keyframes at all (unlike
 // css-effect.js) - see file header.
 function setup(ctx) {
-  const { wrapper, scrollDistance, scrollSize, offsetLength, offsetFromStart, scrollAxis, getAlignmentFraction, getScrollPadding } =
+  const { wrapper, scrollDistance, scrollSize, offsetSize, offsetFromStart, scrollAxis, getAlignmentFraction, getScrollPadding } =
     ctx;
   const items = wrapper.querySelectorAll(".carousel-item");
   const alignment = getAlignmentFraction(wrapper);
   const scrollPadding = getScrollPadding(wrapper);
-  const { anchors, lengths } = getItemMetrics(
+  const { anchors, sizes } = getItemMetrics(
     wrapper,
     items,
     offsetFromStart,
-    offsetLength,
+    offsetSize,
     scrollDistance,
     alignment,
     scrollPadding
   );
-  const ranges = computeAnimationRanges(anchors, lengths, wrapper[offsetLength], alignment, scrollPadding);
+  const ranges = computeAnimationRanges(anchors, sizes, wrapper[offsetSize], alignment, scrollPadding);
 
   // Maps a scrollAnchor value onto the --carousel-scroll timeline's 0%-100%
   // (raw scroll offset 0/maxScroll), same relationship css-effect.js's
   // percentFor uses for its own translate breakpoints - see the comment on
   // that timeline in main.css for why scrollAnchor and raw offset differ by
   // wrapperAnchorPoint.
-  const wrapperAnchorPoint = wrapperAnchor(wrapper[offsetLength], alignment, scrollPadding);
-  const maxScroll = wrapper[scrollSize] - wrapper[offsetLength];
+  const wrapperAnchorPoint = wrapperAnchor(wrapper[offsetSize], alignment, scrollPadding);
+  const maxScroll = wrapper[scrollSize] - wrapper[offsetSize];
   const percentFor = (scrollAnchor) =>
     maxScroll <= 0 ? 0 : Math.min(Math.max(((scrollAnchor - wrapperAnchorPoint) / maxScroll) * 100, 0), 100);
 
@@ -174,14 +174,14 @@ function setup(ctx) {
 // scroll-driven animation on .carousel-item; this only computes the discrete
 // current index for the page dots.
 function apply(ctx) {
-  const { wrapper, scrollDistance, offsetLength, offsetFromStart, getAlignmentFraction, getScrollPadding, onProgress } =
+  const { wrapper, scrollDistance, offsetSize, offsetFromStart, getAlignmentFraction, getScrollPadding, onProgress } =
     ctx;
   const items = wrapper.querySelectorAll(".carousel-item");
   const { anchors, scrollAnchor } = getItemMetrics(
     wrapper,
     items,
     offsetFromStart,
-    offsetLength,
+    offsetSize,
     scrollDistance,
     getAlignmentFraction(wrapper),
     getScrollPadding(wrapper)

@@ -33,7 +33,7 @@ function onItemCreated(item) {
 }
 
 function setup(ctx) {
-  const { wrapper, scrollDistance, offsetLength, offsetFromStart, getAlignmentFraction, getScrollPadding } = ctx;
+  const { wrapper, scrollDistance, offsetSize, offsetFromStart, getAlignmentFraction, getScrollPadding } = ctx;
   const items = [...wrapper.querySelectorAll(".carousel-item")];
   const style = getComputedStyle(wrapper);
   const itemWidth = parseFloat(style.getPropertyValue("--ios-item-width")) || 20;
@@ -50,7 +50,7 @@ function setup(ctx) {
     wrapper,
     items,
     offsetFromStart,
-    offsetLength,
+    offsetSize,
     scrollDistance,
     alignment,
     scrollPadding
@@ -59,7 +59,7 @@ function setup(ctx) {
   stateByWrapper.set(wrapper, {
     items,
     anchors,
-    wrapperAnchorPoint: wrapperAnchor(wrapper[offsetLength], alignment, scrollPadding),
+    wrapperAnchorPoint: wrapperAnchor(wrapper[offsetSize], alignment, scrollPadding),
     alignment,
     gap: parseFloat(style.gap) || 0,
     itemWidth,

@@ -8,7 +8,7 @@ import {
   alignmentFraction,
   getItemMetrics,
   computeScrollTarget,
-  computeSpacerLength,
+  computeSpacerSize,
   computeCurrentProgress,
   computeCurrentIndex,
   computeScrollAnchorForProgress,
@@ -53,7 +53,7 @@ export function createCarousel(wrapper, options = {}) {
 
   const scrollAxis = wrapper.getAttribute("data-scroll-axis") || "x";
   const scrollDistance = scrollAxis === "x" ? "scrollLeft" : "scrollTop";
-  const offsetLength = scrollAxis === "x" ? "offsetWidth" : "offsetHeight";
+  const offsetSize = scrollAxis === "x" ? "offsetWidth" : "offsetHeight";
   const offsetFromStart = scrollAxis === "x" ? "offsetLeft" : "offsetTop";
   const scrollSize = scrollAxis === "x" ? "scrollWidth" : "scrollHeight";
 
@@ -198,26 +198,26 @@ export function createCarousel(wrapper, options = {}) {
   function updateSpacers() {
     const items = getItems();
     const [firstItem, lastItem] = [items[0], items[items.length - 1] || items[0]];
-    const gapLength = parseFloat(getComputedStyle(wrapper).gap);
+    const gapSize = parseFloat(getComputedStyle(wrapper).gap);
     const alignment = getAlignmentFraction();
     const scrollPadding = getScrollPadding();
 
     [firstSpacer, lastSpacer].forEach((spacer, index) => {
       // Each spacer only needs to make up the room on its own side of the
-      // alignment point - see computeSpacerLength in carousel-math.js.
+      // alignment point - see computeSpacerSize in carousel-math.js.
       const edgeFraction = index === 0 ? alignment : 1 - alignment;
       const item = index === 0 ? firstItem : lastItem;
-      const length = Math.max(
+      const size = Math.max(
         0,
-        computeSpacerLength(
-          wrapper[offsetLength],
-          item[offsetLength],
+        computeSpacerSize(
+          wrapper[offsetSize],
+          item[offsetSize],
           edgeFraction,
-          gapLength,
+          gapSize,
           scrollPadding
         )
       );
-      spacer.style[scrollAxis === "x" ? "width" : "height"] = length + "px";
+      spacer.style[scrollAxis === "x" ? "width" : "height"] = size + "px";
     });
   }
 
@@ -238,7 +238,7 @@ export function createCarousel(wrapper, options = {}) {
       wrapper,
       item,
       offsetFromStart,
-      offsetLength,
+      offsetSize,
       getAlignmentFraction(),
       getScrollPadding()
     );
@@ -257,7 +257,7 @@ export function createCarousel(wrapper, options = {}) {
       wrapper,
       items,
       offsetFromStart,
-      offsetLength,
+      offsetSize,
       scrollDistance,
       getAlignmentFraction(),
       getScrollPadding()
@@ -282,13 +282,13 @@ export function createCarousel(wrapper, options = {}) {
       wrapper,
       items,
       offsetFromStart,
-      offsetLength,
+      offsetSize,
       scrollDistance,
       alignment,
       scrollPadding
     );
     const scrollAnchor = computeScrollAnchorForProgress(anchors, progress);
-    wrapper[scrollDistance] = scrollAnchor - wrapperAnchor(wrapper[offsetLength], alignment, scrollPadding);
+    wrapper[scrollDistance] = scrollAnchor - wrapperAnchor(wrapper[offsetSize], alignment, scrollPadding);
 
     // Render here rather than waiting for the scroll event this write usually
     // causes, because it does not always cause one: a scroll position is
@@ -327,7 +327,7 @@ export function createCarousel(wrapper, options = {}) {
   const ctx = {
     wrapper,
     scrollDistance,
-    offsetLength,
+    offsetSize,
     offsetFromStart,
     scrollSize,
     scrollAxis,
@@ -407,7 +407,7 @@ export function createCarousel(wrapper, options = {}) {
       wrapper,
       items,
       offsetFromStart,
-      offsetLength,
+      offsetSize,
       scrollDistance,
       getAlignmentFraction(),
       getScrollPadding()
