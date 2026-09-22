@@ -17,9 +17,8 @@ export function createPlaceholderItem(wrapper) {
       return;
     }
 
-    const uniform = wrapper.classList.contains("uniform-size");
-    const itemWidth = uniform ? "100px" : randomDimension(50, 300); /* min <> max width */
-    const itemHeight = uniform ? "100px" : randomDimension(50, 300); /* min <> max height */
+    const itemWidth = randomDimension(50, 300); /* min <> max width */
+    const itemHeight = randomDimension(50, 300); /* min <> max height */
     item.textContent = `Item ${i} (${itemWidth} × ${itemHeight})`;
     item.style.width = itemWidth;
     item.style.height = itemHeight;

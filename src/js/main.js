@@ -2,9 +2,7 @@ import { createCarousel } from "./carousel-engine.js";
 import { attachPageControls } from "./navigators/page-controls.js";
 import { attachThumbnailScrubber } from "./navigators/thumbnail-scrubber.js";
 import { attachIosThumbnailScrubber } from "./navigators/ios-thumbnail-scrubber.js";
-import { iosScrubberCssEffect } from "./effects/ios-scrubber-css-effect.js";
-import { iosScrubberEffect } from "./effects/ios-scrubber-effect.js";
-import { supportsScrollDrivenAnimations, getEffect, configureScrubberEffect } from "./effect-selection.js";
+import { cssEffect } from "./effects/css-effect.js";
 import { createPlaceholderItem } from "./demo/placeholder-content.js";
 import { attachScrollEventProbe } from "./scroll-event-probe.js";
 import { watchScrubberJitter } from "./debug-console.js";
@@ -75,7 +73,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
       const carousel = createCarousel(wrapper, {
         itemCount: 30,
-        effect: getEffect(wrapper),
+        effect: cssEffect,
         createItem: createPlaceholderItem(wrapper)
       });
       carousels.push(carousel);
@@ -96,14 +94,12 @@ document.addEventListener("DOMContentLoaded", function () {
   if (scrubberMainWrapper && scrubberStripWrapper) {
     const mainCarousel = createCarousel(scrubberMainWrapper, {
       itemCount: 30,
-      effect: configureScrubberEffect(scrubberMainWrapper),
+      effect: cssEffect,
       createItem: createPlaceholderItem(scrubberMainWrapper)
     });
     carousels.push(mainCarousel);
 
-    const { scrubber, link } = attachThumbnailScrubber(mainCarousel, scrubberStripWrapper, {
-      effect: configureScrubberEffect(scrubberStripWrapper)
-    });
+    const { scrubber, link } = attachThumbnailScrubber(mainCarousel, scrubberStripWrapper);
     carousels.push(scrubber);
 
     attachDemoControls(scrubberMainWrapper, link, { main: mainCarousel, strip: scrubber });
@@ -118,27 +114,12 @@ document.addEventListener("DOMContentLoaded", function () {
   if (iosScrubberMainWrapper && iosScrubberStripWrapper) {
     const mainCarousel = createCarousel(iosScrubberMainWrapper, {
       itemCount: 30,
-      effect: configureScrubberEffect(iosScrubberMainWrapper),
+      effect: cssEffect,
       createItem: createPlaceholderItem(iosScrubberMainWrapper)
     });
     carousels.push(mainCarousel);
 
-    // Same choice configureScrubberEffect makes for the other strips, on the
-    // same pre-recorded answer: this look now has a natively painted
-    // implementation and a hand-computed one, and they are interchangeable.
-    // Unlike those, no data-effect/data-scroll-timelines bookkeeping is
-    // needed either way - the native one declares its own timeline under its
-    // own class (see main.css), and this wrapper opts out of the generic
-    // scaffolding regardless.
-    const { scrubber, link } = attachIosThumbnailScrubber(mainCarousel, iosScrubberStripWrapper, {
-      // ?ios=js forces the hand-computed implementation on a browser that
-      // would otherwise take the native one, so the two can be compared
-      // directly - they are meant to be indistinguishable.
-      effect:
-        supportsScrollDrivenAnimations && new URLSearchParams(location.search).get("ios") !== "js"
-          ? iosScrubberCssEffect()
-          : iosScrubberEffect
-    });
+    const { scrubber, link } = attachIosThumbnailScrubber(mainCarousel, iosScrubberStripWrapper);
     attachDemoControls(iosScrubberMainWrapper, link, { main: mainCarousel, strip: scrubber });
     carousels.push(scrubber);
     attachScrollEventProbe(scrubber, "iOS thumbnail strip (not the main carousel)");

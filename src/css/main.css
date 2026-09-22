@@ -130,13 +130,6 @@ body {
   scroll-snap-type: y mandatory;
 }
 
-/* Demonstrates the origin effect's actual constraint: 0 gap never causes
-   overlap (see origin-effect.js) - the "minimum visual gap" it produces is
-   whatever an item's own scale-loss adds on top of this. */
-.carousel-wrapper.uniform-size {
-  --wrapper-gap: 0px;
-}
-
 .carousel-item,
 .spacer {
   height: var(--carousel-item-height);
@@ -152,9 +145,7 @@ body {
 
   /* Neutral fallback in case the timeline never resolves (e.g. the
      polyfill script failed to load) - degrades to "no scroll effect"
-     rather than every item stuck permanently scaled down/faded. Also the
-     starting state for the data-effect="js" comparison carousel, whose
-     scale/opacity come from inline styles instead (see main.js). */
+     rather than every item stuck permanently scaled down/faded. */
   scale: 1;
   opacity: 1;
 
@@ -242,9 +233,9 @@ body {
    off - 0 or 1, whichever end of its own range is "undecorated" for that
    look (see --item-progress-effective below). A look declares this once, as
    a plain CSS value scoped to wherever it's used (the scale+fade rule below
-   sets 1; the iOS filmstrip rule leaves the default 0), the same restProgress
-   the JS looks declare for settle-effect.js to read - see
-   effects/looks/scale-fade-look.js and effects/looks/ios-box-look.js. */
+   sets 1; the iOS filmstrip rule leaves the default 0). The hand-computed
+   looks spelled the same thing as a `restProgress` property for
+   settle-effect.js to read - see archive/proto-v1/js/effects/looks/. */
 @property --rest-progress {
   syntax: "<number>";
   inherits: true;
@@ -276,23 +267,16 @@ body {
   --contrast-amount: 0;
 }
 
-/* Every rule below is gated on data-scroll-timelines, NOT on data-effect.
-   The two are different questions: data-effect picks which effect module
-   main.js constructs, while this scaffolding asks whether the wrapper drives
-   its items with native CSS scroll-driven animations at all. They used to be
-   conflated behind :not([data-effect="js"]), which forced any wrapper that
-   wanted out of these rules to claim data-effect="js" whether or not it
-   actually used js-effect.js - see ios-thumbnail-scrubber.js, which runs
-   ios-scrubber-effect.js and was mislabelled purely to land on this side of
-   the selector.
+/* The scale-fade look's scaffolding: the per-item view-timeline and the
+   wrapper-level scroll-timeline that css-effect.js hangs its generated
+   per-item animation-name/-range off.
 
-   Opted out: js-effect.js (computes scale/opacity itself on every scroll
-   event) and ios-scrubber-effect.js (its "current item" look is padding and
-   width, driven from JS). Opted in: css-effect.js and origin-effect.js,
-   which share this --item-reveal view-timeline scaffolding and override
-   animation-name/-range per item themselves; origin-effect.js just never
-   uses the --carousel-scroll timeline declared below, since it needs no
-   translate. */
+   data-scroll-timelines="off" opts a wrapper out of all of it. The one
+   wrapper that does so is the iOS strip, whose "current item" look is width
+   and displacement rather than scale and opacity, and which declares the one
+   timeline it does want under its own class further down. Once each
+   implementation owns its own stylesheet there is nothing to opt out of and
+   the attribute goes. */
 .carousel-wrapper:not([data-scroll-timelines="off"]) .carousel-item {
   view-timeline-name: --item-reveal;
   view-timeline-axis: inline;
@@ -375,11 +359,8 @@ body {
    the per-item keyframes that drive --item-progress; these rules are the
    other half of it.
 
-   origin-effect.js shares this scaffolding but overrides scale and opacity
-   from keyframes of its own, and an animation beats these declarations, so
-   it draws as it always has (and does not yet answer to contrast). It
-   writes no translate, and an unset --item-shift is 0, so that line is a
-   no-op there. */
+   An unset --item-shift is 0, so a wrapper whose generated keyframes write
+   no translate leaves that line a no-op. */
 .carousel-wrapper:not([data-scroll-timelines="off"]) .carousel-item {
   --rest-progress: 1;
   scale: calc(var(--noncurrent-scale) + var(--item-progress-effective) * (1 - var(--noncurrent-scale)));
@@ -526,8 +507,9 @@ body {
    and a transform, never as a bigger box, so that this scroller's layout
    (and therefore its snap points, and the offsetLeft/offsetWidth reads
    carousel-math derives progress from) can't move as a side effect of what
-   ios-scrubber-effect.js paints. See that file's header for what went wrong
-   when it could. overflow is visible for the same reason: the expanded
+   the look paints. See archive/proto-v1/js/effects/looks/ios-box-look.js
+   for what went wrong when it could. overflow is visible for the same
+   reason: the expanded
    thumb is deliberately wider than the box it lives in. */
 .ios-thumbnail-scrubber-item {
   flex: 0 0 auto;
@@ -537,10 +519,10 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  /* Always on, not toggled from JS - ios-scrubber-effect.js just writes a
-     continuous target value every scroll frame (how close this item is to
-     "current" right now); this transition is what turns that stream of
-     targets into motion. It doubles as the mechanism that keeps a fast
+  /* Always on, not toggled from JS - the look just supplies a continuous
+     target value every scroll frame (how close this item is to "current"
+     right now); this transition is what turns that stream of targets into
+     motion. It doubles as the mechanism that keeps a fast
      flick from visibly popping every item it sweeps past on its way to
      wherever it actually lands: each intermediate item's target is
      overwritten by the next one before this transition can catch up to it,
@@ -560,11 +542,9 @@ body {
 }
 
 /* --- The iOS scrubber look, painted natively ---------------------------
-   Used when effects/ios-scrubber-css-effect.js is the strip's effect; the
-   hand-computed variant (ios-scrubber-effect.js) paints the same look from
-   JS and needs none of this. See that file's header for the derivation
-   these rules are the other half of - it explains why one animation
-   advancing one number is enough for the whole strip.
+   The other half of effects/ios-scrubber-css-effect.js. See that file's
+   header for the derivation these rules rest on - it explains why one
+   animation advancing one number is enough for the whole strip.
 
    Horizontal only, like the look it mirrors: the translates below are
    written on X. A vertical filmstrip would want the same formula on Y and

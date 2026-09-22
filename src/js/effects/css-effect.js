@@ -6,8 +6,9 @@
 // animation geometry (setup); apply() just derives the current index for
 // the page dots, which is the one thing no timeline can hand back to JS.
 // The same look computed by hand, item by item, on every scroll frame
-// instead of once as @keyframes, lives in looks/scale-fade-look.js and runs
-// through js-effect.js.
+// instead of once as @keyframes, is archived at
+// archive/proto-v1/js/effects/looks/scale-fade-look.js - the reference
+// implementation to check this one's output against.
 import {
   computeCurrentProgress,
   computeCurrentIndex,

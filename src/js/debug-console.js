@@ -127,8 +127,14 @@ const pad = (value, width) => String(value).padStart(width);
 const fixed = (value, width) => pad(value.toFixed(1), width);
 const signed = (value) => (value >= 0 ? "+" : "") + value.toFixed(1);
 
-// The horizontal translate ios-scrubber-effect.js last wrote on an item, read
-// back off the inline style so no layout is involved.
+// KNOWN STALE: both readers below sample inline styles, which only the
+// hand-computed iOS look ever wrote. That look is archived, and the native
+// one paints from generated stylesheet rules instead, so both now read 0.
+// Re-pointing them at the resolved --item-shift and thumb width means
+// getComputedStyle, which this panel has so far refused on purpose (see the
+// header: it runs every scroll frame, and a forced recalc here is the very
+// jank it measures). Left broken rather than quietly changed, since the
+// panel is off by default and the tradeoff deserves a measurement first.
 function translateOf(item) {
   return parseFloat(item.style.transform.replace("translate3d(", "")) || 0;
 }

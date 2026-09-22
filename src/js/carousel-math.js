@@ -24,17 +24,17 @@
 // point?" - the fraction itself never needs to leak past getItemMetrics and
 // the scroll-target helpers.
 
-export const ALIGNMENT_FRACTIONS = { start: 0, center: 0.5, end: 1 };
+const ALIGNMENT_FRACTIONS = { start: 0, center: 0.5, end: 1 };
 
 export function alignmentFraction(alignment) {
   return ALIGNMENT_FRACTIONS[alignment] ?? ALIGNMENT_FRACTIONS.center;
 }
 
-export function progress(value, start, end) {
+function progress(value, start, end) {
   return (value - start) / (end - start);
 }
 
-export function transition(p, start, end) {
+function transition(p, start, end) {
   return start + p * (end - start);
 }
 
@@ -152,7 +152,7 @@ export function computeScrollAnchorForProgress(anchors, progress) {
 
 // How current item i is, 0 to 1: 1 exactly when currentProgress lands on
 // i, down to 0 by the time currentProgress reaches either adjacent index.
-export function computeItemProgress(currentProgress, i) {
+function computeItemProgress(currentProgress, i) {
   return Math.min(Math.max(1 - Math.abs(currentProgress - i), 0), 1);
 }
 
@@ -227,7 +227,7 @@ function clamp(value, min, max) {
 // Anchoring on currentIndex instead would flip at the midpoint between two
 // items, where scaleDiff is generally nonzero on both sides, producing a
 // visible jump.
-export function computeTranslations(anchors, sizes, scales, currentProgress) {
+function computeTranslations(anchors, sizes, scales, currentProgress) {
   const n = anchors.length;
   const translations = new Array(n).fill(0);
   const scaleDiff = (i) => sizes[i] * (1 - scales[i]);
@@ -245,63 +245,6 @@ export function computeTranslations(anchors, sizes, scales, currentProgress) {
     if (i > currentProgress) {
       acc += scaleDiff(i);
       translations[i] = -(acc - scaleDiff(i) / 2);
-    }
-  }
-
-  return translations;
-}
-
-// Precomputes the per-item data computeTranslationsAt needs to evaluate
-// computeTranslations' result at an arbitrary currentProgress in O(1) per
-// item instead of O(n): computeItemProgress is exactly 0 outside a
-// fixed +/-1 window around currentProgress, so every item's scaleDiff
-// (sizes[i] * (1 - scales[i])) equals a currentProgress-independent
-// baseline - sizes[i] * (1 - noncurrentScale) - except for at most the one
-// or two items straddling currentProgress. Prefix-summing that baseline once
-// here means computeTranslationsAt's running sums are just a prefix-sum
-// lookup plus an O(1) correction at the straddling item(s), rather than
-// walking every item from scratch each time it's called.
-export function computeTranslationPrefixSums(sizes, noncurrentScale) {
-  const n = sizes.length;
-  const baseDiff = sizes.map((size) => size * (1 - noncurrentScale));
-  const prefix = new Array(n + 1).fill(0);
-  for (let i = 0; i < n; i++) prefix[i + 1] = prefix[i] + baseDiff[i];
-  return { baseDiff, prefix };
-}
-
-// computeTranslations' result for an arbitrary (possibly fractional,
-// possibly out-of-[0, n-1]) currentProgress, using the prefix sums from
-// computeTranslationPrefixSums instead of recomputing every item's scale and
-// walking the whole array. Exact, not an approximation: translations is
-// provably piecewise-linear in currentProgress with breaks only at integer
-// indices (see computeTranslationBreakpoints below), and
-// baseDiff(i) * min(|currentProgress - i|, 1) reproduces
-// sizes[i] * (1 - scales[i]) for every i, so scales[] never needs
-// computing at all. `m`/`k` are the real items immediately below/above
-// currentProgress (clamped to the valid index range) - the only two items
-// whose scaleDiff can differ from the baseline - so only their two
-// corrections need computing before every other item's translation falls
-// out of the prefix sum directly.
-export function computeTranslationsAt(prefix, baseDiff, currentProgress) {
-  const n = baseDiff.length;
-  const translations = new Array(n).fill(0);
-  if (n === 0) return translations;
-
-  const scaleDiffAt = (i) => baseDiff[i] * Math.min(Math.abs(currentProgress - i), 1);
-
-  const m = Math.min(Math.ceil(currentProgress) - 1, n - 1);
-  if (m >= 0) {
-    const reduction = baseDiff[m] - scaleDiffAt(m);
-    for (let i = 0; i <= m; i++) {
-      translations[i] = prefix[m + 1] - prefix[i] - reduction - scaleDiffAt(i) / 2;
-    }
-  }
-
-  const k = Math.max(Math.floor(currentProgress) + 1, 0);
-  if (k <= n - 1) {
-    const reduction = baseDiff[k] - scaleDiffAt(k);
-    for (let i = k; i < n; i++) {
-      translations[i] = -(prefix[i + 1] - prefix[k] - reduction - scaleDiffAt(i) / 2);
     }
   }
 
@@ -348,24 +291,4 @@ export function computeTranslationBreakpoints(
 
     return { scrollAnchor, translations };
   });
-}
-
-// The JS-effect analog of what a native scroll-timeline does with the same
-// breakpoints (see computeTranslationBreakpoints): finds which pair of
-// adjacent breakpoints brackets scrollAnchor and linearly interpolates each
-// item's translation between them, instead of recomputing computeTranslations
-// from scratch every scroll frame. Same bracket-search shape as
-// computeCurrentProgress above, just walking breakpoints instead of anchors.
-export function interpolateTranslations(breakpoints, scrollAnchor) {
-  const n = breakpoints.length;
-  if (n === 0) return [];
-  if (n === 1) return breakpoints[0].translations;
-
-  let i = 0;
-  while (i < n - 2 && breakpoints[i + 1].scrollAnchor < scrollAnchor) i++;
-
-  const p = progress(scrollAnchor, breakpoints[i].scrollAnchor, breakpoints[i + 1].scrollAnchor);
-  return breakpoints[i].translations.map((start, itemIndex) =>
-    transition(p, start, breakpoints[i + 1].translations[itemIndex])
-  );
 }

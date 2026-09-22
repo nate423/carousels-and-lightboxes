@@ -29,8 +29,9 @@
 //     measured at 17 scroll / 17 scrollend on the strip for a single flick
 //     of the main carousel, against 1 scrollend on the main carousel
 //     itself. 'scrollend' is therefore NOT a "the user finished" signal on
-//     a scroller something else is driving, which is exactly why
-//     ios-scrubber-effect.js gates it on the engine's scroll attribution.
+//     a scroller something else is driving, which is exactly why the engine
+//     ends a driven carousel's motion from the driver's scrollend instead
+//     (see endFollowing in carousel-engine.js).
 const PROBE_ENABLED = false;
 
 const TAIL_LENGTH = 8;

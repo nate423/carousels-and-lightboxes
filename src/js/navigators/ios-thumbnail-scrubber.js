@@ -10,32 +10,18 @@
 // carousel - linked to the main carousel via the same linkCarousels used
 // there (defaults: this strip follows continuously, the main carousel
 // follows instantly). All of the "only the centered item is bigger" visual
-// logic lives in whichever effect the caller passes - ios-scrubber-css-
-// effect.js paints it with a native scroll-driven animation,
-// ios-scrubber-effect.js computes the same thing by hand - and this file
-// just wires up fixed-size, non-aspect-ratio-preserving items (unlike the
+// logic lives in ios-scrubber-css-effect.js, which paints it with a native
+// scroll-driven animation, and this file just wires up fixed-size, non-aspect-ratio-preserving items (unlike the
 // original, whose thumbnails mirror each source item's real aspect ratio),
 // the sizes as CSS custom properties the effect reads, and the contrast
 // policy that makes the thumbnails flatten while the strip itself is being
 // dragged.
 import { createCarousel } from "../carousel-engine.js";
-import { iosScrubberEffect } from "../effects/ios-scrubber-effect.js";
+import { iosScrubberCssEffect } from "../effects/ios-scrubber-css-effect.js";
 import { linkCarousels } from "../carousel-link.js";
 
 export function attachIosThumbnailScrubber(mainCarousel, scrubberWrapper, options = {}) {
-  // `effect` is how the caller picks which of the two implementations of
-  // this look runs - the natively painted one, or the hand-computed one for
-  // browsers without scroll-driven-animation support. Only main.js can tell
-  // those apart reliably (see the note there about the polyfill patching
-  // CSS.supports), so the choice is the caller's.
-  const {
-    itemWidth = 20,
-    itemHeight = 30,
-    gap = 3,
-    expandedWidth = 30,
-    expandedPadding = 10,
-    effect = iosScrubberEffect
-  } = options;
+  const { itemWidth = 20, itemHeight = 30, gap = 3, expandedWidth = 30, expandedPadding = 10 } = options;
   const itemCount = mainCarousel.getItems().length;
 
   scrubberWrapper.style.setProperty("--wrapper-gap", gap + "px");
@@ -57,7 +43,7 @@ export function attachIosThumbnailScrubber(mainCarousel, scrubberWrapper, option
 
   const scrubber = createCarousel(scrubberWrapper, {
     itemCount,
-    effect,
+    effect: iosScrubberCssEffect(),
     // This style's defining behavior: the thumbnails flatten out while you
     // are dragging the strip itself, and whichever one you come to rest on
     // grows. While it is merely following the main carousel it keeps its

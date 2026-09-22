@@ -1,12 +1,13 @@
 // The iOS Photos scrubber's look, painted by a native scroll-driven
-// animation instead of by JS on every frame. The same look computed by hand
-// lives in ios-scrubber-effect.js (settle-effect.js wrapped around
-// looks/ios-box-look.js) and is still what runs on browsers without
-// scroll-driven-animation support; main.js picks between them.
+// animation. The same look computed by hand is archived at
+// archive/proto-v1/js/effects/ios-scrubber-effect.js (settle-effect.js
+// wrapped around looks/ios-box-look.js) - the reference implementation this
+// one's derivation below was checked against.
 //
 // --- Why this needs no keyframes per item -------------------------------
 //
-// ios-box-look.js lays every item out a second time in visual terms - each
+// The archived ios-box-look.js lays every item out a second time in visual
+// terms - each
 // occupying its real expanded footprint - and translates each item by the
 // difference between that layout and its own fixed box. Written out, with
 // F = footprintGrowth, a = alignment, P = currentProgress and u = i - P
@@ -73,7 +74,7 @@ function onItemCreated(item) {
 // worth eight of the driver's. In translate that is 0.65px per strip pixel
 // against 0.08px per driver pixel - the strip can only move in steps eight
 // times larger than the motion being asked of it, so it holds still for
-// several frames and then jumps. That is what settle-effect.js's
+// several frames and then jumps. That is what the archived settle-effect.js's
 // getDrivenProgress exists to avoid, and reading the position back through
 // the timeline walks straight into it.
 //
@@ -195,6 +196,7 @@ export function iosScrubberCssEffect({ progressDriver = "auto" } = {}) {
 
   // This effect owns every item's rendering, and nothing it writes changes
   // an item's own border box, so the engine's item-level ResizeObserver has
-  // nothing real to recover here - same reasoning as looks/ios-box-look.js.
+  // nothing real to recover here - it draws with transforms and with
+  // properties confined inside the box (see engine/geometry-cache.js).
   return { onItemCreated, setup, apply, skipItemResizeObserver: true };
 }

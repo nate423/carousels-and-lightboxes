@@ -8,24 +8,17 @@
 // tuned smaller (see .thumbnail-scrubber-strip's --noncurrent-scale in
 // main.css) - no bespoke visual code needed for the "current thumbnail is
 // bigger" look.
-//
-// Defaults to cssEffect - not origin-effect, since thumbnails keep the main
-// carousel's real per-item aspect ratio rather than a uniform size, and
-// origin-effect only produces even gaps when every item is the same size
-// (see its file header) - but takes the effect as an option rather than
-// importing it directly, so a caller can swap in jsEffect wholesale on
-// browsers without native scroll-driven-animation support (see main.js).
 import { createCarousel } from "../carousel-engine.js";
 import { cssEffect } from "../effects/css-effect.js";
 import { linkCarousels } from "../carousel-link.js";
 
 export function attachThumbnailScrubber(mainCarousel, scrubberWrapper, options = {}) {
-  const { thumbnailCrossSize = 32, effect = cssEffect } = options;
+  const { thumbnailCrossSize = 32 } = options;
   const sourceItems = mainCarousel.getItems();
 
   const scrubber = createCarousel(scrubberWrapper, {
     itemCount: sourceItems.length,
-    effect,
+    effect: cssEffect,
     itemSizing: {
       crossSize: thumbnailCrossSize,
       // Each thumbnail keeps the ratio of the item it stands for, so a strip

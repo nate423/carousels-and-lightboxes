@@ -1,9 +1,9 @@
-// Shared by every CSS-driven effect that generates its own stylesheet rules
-// (css-effect.js, origin-effect.js, ios-scrubber-css-effect.js): all of them
-// hand geometry to the scroll-timeline polyfill (Safari) through real
-// stylesheet rules rather than inline styles, because the polyfill only
-// discovers animation-name/-timeline/-range - and, for css-effect.js and
-// origin-effect.js, the @keyframes themselves - by parsing a <style>
+// Shared by every effect that generates its own stylesheet rules
+// (css-effect.js, ios-scrubber-css-effect.js): both of them hand geometry to
+// the scroll-timeline polyfill (Safari) through real stylesheet rules rather
+// than inline styles, because the polyfill only discovers
+// animation-name/-timeline/-range - and, for css-effect.js, the @keyframes
+// themselves - by parsing a <style>
 // element's contents, and only does that parsing once, at the moment the
 // element is inserted into the DOM. A later `.textContent =` on an
 // already-inserted element is just a text-node mutation inside it, which the

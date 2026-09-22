@@ -289,7 +289,7 @@ export function createCarousel(wrapper, options = {}) {
   // Recovers from an item's size changing for reasons outside this module's
   // own control (e.g. a placeholder image finishing its load mid-scroll).
   // Effects that resize items themselves as their normal scroll-driven
-  // behavior (see ios-scrubber-effect.js) opt out via
+  // behavior (see effects/ios-scrubber-css-effect.js) opt out via
   // effect.skipItemResizeObserver - without that, every write the effect
   // makes would itself be observed here as "an item's size changed
   // unexpectedly", re-triggering refreshGeometry (and so effect.apply
