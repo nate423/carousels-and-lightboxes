@@ -2,7 +2,8 @@ import { resolve } from "node:path";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
+  base: command === "build" ? "/carousels-and-lightboxes/" : "/",
   plugins: [react()],
   server: {
     port: 56576,
@@ -20,4 +21,4 @@ export default defineConfig({
       }
     }
   }
-});
+}));
