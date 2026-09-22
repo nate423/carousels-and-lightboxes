@@ -4,18 +4,41 @@
    is in shared/effects/scale-fade.css, which every .scale-fade wrapper here
    answers to. */
 
+/* --- Main carousel --------------------------------------------------------
+   This page is happy with the scale-fade look's own default
+   --noncurrent-scale/--noncurrent-opacity (see .scale-fade in
+   shared/effects/scale-fade.css) - left commented out rather than restated
+   live, so the slot is visible here without a duplicate number that could
+   drift from the look's actual default; uncomment and edit to override. */
+.main-carousel {
+  /* --noncurrent-scale: 0.8; */
+  /* --noncurrent-opacity: 0.5; */
+}
+
 /* --- The filmstrip ------------------------------------------------------- */
 
 /* The filmstrip navigator (see strip.js) - a second,
    independent carousel synced to the main one, not a bolted-on widget. Its
-   items keep the main carousel's real per-item aspect ratio (set inline, in
-   JS) at this fixed height; a tighter --noncurrent-scale than the default
-   0.8 makes the current-vs-neighbor size difference read clearly at
-   filmstrip scale. Height is taller than any single thumbnail so the
-   scaled-up current one has room without the wrapper's own
-   overflow-y: hidden clipping it. */
+   items keep the main carousel's real per-item aspect ratio at this fixed
+   height (--filmstrip-item-height): strip.js reads that back via
+   getComputedStyle rather than owning the number itself, since only the
+   per-item aspect - which varies per thumbnail and can't be known in CSS -
+   still has to be computed in JS. A tighter --noncurrent-scale than the
+   default 0.8 makes the current-vs-neighbor size difference read clearly at
+   filmstrip scale. Wrapper height is taller than any single thumbnail so
+   the scaled-up current one has room without the wrapper's own
+   overflow-y: hidden clipping it.
+
+   --wrapper-gap is tighter than shared/base.css's 10px default, to suit
+   the smaller thumbnails; --item-border-radius is left commented out
+   below rather than restated live, since it isn't actually overriding
+   base.css's 5px - the slot is visible without a duplicate number that
+   could drift from the real default. */
 .thumbnail-scrubber-strip {
   height: 100px;
-  --noncurrent-scale: 0.6;
-  --noncurrent-opacity: 0.6;
+  --wrapper-gap: 6px;
+  --filmstrip-item-height: 36px;
+  /* --item-border-radius: 5px; */
+  /* --noncurrent-scale: 0.6; */
+  /* --noncurrent-opacity: 0.6; */
 }

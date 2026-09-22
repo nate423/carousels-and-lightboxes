@@ -12,8 +12,10 @@ import { createCarousel } from "../shared/carousel-engine.js";
 import { scaleFadeEffect } from "../shared/effects/scale-fade.js";
 import { linkCarousels } from "../shared/linked-scrolling/link.js";
 
-export function attachFilmstrip(mainCarousel, scrubberWrapper, options = {}) {
-  const { thumbnailCrossSize = 32 } = options;
+export function attachFilmstrip(mainCarousel, scrubberWrapper) {
+  const thumbnailCrossSize = parseFloat(
+    getComputedStyle(scrubberWrapper).getPropertyValue("--filmstrip-item-height")
+  );
   const sourceItems = mainCarousel.getItems();
 
   const scrubber = createCarousel(scrubberWrapper, {

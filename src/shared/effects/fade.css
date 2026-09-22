@@ -5,6 +5,13 @@
    - and for the same reason: which carousels want which look is a fact about
    the page, and saying it in the markup is where leaving it off is visible. */
 
+/* This look's own default for how faded a non-current item is - scoped
+   here, not to every .carousel-wrapper (see shared/effects/scale-fade.css's
+   header for why), since .fade never reads --noncurrent-scale at all. */
+.fade {
+  --noncurrent-opacity: 0.5;
+}
+
 .fade .carousel-item {
   view-timeline-name: --item-reveal;
   view-timeline-axis: inline;

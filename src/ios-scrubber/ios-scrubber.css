@@ -5,6 +5,17 @@
    and the strip's own look is shared/effects/expand.css (which the
    .expand-effect wrapper, added by expand.js, answers to). */
 
+/* --- Main carousel ---------------------------------------------------------
+   This page is happy with the fade look's own default --noncurrent-opacity
+   (see .fade in shared/effects/fade.css; .fade never reads
+   --noncurrent-scale, so there's no slot for it here) - left commented out
+   rather than restated live, so the slot is visible without a duplicate
+   number that could drift from the look's actual default; uncomment and
+   edit to override. */
+.main-carousel {
+  /* --noncurrent-opacity: 0.5; */
+}
+
 /* --- How much of the strip's look is showing -----------------------------
    expand.css's --item-progress/--item-shift describe the look at full
    strength; --contrast-amount is this page's own dimmer on top, and
@@ -71,11 +82,18 @@
    scroll-snap, from the shared .carousel-wrapper rules) - no custom
    drag/transform here.
 
-   The height is breathing room, not a measurement: nothing here ever grows
-   taller, only wider, so the thumbnails need no headroom and simply sit
-   centred in it. */
+   This page is happy with the expand look's own default size (see
+   .expand-effect in shared/effects/expand.css for the 2:3/1:1 ratio math)
+   - left commented out below rather than restated live, so the slot is
+   visible without a duplicate number that could drift from the look's
+   actual default; uncomment and edit to actually override.*/
 .ios-thumbnail-scrubber-strip {
   height: 100px;
+  --wrapper-gap: 3px;
+  /* --expand-item-height: 36px; */
+  /* --expand-item-width: calc(var(--expand-item-height) * 2 / 3); */
+  /* --expand-item-width-grown: var(--expand-item-height); */
+  /* --expand-grown-padding: 12px; */
 }
 
 /* Fixed width, always - the current item's growth is drawn as overflow
@@ -88,7 +106,7 @@
 .expand-effect-item {
   flex: 0 0 auto;
   width: var(--expand-item-width);
-  height: 100%;
+  height: var(--expand-item-height);
   overflow: visible;
   display: flex;
   align-items: center;
@@ -108,7 +126,7 @@
   /* Never shrink to fit the (narrower) fixed item box around it. */
   flex: 0 0 auto;
   width: var(--expand-item-width);
-  height: 100%;
+  height: var(--expand-item-height);
   border-radius: 4px;
   transition: width 200ms ease, transform 200ms ease;
   background-color: hsl(220, 14%, 70%);

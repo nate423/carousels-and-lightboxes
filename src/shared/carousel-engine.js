@@ -33,9 +33,7 @@ export function createCarousel(wrapper, options = {}) {
   } = options;
 
   function getNoncurrentScale() {
-    return (
-      parseFloat(getComputedStyle(wrapper).getPropertyValue("--noncurrent-scale")) || 1
-    );
+    return parseFloat(getComputedStyle(wrapper).getPropertyValue("--noncurrent-scale"));
   }
 
   function getItems() {

@@ -101,15 +101,20 @@ export function expandEffect({ progressDriver = "auto" } = {}) {
   function setup(ctx) {
     const { wrapper, getGeometry } = ctx;
     const { items, anchors } = getGeometry();
+
+    // Before reading computed style below: --expand-item-width and its
+    // siblings default from .expand-effect itself (see expand.css), so the
+    // class has to be on the wrapper before this reads them, not after.
+    wrapper.classList.add("expand-effect");
+
     const style = getComputedStyle(wrapper);
-    const itemWidth = parseFloat(style.getPropertyValue("--expand-item-width")) || 20;
-    const grownWidth = parseFloat(style.getPropertyValue("--expand-grown-width")) || 30;
-    const grownPadding = parseFloat(style.getPropertyValue("--expand-grown-padding")) || 10;
+    const itemWidth = parseFloat(style.getPropertyValue("--expand-item-width"));
+    const grownWidth = parseFloat(style.getPropertyValue("--expand-item-width-grown"));
+    const grownPadding = parseFloat(style.getPropertyValue("--expand-grown-padding"));
 
     const previous = stateByWrapper.get(wrapper);
     const stripId = previous ? previous.stripId : nextStripId++;
 
-    wrapper.classList.add("expand-effect");
     // How much wider the thumb itself draws when fully grown, versus how
     // much room the grown item takes from its neighbours - which also
     // includes the breathing space either side of it. Both are drawn as

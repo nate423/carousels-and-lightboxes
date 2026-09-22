@@ -17,22 +17,12 @@
   --item-border-radius: 5px;
 
   --body-padding: 28px 0 0 0;
-  /*   --wrapper-margin: 0 0 100px 0; */
 
-  --color-background: #fff;
+  --color-background: light-dark(hsl(220, 14%, 100%), hsl(220, 14%, 8%));
 
-  --bg-offset-2: hsl(220, 14%, 98%);
-  --bg-offset-10: hsl(220, 14%, 90%);
-  --bg-offset-60: hsl(220, 14%, 40%);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --color-background: hsl(220, 14%, 8%);
-    --bg-offset-2: hsl(220, 14%, 10%);
-    --bg-offset-10: hsl(220, 14%, 20%);
-    --bg-offset-60: hsl(220, 14%, 60%);
-  }
+  --bg-offset-2: light-dark(hsl(220, 14%, 98%), hsl(220, 14%, 10%));
+  --bg-offset-10: light-dark(hsl(220, 14%, 90%), hsl(220, 14%, 20%));
+  --bg-offset-60: light-dark(hsl(220, 14%, 40%), hsl(220, 14%, 60%));
 }
 
 body,
@@ -105,9 +95,6 @@ h1 {
   overflow-y: hidden;
   scroll-snap-type: x mandatory;
   box-shadow: inset 0 0 0 1px rgb(255 0 0 / 0.3);
-
-  --noncurrent-scale: 0.8;
-  --noncurrent-opacity: 0.5;
 }
 
 /* Every carousel here scrolls natively and none of them wants the bar drawn;
@@ -159,10 +146,20 @@ h1 {
   isolation: isolate;
 }
 
-/* Demo content only - see placeholder-items.js. */
+/* Demo content only - see placeholder-items.js. Background is a neutral
+   fill for any placeholder box, including a scrubber strip's own empty
+   thumbnails; the padding is breathing room for the main carousel's
+   randomly-sized boxes' text label specifically ("Item N (WxH)") - a
+   strip's thumbnails have no text of their own (createItem returns
+   nothing), so giving them the same padding would only inflate their
+   rendered box past whatever itemSizing/the look's CSS vars computed,
+   with nothing to show for it. */
 .placeholder-boxes .carousel-item {
-  padding: 6px;
   background-color: hsl(220, 14%, 70%);
+}
+
+.main-carousel.placeholder-boxes .carousel-item {
+  padding: 6px;
 }
 
 .carousel-item-snap-fix {

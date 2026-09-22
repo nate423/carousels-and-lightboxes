@@ -4,6 +4,17 @@
    is in shared/effects/scale-fade.css, which every .scale-fade wrapper here
    answers to. */
 
+/* --- Main carousel --------------------------------------------------------
+   This page is happy with the scale-fade look's own default
+   --noncurrent-scale/--noncurrent-opacity (see .scale-fade in
+   shared/effects/scale-fade.css) - left commented out rather than restated
+   live, so the slot is visible here without a duplicate number that could
+   drift from the look's actual default; uncomment and edit to override. */
+.main-carousel {
+  /* --noncurrent-scale: 0.8; */
+  /* --noncurrent-opacity: 0.5; */
+}
+
 /* --- Page dots ----------------------------------------------------------- */
 .carousel-with-controls {
   position: relative;

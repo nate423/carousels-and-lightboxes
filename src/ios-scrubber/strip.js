@@ -13,33 +13,24 @@
 // bigger" visual logic lives in shared/effects/expand.js; this file just
 // wires up fixed-size, non-aspect-ratio-preserving items (unlike the
 // original, whose thumbnails mirror each source item's real aspect
-// ratio), the sizes as CSS custom properties the effect reads, and the
-// contrast policy that flattens the thumbnails while the strip itself is
-// being dragged.
+// ratio) and the contrast policy that flattens the thumbnails while the
+// strip itself is being dragged.
+//
+// The strip's dimensions (--expand-item-width/-height/-width-grown,
+// --expand-grown-padding, --wrapper-gap) are declared in ios-scrubber.css,
+// not here - .expand-effect-item/.expand-effect-thumb size themselves
+// directly off those, so there's no itemSizing to pass and no inline
+// width/height for this file to compute or keep in sync.
 import { createCarousel } from "../shared/carousel-engine.js";
 import { expandEffect } from "../shared/effects/expand.js";
 import { linkCarousels } from "../shared/linked-scrolling/link.js";
 
-export function attachIosScrubber(mainCarousel, scrubberWrapper, options = {}) {
-  const { itemWidth = 24, itemHeight = 36, gap = 3, expandedWidth = 36, expandedPadding = 12 } = options;
+export function attachIosScrubber(mainCarousel, scrubberWrapper) {
   const itemCount = mainCarousel.getItems().length;
-
-  scrubberWrapper.style.setProperty("--wrapper-gap", gap + "px");
-  scrubberWrapper.style.setProperty("--expand-item-width", itemWidth + "px");
-  scrubberWrapper.style.setProperty("--expand-grown-width", expandedWidth + "px");
-  scrubberWrapper.style.setProperty("--expand-grown-padding", expandedPadding + "px");
 
   const scrubber = createCarousel(scrubberWrapper, {
     itemCount,
     effect: expandEffect(),
-    itemSizing: {
-      crossSize: itemHeight,
-      // One ratio for the whole strip, rather than each thumbnail keeping
-      // its own - this style's thumbnails are deliberately uniform, and only
-      // the centered one departs from that, as overflow rather than as a
-      // bigger box.
-      size: { aspect: itemWidth / itemHeight }
-    },
     // The thumb the look paints is added in onItemCreated; there is no
     // per-item content beyond it, and the engine's default would fill each
     // item with its own index as text.

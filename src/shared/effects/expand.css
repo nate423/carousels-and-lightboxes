@@ -16,9 +16,13 @@
    written on X. A vertical strip would want the same formula on Y and a
    block-axis timeline.
 
-   A page using this look supplies --expand-item-width, --expand-grown-width
-   and --expand-grown-padding (the effect reads these to derive
-   --expand-thumb-growth/--expand-footprint-growth) and adds
+   The look's own default dimensions - 2:3 collapsed, 1:1 grown, matching
+   iOS Photos' scrubber - live below on .expand-effect, the same way
+   .scale-fade/.fade own their default --noncurrent-scale/-opacity (see
+   those files). A page overrides --expand-item-height (or any of the three
+   directly) on its own wrapper to get a different size without touching
+   the ratios; expand.js reads the three back via getComputedStyle to
+   derive --expand-thumb-growth/--expand-footprint-growth, and adds
    .expand-effect-item/.expand-effect-thumb to its item markup - see
    expand.js's onItemCreated. A page may also dim the look via
    --contrast-amount and --item-progress-effective (see the iOS scrubber
@@ -50,6 +54,26 @@
   initial-value: 0px;
 }
 
+/* Registered so a page's calc()'d --expand-item-width/-width-grown resolve
+   to an absolute length when this file's JS half reads them back via
+   getComputedStyle - an unregistered custom property is stored as an
+   untyped token stream, so a raw "calc(36px * 2 / 3)" would come back
+   verbatim instead of "24px" and silently fail to parse as a number.
+   Their initial-value matches the real default below rather than some
+   unrelated placeholder, since a nested thumb inherits whichever one is in
+   scope before .expand-effect's own calc() has a chance to run. */
+@property --expand-item-width {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 24px;
+}
+
+@property --expand-item-width-grown {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 36px;
+}
+
 .expand-effect {
   /* Only the timeline this look needs. The scale-fade look also hangs a
      per-item view-timeline off .carousel-item, which would drive a
@@ -63,6 +87,19 @@
   animation-timeline: --carousel-scroll;
   animation-fill-mode: both;
   animation-timing-function: linear;
+
+  /* The look's own default size for the items nested inside, listed after
+     this wrapper's own properties above: a collapsed thumbnail is 2:3, the
+     centred one grows to 1:1 - both derived from one height so they can't
+     drift apart, the same way .scale-fade/.fade derive their look's
+     defaults in their own files. A page overrides --expand-item-height
+     (see the iOS scrubber page's own stylesheet) to resize the whole strip
+     without touching the ratios, or overrides a width directly for a
+     non-uniform shape. */
+  --expand-item-height: 36px;
+  --expand-item-width: calc(var(--expand-item-height) * 2 / 3);
+  --expand-item-width-grown: var(--expand-item-height);
+  --expand-grown-padding: 12px;
 }
 
 /* No transition here, on purpose. The hand-computed variant needs one:

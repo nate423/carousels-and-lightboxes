@@ -15,6 +15,19 @@
 
 /* --- The scale-fade look ------------------------------------------------- */
 
+/* The look's own default for how strongly a non-current item shrinks and
+   fades - scoped here rather than to every .carousel-wrapper (as these once
+   were, in shared/base.css) because a wrapper whose look never reads one of
+   these has no business inheriting a value for it: .fade only ever reads
+   --noncurrent-opacity, and .expand-effect reads neither. A page that wants
+   different numbers overrides them on its own wrapper (see filmstrip.css's
+   --noncurrent-scale/--noncurrent-opacity on .thumbnail-scrubber-strip),
+   which wins because every page's own stylesheet loads after this one. */
+.scale-fade {
+  --noncurrent-scale: 0.8;
+  --noncurrent-opacity: 0.5;
+}
+
 .scale-fade .carousel-item {
   view-timeline-name: --item-reveal;
   view-timeline-axis: inline;
