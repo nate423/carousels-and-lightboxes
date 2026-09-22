@@ -1,20 +1,19 @@
 # Carousels and Lightboxes
 
-Two apps live here side by side:
-
-- `src/` - vanilla HTML/CSS/JS prototypes of carousel and scrubber
-  behaviours, built on native CSS scroll-driven animations (with the
-  standard scroll-timeline polyfill where those are not supported
-  natively).
-- `ios-scrubber-lightbox/` - a Vite + React app.
+One app, one dev server. `ios-scrubber-lightbox/` is a Vite multi-page app:
+a React lightbox page alongside the vanilla HTML/CSS/JS carousel prototypes,
+built on native CSS scroll-driven animations (with the standard
+scroll-timeline polyfill where those are not supported natively).
 
 ## Structure
 
 ```
-src/
+ios-scrubber-lightbox/
   index.html               links to the pages below
+  lightbox-app/            the React lightbox (mounts src/App.jsx)
+  src/                     the React app's source
   scale-fade/              a carousel with a page-dot navigator
-  filmstrip/                the same look, navigated by a proportional filmstrip
+  filmstrip/               the same look, navigated by a proportional filmstrip
   ios-scrubber/             fixed-size thumbnails; only the centred one expands
   shared/
     carousel-math.js        numbers in, numbers out
@@ -25,8 +24,6 @@ src/
     scale-fade-look.css     the look's timelines, for any .scale-fade wrapper
   dev/                      debugging aids, all off by default
   archive/proto-v1/         the frozen prototype these were reduced from
-
-ios-scrubber-lightbox/      the React app
 ```
 
 `shared/` holds what is genuinely common and carries no configuration - none of
@@ -48,11 +45,10 @@ never gets fixed. See its own README.
 ## Running locally
 
 ```bash
-# vanilla prototypes
-npx serve src
-
-# React app
 cd ios-scrubber-lightbox
 npm install
 npm run dev
 ```
+
+Serves everything - the landing page, the vanilla pages, and the React
+lightbox - from one Vite dev server at `http://localhost:56576`.

@@ -3,27 +3,26 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
-  <title>Scale-fade carousel</title>
+  <title>Filmstrip scrubber</title>
   <link rel="stylesheet" href="../shared/base.css" />
   <link rel="stylesheet" href="../shared/effects/scale-fade.css" />
-  <link rel="stylesheet" href="scale-fade.css" />
+  <link rel="stylesheet" href="filmstrip.css" />
 </head>
 
 <body>
   <nav>
     <a href="../">index</a>
-    <a href="../scale-fade/" class="current">scale-fade</a>
-    <a href="../filmstrip/">filmstrip</a>
+    <a href="../scale-fade/">scale-fade</a>
+    <a href="../filmstrip/" class="current">filmstrip</a>
     <a href="../ios-scrubber/">ios scrubber</a>
     <a href="../archive/proto-v1/">archive</a>
+    <a href="../ramka/">ramka</a>
   </nav>
 
   <main>
-    <h1>Scale-fade carousel <span class="build-stamp" id="build-stamp"></span></h1>
-    <div class="carousel-with-controls">
-      <div class="carousel-wrapper main-carousel scale-fade placeholder-boxes" id="carousel"></div>
-      <div class="page-controls"></div>
-    </div>
+    <h1>Filmstrip scrubber <span class="build-stamp" id="build-stamp"></span></h1>
+    <div class="carousel-wrapper main-carousel scale-fade placeholder-boxes" id="main-carousel"></div>
+    <div class="carousel-wrapper thumbnail-scrubber-strip scale-fade placeholder-boxes" id="strip"></div>
   </main>
 
   <script>
