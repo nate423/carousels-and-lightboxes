@@ -10,7 +10,6 @@ import { scaleFadeEffect } from "../shared/effects/scale-fade-effect.js";
 import { attachIosScrubber } from "./strip.js";
 import { createPlaceholderItem } from "./placeholder-items.js";
 import { showBuildStamp } from "../dev/build-stamp.js";
-import { attachDemoControls } from "../dev/demo-controls.js";
 import { attachScrollEventProbe } from "../dev/scroll-event-probe.js";
 import { watchScrubberJitter } from "../dev/debug-console.js";
 
@@ -23,9 +22,7 @@ document.addEventListener("DOMContentLoaded", () => {
     createItem: createPlaceholderItem
   });
 
-  const { scrubber, link } = attachIosScrubber(mainCarousel, document.getElementById("strip"));
-
-  attachDemoControls(link, { main: mainCarousel, strip: scrubber });
+  const scrubber = attachIosScrubber(mainCarousel, document.getElementById("strip"));
 
   // Both off by default; see their own files.
   attachScrollEventProbe(scrubber, "iOS thumbnail strip (not the main carousel)");

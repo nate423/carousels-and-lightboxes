@@ -19,7 +19,8 @@
 // follows a continuously but follows c instantly" - which a single property
 // on b could not say. Nothing here makes either side primary: whichever
 // carousel is moving for its own reasons leads, and the other one's own
-// setting decides how it follows.
+// setting decides how it follows. Both are fixed for the life of the link;
+// each page decides its pairing once, at the call site.
 //
 // This module touches no DOM of its own. Whether a given scroll is the user's
 // doing or an echo of a write we just made is carousel-engine's to answer -
@@ -33,13 +34,10 @@ function currentIndexOf(carousel) {
   return computeCurrentIndex(carousel.getCurrentProgress(), carousel.getItems().length);
 }
 
-export function linkCarousels(a, b, { aWhileFollowing = "instant", bWhileFollowing = "continuous" } = {}) {
+export function linkCarousels(a, b, { aWhileFollowing, bWhileFollowing }) {
   // Keyed by the carousel itself rather than by a position in this call's
   // arguments, so nothing downstream has to know which one was passed first -
-  // there is no "a role" and "b role" here, only two carousels. Mutable and
-  // read at write time, not captured per-wire, so setResponse() (see the
-  // returned controller) can change either side live, e.g. from a debug
-  // control, without tearing down and re-registering the subscriptions below.
+  // there is no "a role" and "b role" here, only two carousels.
   const whileFollowing = new Map([
     [a, aWhileFollowing],
     [b, bWhileFollowing]
@@ -111,10 +109,4 @@ export function linkCarousels(a, b, { aWhileFollowing = "instant", bWhileFollowi
 
   wire(a, b);
   wire(b, a);
-
-  return {
-    setResponse(carousel, response) {
-      whileFollowing.set(carousel, response);
-    }
-  };
 }

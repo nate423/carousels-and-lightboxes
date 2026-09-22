@@ -10,7 +10,6 @@ import { scaleFadeEffect } from "../shared/effects/scale-fade-effect.js";
 import { attachFilmstrip } from "./strip.js";
 import { createPlaceholderItem } from "./placeholder-items.js";
 import { showBuildStamp } from "../dev/build-stamp.js";
-import { attachDemoControls } from "../dev/demo-controls.js";
 
 document.addEventListener("DOMContentLoaded", () => {
   showBuildStamp();
@@ -21,7 +20,5 @@ document.addEventListener("DOMContentLoaded", () => {
     createItem: createPlaceholderItem
   });
 
-  const { scrubber, link } = attachFilmstrip(mainCarousel, document.getElementById("strip"));
-
-  attachDemoControls(link, { main: mainCarousel, strip: scrubber });
+  attachFilmstrip(mainCarousel, document.getElementById("strip"));
 });

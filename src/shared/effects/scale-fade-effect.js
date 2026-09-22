@@ -93,41 +93,31 @@ function getWrapperState(wrapper) {
 // every one of the n writes - O(n^2) - which would show up as jank or
 // freezing on window resize, since resize has no debounce and calls setup()
 // on every native 'resize' event.
-// Two shapes of the same animation, and which one a carousel gets is the
-// difference between the compositor drawing this look and the main thread
-// drawing it.
+// The keyframes write scale, opacity and translate outright, which are
+// properties the compositor understands, so the whole look keeps running when
+// the main thread is busy.
 //
-// A carousel whose contrast never changes has nothing to multiply its look
-// by, so the keyframes can write scale, opacity and translate outright.
-// Those are properties the compositor understands, so the whole look keeps
-// running when the main thread is busy.
+// There used to be a second shape of this same animation, for a carousel that
+// could drop its contrast while moving: every drawn value then has to be
+// multiplied by how much contrast is showing, every frame, which means the
+// keyframes write --item-progress and --item-shift and a calc() in the
+// stylesheet turns those into what is drawn. That is nothing the compositor
+// can evaluate, so the style engine has to resolve the animation every frame
+// instead - measured by blocking the main thread for three seconds and
+// scrolling, which froze that shape outright where this one kept animating.
 //
-// A carousel whose contrast can change needs every drawn value multiplied
-// by it, every frame. That has to happen in a calc() reading an animated
-// custom property (the page's stylesheet turns the two values below into what
-// is drawn),
-// and nothing the compositor can evaluate - the animation has to be
-// resolved by the style engine each frame instead. Verified the hard way:
-// with only this second shape, blocking the main thread for three seconds
-// and scrolling froze the look outright, where it had kept animating
-// before.
-//
-// Contrast could not just be composed on top as a second animation, which
-// would have avoided the split. Transform lists do compose multiplicatively
-// under animation-composition, but what contrast scales is each value's
-// *distance from neutral* - 1 + c * (s - 1) - and that is not any factor
-// depending on c alone.
-function setItemCurrentKeyframes(state, item, peakX, range, translateStops, usesContrast) {
+// No carousel using this look drops its contrast any more. The iOS scrubber,
+// which does, has its own look and pays that cost there. Worth knowing that
+// contrast cannot simply be composed on top as a second animation, which
+// would have avoided the split in the first place: transform lists do compose
+// multiplicatively under animation-composition, but what contrast scales is
+// each value's *distance from neutral* - 1 + c * (s - 1) - and that is not
+// any factor depending on c alone.
+function setItemCurrentKeyframes(state, item, peakX, range, translateStops) {
   const currentName = `item-current-${item.dataset.itemId}`;
   state.currentKeyframeSheet.set(
     currentName,
-    usesContrast
-      ? `@keyframes ${currentName} {
-      0% { --item-progress: 0; }
-      ${peakX * 100}% { --item-progress: 1; }
-      100% { --item-progress: 0; }
-    }`
-      : `@keyframes ${currentName} {
+    `@keyframes ${currentName} {
       0% { scale: var(--noncurrent-scale); opacity: var(--noncurrent-opacity); }
       ${peakX * 100}% { scale: 1; opacity: 1; }
       100% { scale: var(--noncurrent-scale); opacity: var(--noncurrent-opacity); }
@@ -136,11 +126,7 @@ function setItemCurrentKeyframes(state, item, peakX, range, translateStops, uses
 
   const translateName = `item-translate-${item.dataset.itemId}`;
   const stops = translateStops
-    .map(({ percent, value }) =>
-      usesContrast
-        ? `${percent}% { --item-shift: ${value}px; }`
-        : `${percent}% { translate: ${value}px 0; }`
-    )
+    .map(({ percent, value }) => `${percent}% { translate: ${value}px 0; }`)
     .join("\n      ");
   state.translateKeyframeSheet.set(translateName, `@keyframes ${translateName} {\n      ${stops}\n    }`);
 
@@ -200,7 +186,6 @@ function onItemCreated(item) {
 function setup(ctx) {
   const { wrapper, getNoncurrentScale } = ctx;
   const state = getWrapperState(wrapper);
-  const usesContrast = ctx.usesContrast();
   const { items, anchors, sizes, wrapperAnchorPoint } = ctx.getGeometry();
   const ranges = computeAnimationRanges(anchors, sizes, wrapper.offsetWidth);
 
@@ -228,7 +213,7 @@ function setup(ctx) {
       percent: percentFor(bp.scrollAnchor),
       value: bp.translations[i]
     }));
-    setItemCurrentKeyframes(state, item, ranges[i].peakX, ranges[i], translateStops, usesContrast);
+    setItemCurrentKeyframes(state, item, ranges[i].peakX, ranges[i], translateStops);
   });
   flushKeyframeStyles(state);
 } // End setup function

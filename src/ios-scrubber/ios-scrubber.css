@@ -167,9 +167,8 @@ h1 {
   box-shadow: inset 0 0 0 1px rgb(255 0 0 / 0);
 }
 
-/* --- What a look draws, and how much of it showing ---------------------
-   Two values every look here speaks in, so the contrast policy can be one
-   mechanism rather than one per look:
+/* --- What the strip's look draws, and how much of it is showing --------
+   Two values the strip's look is written in terms of:
 
      --item-progress  how far this item has come from its noncurrent state
                       to its current one, 0 to 1 - the same itemProgress
@@ -217,45 +216,34 @@ h1 {
 
    Added to what a look draws rather than multiplied into it - this is not
    part of the look, it is the correction that makes the look land where it
-   was asked to. Which is also why it is outside the contrast multiplier: a
-   flattened strip still has to sit in the right place. */
+   was asked to. Which is also why it sits outside the contrast multiplier
+   below: a flattened strip still has to be in the right place. */
 @property --scroll-error {
   syntax: "<length>";
   inherits: true;
   initial-value: 0px;
 }
 
-/* How much of the look is showing at all: 1 fully, 0 not at all.
-   carousel-engine.js writes data-contrast from the carousel's contrast
-   policy and its motion state, and this is the only place that attribute
-   becomes a number. Inherited so the transition can run once on the wrapper
-   while items read the value. */
+/* How much of the look is showing at all: 1 fully, 0 not at all. strip.js
+   writes data-contrast from the carousel's motion state, and this is the only
+   place that attribute becomes a number. Inherited so the transition can run
+   once on the wrapper while items read the value. */
 @property --contrast-amount {
   syntax: "<number>";
   inherits: true;
   initial-value: 1;
 }
 
-/* Which raw --item-progress value a look settles at when contrast is fully
-   off - 0 or 1, whichever end of its own range is "undecorated" for that
-   look (see --item-progress-effective below). A look declares this once, as
-   a plain CSS value scoped to wherever it's used (the scale+fade rule below
-   sets 1; the iOS filmstrip rule leaves the default 0). The hand-computed
-   looks spelled the same thing as a `restProgress` property for
-   settle-effect.js to read - see archive/proto-v1/js/effects/looks/. */
-@property --rest-progress {
-  syntax: "<number>";
-  inherits: true;
-  initial-value: 0;
-}
+/* What the thumb's width formula actually reads: --item-progress scaled by
+   how much contrast is currently showing, so that at contrast 0 every
+   thumbnail sits at its undecorated size and at contrast 1 the centred one
+   is fully grown.
 
-/* The one contrast mechanism every look's per-channel formulas read instead
-   of each hand-deriving its own blend: --item-progress interpolated from
-   --rest-progress (at contrast 0) to itself (at contrast 1). A channel's
-   value is then always transition(--item-progress-effective, restValue,
-   currentValue) - restValue at itemProgress 0, currentValue at 1 - the same
-   shape scale+fade's scale/opacity and the iOS filmstrip's thumb width all
-   use below. */
+   This used to blend toward a per-look --rest-progress, because the scale+fade
+   look settles at the opposite end - undecorated there means every item drawn
+   as current, not every item collapsed. That look no longer changes its
+   contrast at all, so the only rest value left is this one's, which is 0, and
+   the blend is a plain multiply. */
 @property --item-progress-effective {
   syntax: "<number>";
   inherits: true;
@@ -263,14 +251,14 @@ h1 {
 }
 
 .carousel-item {
-  --item-progress-effective: calc(var(--rest-progress) + var(--contrast-amount) * (var(--item-progress) - var(--rest-progress)));
+  --item-progress-effective: calc(var(--contrast-amount) * var(--item-progress));
 }
 
-.carousel-wrapper {
+.ios-thumbnail-scrubber-strip {
   transition: --contrast-amount 130ms ease;
 }
 
-.carousel-wrapper[data-contrast="off"] {
+.ios-thumbnail-scrubber-strip[data-contrast="off"] {
   --contrast-amount: 0;
 }
 
@@ -313,63 +301,34 @@ h1 {
   scroll-timeline-axis: inline;
 }
 
-/* The scale+fade look: the current item at full size and opacity, the rest
-   scaled down and faded, interpolated by --item-progress-effective (see its
-   block above). This look's rest-progress is 1 - at contrast 0, every item
-   is left exactly as laid out, which is what "no contrast" means here -
-   nothing distinguishing any item from any other. scale-fade-effect.js generates
-   the per-item keyframes that drive --item-progress; these rules are the
-   other half of it.
+/* Scale, opacity and translate on the main carousel are written by the
+   generated per-item keyframes themselves (see setItemCurrentKeyframes in
+   shared/effects/scale-fade-effect.js). It never drops its contrast - only
+   the strip does - so there is nothing here to multiply them by.
 
-   An unset --item-shift is 0, so a wrapper whose generated keyframes write
-   no translate leaves that line a no-op. */
+   The scroll-error correction stays, on its own property: the animation owns
+   translate and nothing can be added to it there, but translate and transform
+   compose, so the correction lands either way. */
 .main-carousel .carousel-item {
-  --rest-progress: 1;
-  scale: calc(var(--noncurrent-scale) + var(--item-progress-effective) * (1 - var(--noncurrent-scale)));
-  opacity: calc(var(--noncurrent-opacity) + var(--item-progress-effective) * (1 - var(--noncurrent-opacity)));
-  translate: calc(var(--item-shift) * var(--contrast-amount)) 0;
-
-  /* On its own property rather than folded into the translate above,
-     because a carousel whose contrast never changes has its translate
-     written by the animation itself (see setItemCurrentKeyframes) and
-     nothing can be added to it there. translate and transform compose, so
-     the correction lands either way, and it stays static - and therefore
-     free - on any carousel that is not currently being driven. */
   transform: translateX(var(--scroll-error));
 }
 
-/* The shared default, used until scale-fade-effect.js replaces it with a per-item
-   rule whose peak sits where that item's own geometry puts it. Writes the
-   same input the generated ones do. */
+/* The shared default, used until scale-fade-effect.js replaces it with a
+   per-item rule whose peak sits where that item's own geometry puts it rather
+   than at a flat 50%. Draws the same properties the generated ones do. */
 @keyframes item-current {
   0% {
-    --item-progress: 0;
+    scale: var(--noncurrent-scale);
+    opacity: var(--noncurrent-opacity);
   }
   50% {
-    --item-progress: 1;
+    scale: 1;
+    opacity: 1;
   }
   100% {
-    --item-progress: 0;
+    scale: var(--noncurrent-scale);
+    opacity: var(--noncurrent-opacity);
   }
-}
-
-/* --- Demo controls ------------------------------------------------------- */
-
-.carousel-controls {
-  display: flex;
-  gap: 16px;
-  margin-bottom: 12px;
-  padding: 8px 12px;
-  background: var(--bg-offset-2);
-  border-radius: 10px;
-  font-size: 13px;
-  width: fit-content;
-}
-
-.carousel-controls label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
 }
 
 /* --- The iOS scrubber ---------------------------------------------------- */
@@ -481,12 +440,10 @@ h1 {
   --lo: clamp(0, calc(1 + var(--u)), 1);
   --hi: clamp(0, var(--u), 1);
 
-  /* The two shared values every look here speaks in - see their block
-     above. Written at full (raw) strength; --item-progress-effective folds
-     in --contrast-amount and this look's own rest-progress (0, the default -
-     not set explicitly anywhere below) at the point of use, exactly as the
-     scale+fade look does it. The difference is only that these come from a
-     calc() over one shared progress rather than from per-item keyframes.
+  /* The two values this look draws from - see their block above. Written at
+     full (raw) strength; --item-progress-effective folds in --contrast-amount
+     at the point of use. Unlike the scale+fade look, which gets these from
+     per-item keyframes, they come from a calc() over one shared progress.
 
      --item-progress is a triangle centered on this item's own index,
      written without abs() by subtracting the two ramps. It inherits, which

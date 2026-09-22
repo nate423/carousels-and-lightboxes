@@ -34,12 +34,14 @@ export function attachFilmstrip(mainCarousel, scrubberWrapper, options = {}) {
     createItem: () => {}
   });
 
-  // Defaults match carousel-link.js: the strip, while following, comes along
-  // continuously, and the main carousel, while following, jumps the instant
-  // the strip's current item changes. `link` is returned alongside the
-  // scrubber so a caller can change either carousel's response live (e.g.
-  // from a debug control).
-  const link = linkCarousels(mainCarousel, scrubber);
+  // The strip, while following, comes along continuously; the main carousel,
+  // while following, jumps the instant the strip's current item changes.
+  // Spelled out rather than left to carousel-link.js's defaults, because it
+  // is a decision this page made rather than one it inherited.
+  linkCarousels(mainCarousel, scrubber, {
+    aWhileFollowing: "instant",
+    bWhileFollowing: "continuous"
+  });
 
-  return { scrubber, link };
+  return scrubber;
 }

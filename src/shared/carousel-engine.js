@@ -4,8 +4,8 @@
 // none) by reading the returned controller's progress and calling its seek
 // methods.
 //
-// The stateful pieces below - scroll attribution, snap suspension, contrast
-// policy, geometry caching, spacers, item population - each live in their
+// The stateful pieces below - scroll attribution, snap suspension, geometry
+// caching, spacers, item population - each live in their
 // own module under engine/, self-contained apart from the accessors
 // (getItems, getNoncurrentScale, ...) and callbacks this file wires
 // between them. This file is the orchestrator: it owns nothing but the glue
@@ -18,7 +18,6 @@ import { computeScrollTarget, computeScrollAnchorForProgress } from "./carousel-
 import { rafThrottle } from "./engine/raf-throttle.js";
 import { createScrollAttribution } from "./engine/scroll-attribution.js";
 import { createSnapSuspension } from "./engine/snap-suspension.js";
-import { createContrastPolicy } from "./engine/contrast-policy.js";
 import { createGeometryCache } from "./engine/geometry-cache.js";
 import { createSpacers } from "./engine/spacers.js";
 import { populateItems as populateItemsInto } from "./engine/populate-items.js";
@@ -30,8 +29,7 @@ export function createCarousel(wrapper, options = {}) {
     itemCount = 30,
     effect,
     createItem,
-    itemSizing,
-    removeContrastWhileScrolling = "never"
+    itemSizing
   } = options;
 
   function getNoncurrentScale() {
@@ -51,26 +49,36 @@ export function createCarousel(wrapper, options = {}) {
   // hand snap back.
   const snap = createSnapSuspension(wrapper);
   const attribution = createScrollAttribution(wrapper, { onSelfReclaim: snap.restore });
-  const contrast = createContrastPolicy(wrapper, removeContrastWhileScrolling);
   const geometry = createGeometryCache({ wrapper, getItems });
   const spacers = createSpacers(wrapper, { getItems });
 
-  // Reads motion off attribution and writes it through to the contrast
-  // policy - the one-line seam between the two modules. Return value (did
-  // the attribute actually change) is only used by setContrastRemoval below;
-  // every other call site treats this as fire-and-forget.
-  function updateContrast() {
-    return contrast.update(attribution.getMotionState());
+  // Whoever is watching this carousel move - today, the iOS strip, which
+  // flattens its thumbnails while you are dragging it and lets them grow
+  // again once you let go. The engine has no opinion on what a page does
+  // with this; it only knows which of leading/following/idle it is in.
+  //
+  // Fired from the unthrottled scroll listener below rather than the
+  // rAF-throttled one, so a gesture registers on its first scroll event
+  // rather than a frame into it, and only on an actual change, since a
+  // listener will typically write an attribute and rewriting an unchanged
+  // one still invalidates style for the whole subtree.
+  const motionListeners = new Set();
+  let lastMotionState = attribution.getMotionState();
+
+  function notifyMotion() {
+    const state = attribution.getMotionState();
+    if (state === lastMotionState) return;
+    lastMotionState = state;
+    motionListeners.forEach((listener) => listener(state));
   }
 
   // effect.apply reads state that effect.setup builds, so nothing may call
   // it before the first setup below has run.
   let ready = false;
 
-  // A look painted in CSS redraws itself when the contrast attribute
-  // changes; one painted in JS only draws from apply(). Both places below
-  // are ones where a JS look would otherwise be left holding a stale frame,
-  // since neither is a scroll.
+  // Both call sites are ends of motion, where the rAF-throttled render below
+  // still has the previous frame's position pending and no further scroll is
+  // coming to flush it.
   function applyIfReady() {
     if (ready) effect.apply(ctx);
   }
@@ -109,7 +117,7 @@ export function createCarousel(wrapper, options = {}) {
   // only makes sense against a fixed destination. See carousel-link.js.
   function setProgressDirect(progress) {
     attribution.noteDirectWrite(progress);
-    updateContrast();
+    notifyMotion();
     snap.suspend();
 
     const { anchors, wrapperAnchorPoint } = geometry.get();
@@ -152,12 +160,10 @@ export function createCarousel(wrapper, options = {}) {
     // what they must not do is read it fresh every frame.
     getGeometry: geometry.get,
     currentScrollAnchor: geometry.currentScrollAnchor,
-    usesContrast: contrast.usesContrast,
     onProgress: undefined
   };
 
   populateItems();
-  updateContrast();
   effect.setup(ctx);
   effect.apply(ctx);
   ready = true;
@@ -174,15 +180,12 @@ export function createCarousel(wrapper, options = {}) {
   // this synchronous loop.
   // 'scrollend' fires once a scroll operation - gesture, momentum and any snap
   // correction together - is over, which is what bounds a stretch of movement.
-  // Contrast is updated from the unthrottled listener, not the rAF-throttled
-  // one below, so it flips on the first scroll event of a gesture rather
-  // than a frame into it.
   wrapper.addEventListener("scroll", () => {
     attribution.noteScrollEvent();
-    updateContrast();
+    notifyMotion();
   });
-  // Unconditionally, not just when contrast changed: this is where a
-  // gesture's final position becomes final, and the apply below is
+  // This is where a gesture's final position becomes final, and the apply
+  // below is
   // rAF-throttled, so the last scroll event's render is still pending when
   // this fires. Rendering once more here is what guarantees the look ends
   // up drawing the position the carousel actually came to rest at.
@@ -195,7 +198,7 @@ export function createCarousel(wrapper, options = {}) {
   // it were the authoritative "the gesture is over" signal.
   wrapper.addEventListener("scrollend", () => {
     const wasLeading = attribution.endLeading();
-    updateContrast();
+    notifyMotion();
     applyIfReady();
     if (wasLeading) {
       scrollEndListeners.forEach((listener) => listener());
@@ -243,7 +246,7 @@ export function createCarousel(wrapper, options = {}) {
   // carousel-link.js.
   function endFollowing() {
     if (!attribution.endFollowing()) return;
-    updateContrast();
+    notifyMotion();
     applyIfReady();
   }
 
@@ -255,18 +258,11 @@ export function createCarousel(wrapper, options = {}) {
     setProgressDirect,
     getScrollSource: attribution.getScrollSource,
     getMotionState: attribution.getMotionState,
-    // Which motion states drop contrast, changeable live (e.g. from a demo
-    // control) - the policy is read fresh on every update, not captured.
-    setContrastRemoval(mode) {
-      const { usesContrastChanged } = contrast.setMode(mode);
-      // Crossing between "never" and anything else can change how a look
-      // draws itself, not just what it draws, so the effect is rebuilt
-      // rather than merely re-rendered.
-      if (ready && usesContrastChanged) {
-        effect.setup(ctx);
-        effect.apply(ctx);
-      }
-      if (updateContrast()) applyIfReady();
+    // Notified whenever this carousel changes between leading, following and
+    // idle. Returns an unsubscribe function.
+    onMotionChange(listener) {
+      motionListeners.add(listener);
+      return () => motionListeners.delete(listener);
     },
     isMovingItself: attribution.isMovingItself,
     selfScrollStartedAt: attribution.selfScrollStartedAt,

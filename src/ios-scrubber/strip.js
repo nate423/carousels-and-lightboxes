@@ -31,11 +31,6 @@ export function attachIosScrubber(mainCarousel, scrubberWrapper, options = {}) {
   const scrubber = createCarousel(scrubberWrapper, {
     itemCount,
     effect: iosScrubberCssEffect(),
-    // This style's defining behavior: the thumbnails flatten out while you
-    // are dragging the strip itself, and whichever one you come to rest on
-    // grows. While it is merely following the main carousel it keeps its
-    // contrast and tracks along expanded.
-    removeContrastWhileScrolling: "leading",
     itemSizing: {
       crossSize: itemHeight,
       // One ratio for the whole strip, rather than each thumbnail keeping
@@ -50,7 +45,22 @@ export function attachIosScrubber(mainCarousel, scrubberWrapper, options = {}) {
     createItem: () => {}
   });
 
-  const link = linkCarousels(mainCarousel, scrubber);
+  // This style's defining behavior: the thumbnails flatten out while you are
+  // dragging the strip itself, and whichever one you come to rest on grows.
+  // While it is merely following the main carousel it keeps its contrast and
+  // tracks along expanded, so "leading" and not any other motion state.
+  //
+  // The look reads data-contrast from CSS (see --contrast-amount in this
+  // page's stylesheet, and the transition on it that turns this step change
+  // into motion), so nothing here has to re-render anything.
+  scrubber.onMotionChange((state) => {
+    scrubberWrapper.dataset.contrast = state === "leading" ? "off" : "on";
+  });
 
-  return { scrubber, link };
+  linkCarousels(mainCarousel, scrubber, {
+    aWhileFollowing: "instant",
+    bWhileFollowing: "continuous"
+  });
+
+  return scrubber;
 }
