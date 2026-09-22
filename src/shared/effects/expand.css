@@ -8,7 +8,7 @@
    archive/proto-v1/js/effects/looks/ios-box-look.js for what went wrong when
    it could.
 
-   Paired with shared/effects/expand-effect.js - see that file's header for
+   Paired with shared/effects/expand.js - see that file's header for
    the derivation these rules rest on: it explains why one animation
    advancing one number is enough for the whole strip.
 
@@ -20,7 +20,7 @@
    and --expand-grown-padding (the effect reads these to derive
    --expand-thumb-growth/--expand-footprint-growth) and adds
    .expand-effect-item/.expand-effect-thumb to its item markup - see
-   expand-effect.js's onItemCreated. A page may also dim the look via
+   expand.js's onItemCreated. A page may also dim the look via
    --contrast-amount and --item-progress-effective (see the iOS scrubber
    page's own stylesheet for that); both are read with a fallback here so a
    page that doesn't define them still gets the look at full strength. */

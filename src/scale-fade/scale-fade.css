@@ -1,7 +1,7 @@
 /* === Page: the scale-fade carousel, with a page-dot navigator ===
    Only what is true of this page alone. The page chrome and the carousel
    and item boxes are in shared/base.css; the scale-fade look's scaffolding
-   is in shared/scale-fade-look.css, which every .scale-fade wrapper here
+   is in shared/effects/scale-fade.css, which every .scale-fade wrapper here
    answers to. */
 
 /* --- Page dots ----------------------------------------------------------- */

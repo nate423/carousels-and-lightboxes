@@ -5,7 +5,7 @@
 // Only the scale-fade look needs any of it - a fade moves nothing - which is
 // why it lives beside that look rather than in carousel-math.js with the
 // progress and anchor math every carousel here uses.
-import { transition, computeCurrentProgress } from "../carousel-math.js";
+import { transition, computeCurrentProgress } from "../../carousel-math.js";
 
 // How current item i is, 0 to 1: 1 exactly when currentProgress lands on
 // i, down to 0 by the time currentProgress reaches either adjacent index.
@@ -38,9 +38,8 @@ function computeItemProgress(currentProgress, i) {
 // it applies independently *within* each keyframe-to-keyframe segment
 // (re-based to that segment's own local 0-1), not as a single remap across
 // the whole animation, so it can't shift where a keyframe's value actually
-// lands. Instead scale-fade-effect.js (setItemCurrentKeyframes) gives each
-// item its own
-// generated `@keyframes` rule with the "scale: 1" stop placed directly at
+// lands. Instead scale-fade.js (setItemCurrentKeyframes) gives each item
+// its own generated `@keyframes` rule with the "scale: 1" stop placed directly at
 // `peakX%` - the only way to put a keyframe value at an arbitrary per-item
 // position. (The gap-compensating translate math below doesn't need peakX
 // at all: computeCurrentProgress + computeItemProgress already produce the
@@ -88,7 +87,7 @@ function computeTranslations(anchors, sizes, scales, currentProgress) {
 // Precomputes the exact breakpoints needed to reconstruct computeTranslations'
 // output as a native CSS @keyframes curve (one per item, driven by a
 // scroll-timeline spanning the wrapper's whole scrollable range - see
-// effects/scale-fade-effect.js). As a function of raw scroll offset, every item's
+// effects/scale-fade.js). As a function of raw scroll offset, every item's
 // translation is piecewise-linear: computeItemProgress's how-current-is-it
 // curve (derived from the real anchor-to-anchor pixel distances via
 // computeCurrentProgress, same as it is for the JS effect) reaches exactly 0

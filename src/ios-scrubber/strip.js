@@ -9,14 +9,14 @@
 // carousel - linked to the main carousel via the same linkCarousels used
 // there (defaults: this strip follows continuously, the main carousel
 // follows instantly). All of the "only the centered item is bigger" visual
-// logic lives in shared/effects/expand-effect.js, which paints it with a
+// logic lives in shared/effects/expand.js, which paints it with a
 // native scroll-driven animation, and this file just wires up fixed-size, non-aspect-ratio-preserving items (unlike the
 // original, whose thumbnails mirror each source item's real aspect ratio),
 // the sizes as CSS custom properties the effect reads, and the contrast
 // policy that makes the thumbnails flatten while the strip itself is being
 // dragged.
 import { createCarousel } from "../shared/carousel-engine.js";
-import { expandEffect } from "../shared/effects/expand-effect.js";
+import { expandEffect } from "../shared/effects/expand.js";
 import { linkCarousels } from "../shared/linked-scrolling/link.js";
 
 export function attachIosScrubber(mainCarousel, scrubberWrapper, options = {}) {

@@ -8,7 +8,7 @@
 // this page's stylesheet) - no bespoke visual code needed for the "current thumbnail is
 // bigger" look.
 import { createCarousel } from "../shared/carousel-engine.js";
-import { scaleFadeEffect } from "../shared/effects/scale-fade-effect.js";
+import { scaleFadeEffect } from "../shared/effects/scale-fade.js";
 import { linkCarousels } from "../shared/linked-scrolling/link.js";
 
 export function attachFilmstrip(mainCarousel, scrubberWrapper, options = {}) {

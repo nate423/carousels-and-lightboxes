@@ -8,19 +8,19 @@
 // fade exactly as its neighbour becomes current, whatever the two sizes are.
 // That clamping is what puts an item's peak somewhere other than the middle of
 // its range, which is why each item still needs a generated @keyframes rule of
-// its own (see scale-fade-effect.js's header for the mechanics, which this
+// its own (see scale-fade.js's header for the mechanics, which this
 // shares).
 //
-// What it does not need is gap-compensation.js. Nothing here changes an item's
+// What it does not need is gap-compensation. Nothing here changes an item's
 // drawn size, so no gap opens between neighbours and there is nothing to close.
 import { computeCurrentProgress, computeCurrentIndex, computeAnimationRanges } from "../carousel-math.js";
-import { RuleSheet } from "./style-swap.js";
+import { RuleSheet } from "./helpers/style-swap.js";
 
 let nextItemId = 0;
 const stateByWrapper = new WeakMap();
 
 // One set of generated rules per wrapper, not per page - see
-// scale-fade-effect.js for what goes wrong when carousels share them.
+// scale-fade.js for what goes wrong when carousels share them.
 function getWrapperState(wrapper) {
   let state = stateByWrapper.get(wrapper);
   if (!state) {

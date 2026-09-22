@@ -6,7 +6,7 @@
 // built from it - attachFilmstrip reads each item's real rendered aspect
 // ratio so a thumbnail stands for the item it navigates to.
 import { createCarousel } from "../shared/carousel-engine.js";
-import { scaleFadeEffect } from "../shared/effects/scale-fade-effect.js";
+import { scaleFadeEffect } from "../shared/effects/scale-fade.js";
 import { attachFilmstrip } from "./strip.js";
 import { createPlaceholderItem } from "./placeholder-items.js";
 import { showBuildStamp } from "../dev/build-stamp.js";

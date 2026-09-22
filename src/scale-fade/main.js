@@ -5,7 +5,7 @@
 // Self-contained apart from shared/: no effect registry, no link machinery,
 // and nothing here reads an option the page does not set.
 import { createCarousel } from "../shared/carousel-engine.js";
-import { scaleFadeEffect } from "../shared/effects/scale-fade-effect.js";
+import { scaleFadeEffect } from "../shared/effects/scale-fade.js";
 import { attachPageDots } from "./page-dots.js";
 import { createPlaceholderItem } from "./placeholder-items.js";
 import { showBuildStamp } from "../dev/build-stamp.js";

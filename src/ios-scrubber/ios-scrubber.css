@@ -1,12 +1,12 @@
 /* === Page: a carousel navigated by an iOS Photos-style scrubber ===
    Only what is true of this page alone. The page chrome and the carousel
    and item boxes are in shared/base.css; the fade the main carousel draws is
-   in shared/fade-look.css (which the one .fade wrapper here answers to),
-   and the strip's own look is shared/expand-look.css (which the
-   .expand-effect wrapper, added by expand-effect.js, answers to). */
+   in shared/effects/fade.css (which the one .fade wrapper here answers to),
+   and the strip's own look is shared/effects/expand.css (which the
+   .expand-effect wrapper, added by expand.js, answers to). */
 
 /* --- How much of the strip's look is showing -----------------------------
-   expand-look.css's --item-progress/--item-shift describe the look at full
+   expand.css's --item-progress/--item-shift describe the look at full
    strength; --contrast-amount is this page's own dimmer on top of it, and
    --item-progress-effective is where the two combine. The multiplier is
    applied where --item-progress is read, not where it's written, and that
@@ -20,7 +20,7 @@
    Registered so they interpolate at all: an unregistered custom property is
    an untyped token string, which keyframes and transitions can only swap at
    the halfway mark. --item-progress-effective inherits for the same reason
-   expand-look.css's --item-progress does - so a nested thumb sees its own
+   expand.css's --item-progress does - so a nested thumb sees its own
    item's value - and starts at 1 rather than 0 so an item whose animation
    never resolves - the polyfill failing to load, say - degrades to the
    plain undistorted item rather than to every item stuck at its noncurrent

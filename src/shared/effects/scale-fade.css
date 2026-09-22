@@ -1,5 +1,5 @@
 /* The scale-fade look's scaffolding: the per-item view-timeline and the
-   wrapper-level scroll-timeline that shared/effects/scale-fade-effect.js hangs
+   wrapper-level scroll-timeline that shared/effects/scale-fade.js hangs
    its generated per-item animation-name/-range off.
 
    Scoped to .scale-fade, a class a wrapper opts into, rather than to every
@@ -15,7 +15,7 @@
 /* --- The scale-fade look ------------------------------------------------- */
 
 /* The scale-fade look's scaffolding: the per-item view-timeline and the
-   wrapper-level scroll-timeline that effects/scale-fade-effect.js hangs its
+   wrapper-level scroll-timeline that scale-fade.js hangs its
    generated per-item animation-name/-range off. Every carousel on this page
    wants it, so nothing here is gated. */
 .scale-fade .carousel-item {
@@ -23,7 +23,7 @@
   view-timeline-axis: inline;
 
   /* animation-range is computed and set per item in JS
-     (setItemCurrentKeyframes in shared/effects/scale-fade-effect.js), from the
+     (setItemCurrentKeyframes in shared/effects/scale-fade.js), from the
      same anchor/alignment math as everything else in
      carousel-math.js - keyword ranges (entry/exit/contain) don't track a
      custom alignment anchor point across items of wildly different sizes. */
@@ -38,7 +38,7 @@
    whole scrollable range - drives the gap-compensating translate, which
    (unlike scale/opacity) needs global state a per-item view-timeline can't
    see. Items reference it directly since they're descendants of the wrapper
-   - see setItemCurrentKeyframes in scale-fade-effect.js for the generated per-item
+   - see setItemCurrentKeyframes in scale-fade.js for the generated per-item
    @keyframes and computeTranslationBreakpoints in carousel-math.js for why
    this is exactly reconstructable rather than sampled. */
 .scale-fade {
@@ -48,7 +48,7 @@
 
 /* Scale, opacity and translate are written by the generated per-item
    keyframes themselves (see setItemCurrentKeyframes in
-   shared/effects/scale-fade-effect.js), which is what keeps this look on the
+   shared/effects/scale-fade.js), which is what keeps this look on the
    compositor. Nothing is left here to interpolate.
 
    The scroll-error correction stays, on its own property: the animation owns
@@ -59,7 +59,7 @@
   transform: translateX(var(--scroll-error));
 }
 
-/* The shared default, used until scale-fade-effect.js replaces it with a
+/* The shared default, used until scale-fade.js replaces it with a
    per-item rule whose peak sits where that item's own geometry puts it rather
    than at a flat 50%. Draws the same properties the generated ones do. */
 @keyframes item-current {

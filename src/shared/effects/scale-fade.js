@@ -22,8 +22,8 @@ import {
   computeScrollAnchorForProgress,
   computeAnimationRanges
 } from "../carousel-math.js";
-import { computeTranslationBreakpoints } from "./gap-compensation.js";
-import { RuleSheet } from "./style-swap.js";
+import { computeTranslationBreakpoints } from "./helpers/gap-compensation.js";
+import { RuleSheet } from "./helpers/style-swap.js";
 
 // `animation-timing-function` (including the linear() control-point syntax)
 // applies independently *within* each keyframe-to-keyframe segment, re-based

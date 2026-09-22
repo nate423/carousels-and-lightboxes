@@ -1,16 +1,14 @@
 // Shared by every effect that generates its own stylesheet rules
-// (scale-fade-effect.js and the iOS scrubber's look.js): both of them hand
-// geometry to
-// the scroll-timeline polyfill (Safari) through real stylesheet rules rather
+// (scale-fade.js and expand.js): both of them hand geometry to the
+// scroll-timeline polyfill (Safari) through real stylesheet rules rather
 // than inline styles, because the polyfill only discovers
-// animation-name/-timeline/-range - and, for scale-fade-effect.js, the @keyframes
-// themselves - by parsing a <style>
-// element's contents, and only does that parsing once, at the moment the
-// element is inserted into the DOM. A later `.textContent =` on an
-// already-inserted element is just a text-node mutation inside it, which the
-// polyfill never sees. So every flush swaps in a fresh <style> with its
-// final text already set, rather than mutating the previous element's
-// textContent in place.
+// animation-name/-timeline/-range - and, for scale-fade.js, the @keyframes
+// themselves - by parsing a <style> element's contents, and only does that
+// parsing once, at the moment the element is inserted into the DOM. A later
+// `.textContent =` on an already-inserted element is just a text-node
+// mutation inside it, which the polyfill never sees. So every flush swaps
+// in a fresh <style> with its final text already set, rather than mutating
+// the previous element's textContent in place.
 export function replaceStyleEl(prevEl, cssText) {
   const nextEl = document.createElement("style");
   nextEl.textContent = cssText;
