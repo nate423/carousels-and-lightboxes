@@ -72,7 +72,14 @@ export function ScrubberStrip({ items }) {
     const ramkaController = createRamkaSlidesController(slidesEl);
     linkCarousels(ramkaController, scrubber, {
       // ramka's own slides jump straight to the item the strip lands on,
-      // same as the iOS scrubber page's main carousel.
+      // same as the iOS scrubber page's main carousel. Tried 'continuous'
+      // here at one point, chasing a hard-flick bug - it traded the
+      // expected discrete jump for a smooth pan, which wasn't what was
+      // actually wanted (the bug was staleness under a fast flick, not the
+      // jump itself). Reverted; see ramka-slides-controller.js's geometry
+      // cache and this file's scrollend catch-up for the fixes that
+      // actually address staleness without changing the character of the
+      // motion.
       aWhileFollowing: 'instant',
       // The strip tracks ramka's slides 1:1 while they're being dragged.
       bWhileFollowing: 'continuous'

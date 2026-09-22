@@ -6,7 +6,7 @@ ramka's `Slides` viewport through `shared/linked-scrolling/ramka-slides-controll
 That file's own header documents the linking half - the adapter pattern,
 why it measures via `getBoundingClientRect` instead of the shared
 geometry cache, why its snap suspension isn't the shared one. Below is
-the other half: four bugs that specifically came from wiring a
+the other half: bugs that specifically came from wiring a
 `carousel-engine` look into ramka's React tree, hit while building this
 page. Not a checklist to follow - a record of what actually went wrong,
 in case the next attempt at this runs into the same class of bug.
@@ -91,6 +91,40 @@ transition through its own `calc()` chain without needing a second one -
 re-expanding after a drag read as noticeably slower than the reference
 page instead of matching it. Removed the copied transition entirely;
 position and width now track their already-smooth sources directly.
+
+## A hard flick on the strip leaves the main carousel stale - still open
+
+Flicking the strip hard toward one end can leave ramka's main carousel
+stuck a few items short of where the strip actually settled, only catching
+up (visibly, distractingly) once something else nudges it. Two real,
+independently-justified fixes landed while chasing this - a geometry cache
+in `ramka-slides-controller.js` (measuring every slide via
+`getBoundingClientRect` on every single call was real, measurable
+layout-thrashing) and a `scrollend` catch-up in `link.js` (the "instant"
+follow mode's per-tick sync had nothing to correct a source that went idle
+right after an undershooting tick) - but retesting after each showed the
+underlying staleness itself unchanged.
+
+Also tried: switching the main-carousel-follows-strip direction from
+`link.js`'s "instant" mode to `'continuous'`, on the theory that "instant"
+only reacts to whatever `scroll` events land and ramka's own React
+reconciliation makes those land more sparsely under load than on the
+featherweight vanilla `ios-scrubber` page (where the same "instant" logic
+never shows this). That theory may still be right, but `'continuous'` was
+the wrong fix for it regardless: it swaps the discrete jump-between-photos
+character for a smooth pan, which is a different behavior, not a repaired
+version of the same one - and reverting it was needed. Reverted back to
+`'instant'`.
+
+Net state: the geometry cache and scrollend catch-up are real
+improvements, kept. The core staleness-under-a-fast-flick bug is not yet
+fixed. Whatever the real mechanism is, it wasn't found by any of the three
+attempts above, each of which seemed well-supported by evidence gathered
+*from this environment's own synthetic scroll tooling* - which cannot
+reproduce a genuine multi-event momentum flick (confirmed: it either fires
+one coalesced native scroll or, via a smooth programmatic `goToIndex`,
+fires many). Every fix here needs verifying against a real trackpad/mouse
+flick, by a person, not just against what this tooling can show.
 
 ## None of this was found by reading the code
 

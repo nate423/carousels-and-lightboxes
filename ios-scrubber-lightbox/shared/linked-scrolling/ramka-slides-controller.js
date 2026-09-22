@@ -16,9 +16,9 @@
 // wrapper's flex children, not guaranteed for ramka's slides (their own
 // internal slides-geometry falls back to getBoundingClientRect for exactly
 // this reason). Measuring via getBoundingClientRect here sidesteps the
-// assumption entirely, at the cost of a layout read per slide - cheap at
-// gallery-sized item counts, so nothing here caches it the way
-// geometry-cache.js does for a 30-item placeholder carousel.
+// assumption entirely. It does still cache the result, same as
+// geometry-cache.js - see createGeometryCache below for why that turned out
+// to matter here after all.
 import { createScrollAttribution } from "./scroll-attribution.js";
 import { computeCurrentProgress, computeScrollAnchorForProgress } from "../carousel-math.js";
 import { rafThrottle } from "../engine/raf-throttle.js";
@@ -71,6 +71,33 @@ function measureSlideAnchors(slidesEl, items) {
   return { anchors, wrapperAnchorPoint: wrapperRect.width / 2 };
 }
 
+// Cached, unlike geometry-cache.js's own comment said this file wouldn't
+// need to be: "cheap at gallery-sized item counts" undersold how often
+// link.js's "instant" mode actually calls this. Every scroll tick of the
+// carousel driving this one calls getCurrentProgress once to check the
+// index and, on a change, setProgressDirect again to write it - each a full
+// getBoundingClientRect pass over every slide. A fast flick can trigger
+// several of those per animation frame; measured against real behavior, it
+// was enough forced synchronous layout work to visibly stall the
+// destination a beat behind the gesture instead of tracking it, catching up
+// only once the flick (and the layout thrashing with it) stopped. Cached
+// like geometry-cache.js's own carousel-engine equivalent, invalidated on
+// the one thing that actually changes it here: the wrapper resizing.
+function createGeometryCache(slidesEl, getItems) {
+  let geometry = null;
+
+  function get() {
+    if (!geometry) geometry = measureSlideAnchors(slidesEl, getItems());
+    return geometry;
+  }
+
+  function invalidate() {
+    geometry = null;
+  }
+
+  return { get, invalidate };
+}
+
 /**
  * Wraps a ramka `Slides` viewport DOM node (find it with
  * `slidesEl.querySelector('[data-ramka-slides]')`, or give the node itself)
@@ -88,27 +115,35 @@ export function createRamkaSlidesController(slidesEl) {
 
   const snap = createSlidesSnapSuspension(slidesEl);
   const attribution = createScrollAttribution(slidesEl, { onSelfReclaim: snap.restore });
+  const geometry = createGeometryCache(slidesEl, getItems);
 
   function goToIndex(index, { behavior = "smooth" } = {}) {
     const items = getItems();
     if (!items[index]) return;
     attribution.noteSelfCommand();
-    const { anchors, wrapperAnchorPoint } = measureSlideAnchors(slidesEl, items);
+    const { anchors, wrapperAnchorPoint } = geometry.get();
     slidesEl.scrollTo({ left: anchors[index] - wrapperAnchorPoint, behavior });
   }
 
   function getCurrentProgress() {
-    const items = getItems();
-    const { anchors, wrapperAnchorPoint } = measureSlideAnchors(slidesEl, items);
+    const { anchors, wrapperAnchorPoint } = geometry.get();
     return computeCurrentProgress(anchors, slidesEl.scrollLeft + wrapperAnchorPoint);
   }
 
   function setProgressDirect(progress) {
     attribution.noteDirectWrite(progress);
     snap.suspend();
-    const { anchors, wrapperAnchorPoint } = measureSlideAnchors(slidesEl, getItems());
+    const { anchors, wrapperAnchorPoint } = geometry.get();
     slidesEl.scrollLeft = computeScrollAnchorForProgress(anchors, progress) - wrapperAnchorPoint;
   }
+
+  // The one thing that actually moves these anchors after the fact: the
+  // viewport resizing (window resize, orientation change, devtools panel
+  // toggling). Slide count is fixed for this gallery's lifetime and slide
+  // boxes don't otherwise change size on their own, so this is the only
+  // invalidation source that's actually needed.
+  const resizeObserver = new ResizeObserver(() => geometry.invalidate());
+  resizeObserver.observe(slidesEl);
 
   const scrollListeners = new Set();
   const scrollEndListeners = new Set();

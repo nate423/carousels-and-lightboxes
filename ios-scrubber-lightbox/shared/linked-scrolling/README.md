@@ -41,3 +41,13 @@ that the browser calls the scroll over while the carousel actually driving it
 is still moving. So "following" ends when the *leader* reports its gesture is
 done - that is what `endFollowing` is for, and why the link forwards the
 leader's `onScrollEnd` rather than letting each side watch its own.
+
+The leader's `onScrollEnd` also re-runs the same sync `onScroll` does, not
+just `endFollowing`. "Instant" mode only checks for a new index on the
+leader's own scroll events, so if the leader's last scroll event before going
+idle doesn't land on its truly-final index - a fast flick landed the dest a
+couple of items short of where the leader actually stopped, once, against
+`ramka-slides-controller.js`'s dest and its own async reconciliation - nothing
+ever re-checks afterward. `onScrollEnd` only fires once the leader is
+genuinely at rest, so re-syncing there catches it regardless of what caused
+the miss on the way.

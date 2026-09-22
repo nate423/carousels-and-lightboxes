@@ -44,32 +44,34 @@ export function linkCarousels(a, b, { aWhileFollowing, bWhileFollowing }) {
   ]);
 
   function wire(source, dest) {
-    // dest's own "following" motion ends here, off source's real scrollend,
-    // rather than off any scrollend dest itself fires - see endFollowing in
-    // carousel-engine.js for why dest's own native scrollend can't be
-    // trusted for this while it's the one being driven.
-    source.onScrollEnd(() => dest.endFollowing());
+    // Guards shared between the per-frame sync below and the scrollend
+    // catch-up: never step on a dest that's genuinely mid-gesture itself
+    // (see the comment at its one call site in sync()).
+    function destMovingMoreRecently() {
+      return dest.isMovingItself() && dest.selfScrollStartedAt() > source.selfScrollStartedAt();
+    }
 
-    source.onScroll(({ source: scrollSource }) => {
-      if (scrollSource === "driven") {
-        // This carousel is being written to by us; everything it emits until
-        // something moves it for its own reasons is an echo of that write.
-        return;
-      }
-      // `source` is moving for its own reasons, or we'd have returned above.
-      // It may drive unless `dest` is also moving for its own reasons and
-      // started doing so more recently - flick one carousel hard, then flick
-      // the other while the first is still coasting, and both are genuinely
-      // moving at once; without a rule each wire writes the other every frame
-      // and they settle disagreeing.
-      //
-      // Both facts come from real scroll events, never from input events. The
-      // browser latches a wheel gesture to the scroller it began on while
-      // still dispatching wheel events to whatever is under the cursor, so
-      // input says nothing reliable about which carousel is actually moving.
-      if (dest.isMovingItself() && dest.selfScrollStartedAt() > source.selfScrollStartedAt()) {
-        return;
-      }
+    function writeToDest(progress) {
+      // setProgressDirect handles its own scroll-snap suspension and marks
+      // dest as driven, so the echo it's about to emit is already correctly
+      // attributed by the time dest's own subscription sees it.
+      dest.setProgressDirect(progress);
+    }
+
+    // The per-frame sync, shared by onScroll (below) and the scrollend
+    // catch-up. Takes source's progress fresh each call rather than once
+    // up front, since the catch-up call wants source's truly-final,
+    // fully-settled position - not whatever it was on the last onScroll
+    // tick, which for "instant" mode is only re-checked on the *next*
+    // source scroll event and so has nothing to correct it if source goes
+    // idle right after a tick that undershot the real rest position (a
+    // driven dest with its own async reconciliation - see
+    // ramka-slides-controller.js's page - can do exactly that: a hard
+    // flick on the strip left the main carousel stuck a couple of items
+    // short, having gotten no further update once the strip stopped
+    // emitting scroll events).
+    function sync() {
+      if (destMovingMoreRecently()) return;
 
       const progress = source.getCurrentProgress();
 
@@ -97,14 +99,39 @@ export function linkCarousels(a, b, { aWhileFollowing, bWhileFollowing }) {
       const destIndex = currentIndexOf(dest);
       if (index === destIndex) return;
       writeToDest(index);
+    }
+
+    // dest's own "following" motion ends here, off source's real scrollend,
+    // rather than off any scrollend dest itself fires - see endFollowing in
+    // carousel-engine.js for why dest's own native scrollend can't be
+    // trusted for this while it's the one being driven. onScrollEnd only
+    // ever fires on a real leading gesture ending (see its own doc comment
+    // in carousel-engine.js), so unlike onScroll below, sync() here needs no
+    // "was this a driven echo" check - by definition it wasn't.
+    source.onScrollEnd(() => {
+      sync();
+      dest.endFollowing();
     });
 
-    function writeToDest(progress) {
-      // setProgressDirect handles its own scroll-snap suspension and marks
-      // dest as driven, so the echo it's about to emit is already correctly
-      // attributed by the time dest's own subscription sees it.
-      dest.setProgressDirect(progress);
-    }
+    source.onScroll(({ source: scrollSource }) => {
+      if (scrollSource === "driven") {
+        // This carousel is being written to by us; everything it emits until
+        // something moves it for its own reasons is an echo of that write.
+        return;
+      }
+      // `source` is moving for its own reasons, or we'd have returned above.
+      // It may drive unless `dest` is also moving for its own reasons and
+      // started doing so more recently - flick one carousel hard, then flick
+      // the other while the first is still coasting, and both are genuinely
+      // moving at once; without a rule each wire writes the other every frame
+      // and they settle disagreeing.
+      //
+      // Both facts come from real scroll events, never from input events. The
+      // browser latches a wheel gesture to the scroller it began on while
+      // still dispatching wheel events to whatever is under the cursor, so
+      // input says nothing reliable about which carousel is actually moving.
+      sync();
+    });
   }
 
   wire(a, b);
