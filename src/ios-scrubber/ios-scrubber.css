@@ -1,0 +1,133 @@
+/* === Page: a carousel navigated by an iOS Photos-style scrubber ===
+   Only what is true of this page alone. The page chrome and the carousel
+   and item boxes are in shared/base.css; the fade the main carousel draws is
+   in shared/effects/fade.css (which the one .fade wrapper here answers to),
+   and the strip's own look is shared/effects/expand.css (which the
+   .expand-effect wrapper, added by expand.js, answers to). */
+
+/* --- Main carousel ---------------------------------------------------------
+   This page is happy with the fade look's own default --noncurrent-opacity
+   (see .fade in shared/effects/fade.css; .fade never reads
+   --noncurrent-scale, so there's no slot for it here) - left commented out
+   rather than restated live, so the slot is visible without a duplicate
+   number that could drift from the look's actual default; uncomment and
+   edit to override. */
+.main-carousel {
+  /* --noncurrent-opacity: 0.5; */
+}
+
+/* --- How much of the strip's look is showing -----------------------------
+   expand.css's --item-progress/--item-shift describe the look at full
+   strength; --contrast-amount is this page's own dimmer on top, and
+   --item-progress-effective is where the two combine. The dimmer is
+   applied where --item-progress is *read*, not where it's written - that
+   split is the whole trick, since a scroll-driven animation can keep
+   writing --item-progress at full strength every frame while a
+   transition eases the dimming independently underneath. (A transition
+   on the drawn value itself couldn't do this: animations beat
+   transitions in the cascade, so it would just be ignored while the
+   animation ran and snap the moment it stopped.)
+
+   Registered so it interpolates at all - an unregistered custom property
+   is an untyped token string, which keyframes and transitions can only
+   swap at the halfway mark. Inherits for the same reason expand.css's
+   --item-progress does, so a nested thumb sees its own item's value.
+   Starts at 1 rather than 0 so an item whose animation never resolves
+   (the polyfill failing to load, say) degrades to the plain undistorted
+   item, not to every item stuck at its noncurrent size - the same
+   neutral fallback the .carousel-item rule below reaches. */
+
+/* How much of the look is showing: 1 fully, 0 not at all. strip.js writes
+   data-contrast from the carousel's motion state, and this is the only
+   place that attribute becomes a number. Inherited so the transition can
+   run once on the wrapper while items read the value. */
+@property --contrast-amount {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 1;
+}
+
+/* What the thumb's width formula actually reads: --item-progress scaled
+   by how much contrast is showing, so at contrast 0 every thumbnail sits
+   at its undecorated size, and at contrast 1 the centred one is fully
+   grown. (This once blended toward a per-look --rest-progress, because
+   the scale-fade look settles at the opposite end - undecorated there
+   means every item drawn as current, not collapsed. That look no longer
+   changes its contrast, so the only rest value left is this one's own,
+   0, and the blend is a plain multiply.) */
+@property --item-progress-effective {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 1;
+}
+
+.carousel-item {
+  --item-progress-effective: calc(var(--contrast-amount) * var(--item-progress));
+}
+
+.ios-thumbnail-scrubber-strip {
+  transition: --contrast-amount 200ms ease;
+}
+
+.ios-thumbnail-scrubber-strip[data-contrast="off"] {
+  --contrast-amount: 0;
+}
+
+/* --- The iOS scrubber ---------------------------------------------------- */
+
+/* The other filmstrip-navigator style (see strip.js) - fixed-size thumbnails
+   at a constant gap, where only the item nearest the center is bigger,
+   instead of the filmstrip page's "every item scales continuously toward the
+   center". A real carousel-engine wrapper like any other (native scroll +
+   scroll-snap, from the shared .carousel-wrapper rules) - no custom
+   drag/transform here.
+
+   This page is happy with the expand look's own default size (see
+   .expand-effect in shared/effects/expand.css for the 2:3/1:1 ratio math)
+   - left commented out below rather than restated live, so the slot is
+   visible without a duplicate number that could drift from the look's
+   actual default; uncomment and edit to actually override.*/
+.ios-thumbnail-scrubber-strip {
+  height: 100px;
+  --wrapper-gap: 3px;
+  /* --expand-item-height: 36px; */
+  /* --expand-item-width: calc(var(--expand-item-height) * 2 / 3); */
+  /* --expand-item-width-grown: var(--expand-item-height); */
+  /* --expand-grown-padding: 12px; */
+}
+
+/* Fixed width, always - the current item's growth is drawn as overflow
+   and a transform, never as a bigger box, so this scroller's layout (and
+   so its snap points, and the offsetLeft/offsetWidth reads carousel-math
+   derives progress from) can't move as a side effect of what the look
+   paints. See archive/proto-v1/js/effects/looks/ios-box-look.js for what
+   went wrong when it could. overflow is visible for the same reason: the
+   grown thumb is deliberately wider than the box it lives in. */
+.expand-effect-item {
+  flex: 0 0 auto;
+  width: var(--expand-item-width);
+  height: var(--expand-item-height);
+  overflow: visible;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Always on, not toggled from JS - the look just supplies a continuous
+     target value every scroll frame (how close this item is to "current"
+     right now), and this transition is what turns that stream of targets
+     into motion. It also keeps a fast flick from visibly popping every
+     item it sweeps past: each intermediate item's target gets overwritten
+     before this transition can catch up to it, so only the item the
+     scroll actually comes to rest on ever gets the full duration to
+     arrive. */
+  transition: transform 200ms ease;
+}
+
+.expand-effect-thumb {
+  /* Never shrink to fit the (narrower) fixed item box around it. */
+  flex: 0 0 auto;
+  width: var(--expand-item-width);
+  height: var(--expand-item-height);
+  border-radius: 4px;
+  transition: width 200ms ease, transform 200ms ease;
+  background-color: hsl(220, 14%, 70%);
+}

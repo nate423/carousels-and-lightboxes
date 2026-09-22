@@ -1,0 +1,156 @@
+/* === The expand look, painted natively ===
+   Fixed-size items at a constant gap, where only the one nearest the center
+   grows - both its own box and the room its neighbours leave around it -
+   drawn as overflow and a transform, never as a bigger layout box, so this
+   carousel's own layout (and therefore its snap points, and the
+   offsetLeft/offsetWidth reads carousel-math derives progress from) can't
+   move as a side effect of what the look paints. See
+   archive/proto-v1/js/effects/looks/ios-box-look.js for what went wrong when
+   it could.
+
+   Paired with shared/effects/expand.js - see that file's header for
+   the derivation these rules rest on: it explains why one animation
+   advancing one number is enough for the whole strip.
+
+   Horizontal only, like the look it mirrors: the translates below are
+   written on X. A vertical strip would want the same formula on Y and a
+   block-axis timeline.
+
+   The look's own default dimensions - 2:3 collapsed, 1:1 grown, matching
+   iOS Photos' scrubber - live below on .expand-effect, the same way
+   .scale-fade/.fade own their default --noncurrent-scale/-opacity (see
+   those files). A page overrides --expand-item-height (or any of the three
+   directly) on its own wrapper to get a different size without touching
+   the ratios; expand.js reads the three back via getComputedStyle to
+   derive --expand-thumb-growth/--expand-footprint-growth, and adds
+   .expand-effect-item/.expand-effect-thumb to its item markup - see
+   expand.js's onItemCreated. A page may also dim the look via
+   --contrast-amount and --item-progress-effective (see the iOS scrubber
+   page's own stylesheet for that); both are read with a fallback here so a
+   page that doesn't define them still gets the look at full strength. */
+
+/* Registered so they interpolate - an unregistered custom property is an
+   untyped token string, which keyframes and transitions can only swap at
+   the halfway mark, not animate through. --expand-progress and
+   --item-progress inherit: the wrapper animates the first, the item
+   computes the second from it, and a nested thumb needs to read that
+   same value. --item-shift doesn't inherit - only the item that computes
+   it ever reads it. */
+@property --expand-progress {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0;
+}
+
+@property --item-progress {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 1;
+}
+
+@property --item-shift {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+/* Registered so a page's calc()'d --expand-item-width/-width-grown resolve
+   to an absolute length when this file's JS half reads them back via
+   getComputedStyle - an unregistered custom property is stored as an
+   untyped token stream, so a raw "calc(36px * 2 / 3)" would come back
+   verbatim instead of "24px" and silently fail to parse as a number.
+   Their initial-value matches the real default below rather than some
+   unrelated placeholder, since a nested thumb inherits whichever one is in
+   scope before .expand-effect's own calc() has a chance to run. */
+@property --expand-item-width {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 24px;
+}
+
+@property --expand-item-width-grown {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 36px;
+}
+
+.expand-effect {
+  /* Only the timeline this look needs. The scale-fade look also hangs a
+     per-item view-timeline off .carousel-item, which would drive a
+     scale/opacity animation this look doesn't want - so that scaffolding
+     simply isn't here. */
+  scroll-timeline-name: --carousel-scroll;
+  scroll-timeline-axis: inline;
+
+  /* The one animation driving the entire look. Its @keyframes is
+     generated per wrapper, since it needs the item count. */
+  animation-timeline: --carousel-scroll;
+  animation-fill-mode: both;
+  animation-timing-function: linear;
+
+  /* The look's own default size for the items nested inside, listed after
+     this wrapper's own properties above: a collapsed thumbnail is 2:3, the
+     centred one grows to 1:1 - both derived from one height so they can't
+     drift apart, the same way .scale-fade/.fade derive their look's
+     defaults in their own files. A page overrides --expand-item-height
+     (see the iOS scrubber page's own stylesheet) to resize the whole strip
+     without touching the ratios, or overrides a width directly for a
+     non-uniform shape. */
+  --expand-item-height: 36px;
+  --expand-item-width: calc(var(--expand-item-height) * 2 / 3);
+  --expand-item-width-grown: var(--expand-item-height);
+  --expand-grown-padding: 12px;
+}
+
+/* No transition here, on purpose. The hand-computed variant needs one:
+   JS writes a discrete transform/width target per item per frame, and
+   the transition is what turns that stream of targets into motion. Here
+   the outputs are already continuous - they follow --expand-progress,
+   which the animation advances - so a transition would just add lag and
+   restart its easing curve every frame. Any easing a page wants (e.g.
+   easing a contrast collapse) belongs on the property it multiplies this
+   look's output by, not on the output itself. */
+.expand-effect .expand-effect-item,
+.expand-effect .expand-effect-thumb {
+  transition: none;
+}
+
+.expand-effect .expand-effect-item {
+  /* How many items away this one is from current, signed, and the two
+     clamped ramps both outputs are built from. Split out so the formula
+     below reads like the derivation rather than one long expression, and
+     because the two outputs share them. */
+  --u: calc(var(--expand-index) - var(--expand-progress));
+  --lo: clamp(0, calc(1 + var(--u)), 1);
+  --hi: clamp(0, var(--u), 1);
+
+  /* The two values this look draws from, written at full (raw) strength -
+     a page dimming the look does so where these are read, not here. Unlike
+     the scale+fade look, which gets these from per-item keyframes, they
+     come from a calc() over one shared progress.
+
+     --item-progress is a triangle centered on this item's own index,
+     written without abs() by subtracting the two ramps. It inherits, which
+     is what lets a nested thumb read its own item's value. */
+  --item-progress: calc(var(--lo) - var(--hi));
+
+  /* The general form was F * (a*lo + (1-a)*hi - a - bend), for anchor
+     fraction a. Centred, a is 1/2 and the two ramps weigh the same, and bend
+     - a quadratic correction in frac(progress) - is identically zero. That
+     term was the only part of the formula that was not a function of an
+     item's own index, and so the only thing the effect had to write per
+     frame; without it this rule is entirely static. */
+  --item-shift: calc(var(--expand-footprint-growth) * ((var(--lo) + var(--hi)) * 0.5 - 0.5));
+
+  transform: translate3d(calc(var(--item-shift) * var(--contrast-amount, 1) + var(--scroll-error, 0px)), 0, 0);
+}
+
+.expand-effect .expand-effect-thumb {
+  /* No transform to re-centre the thumb inside the footprint its neighbours
+     made room for: that correction was proportional to (0.5 - a), and the
+     anchor point is the item's own centre.
+
+     Reads --item-progress-effective when a page defines one (folding in its
+     own --contrast-amount), falling back to the raw --item-progress. */
+  width: calc(var(--expand-item-width) + var(--item-progress-effective, var(--item-progress)) * var(--expand-thumb-growth));
+}

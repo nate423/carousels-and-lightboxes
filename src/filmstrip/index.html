@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <title>Filmstrip scrubber</title>
+  <link rel="stylesheet" href="../shared/base.css" />
+  <link rel="stylesheet" href="../shared/effects/scale-fade.css" />
+  <link rel="stylesheet" href="filmstrip.css" />
+</head>
+
+<body>
+  <nav>
+    <a href="../">index</a>
+    <a href="../scale-fade/">scale-fade</a>
+    <a href="../filmstrip/" class="current">filmstrip</a>
+    <a href="../ios-scrubber/">ios scrubber</a>
+    <a href="../archive/proto-v1/">archive</a>
+  </nav>
+
+  <main>
+    <h1>Filmstrip scrubber <span class="build-stamp" id="build-stamp"></span></h1>
+    <div class="carousel-wrapper main-carousel scale-fade placeholder-boxes" id="main-carousel"></div>
+    <div class="carousel-wrapper thumbnail-scrubber-strip scale-fade placeholder-boxes" id="strip"></div>
+  </main>
+
+  <script>
+    // Loaded ahead of the entry script, synchronously, so every rule the look
+    // generates is inserted into a document that already has the polyfill's
+    // MutationObserver watching for it. The polyfill patches CSS.supports to
+    // report animation-timeline as supported, which is deliberate - it keeps
+    // feature queries in the page's own CSS from skipping the declarations it
+    // exists to interpret - and nothing here asks that question.
+    if (!CSS.supports("animation-timeline: --works")) {
+      const s = document.createElement("script");
+      s.src = "../shared/vendor/scroll-timeline.js";
+      s.async = false;
+      document.currentScript.after(s);
+    }
+  </script>
+  <script type="module" src="main.js"></script>
+</body>
+</html>
