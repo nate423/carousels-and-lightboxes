@@ -21,26 +21,16 @@ function aspectFor(size, index) {
 // their content makes them, on both axes, which is what every main carousel
 // here wants.
 //
-// Which axis is which comes from the wrapper's own scrollAxis, so a vertical
-// strip fixes its width and derives its height rather than always fixing
-// height as if every strip were horizontal.
-function applyItemSizing(item, index, itemSizing, scrollAxis) {
+// Everything here scrolls horizontally, so the cross axis is height and the
+// main axis is width.
+function applyItemSizing(item, index, itemSizing) {
   if (!itemSizing) return;
 
   const { crossSize, size } = itemSizing;
-  const crossSide = scrollAxis === "x" ? "height" : "width";
-  const mainSide = scrollAxis === "x" ? "width" : "height";
+  const mainSize = typeof size === "number" ? size : crossSize * aspectFor(size, index);
 
-  let mainSize;
-  if (typeof size === "number") {
-    mainSize = size;
-  } else {
-    const aspect = aspectFor(size, index);
-    mainSize = scrollAxis === "x" ? crossSize * aspect : crossSize / aspect;
-  }
-
-  item.style[crossSide] = crossSize + "px";
-  item.style[mainSide] = Math.round(mainSize) + "px";
+  item.style.height = crossSize + "px";
+  item.style.width = Math.round(mainSize) + "px";
 }
 
 // Builds itemCount items into wrapper, immediately before insertBefore (the
@@ -50,7 +40,7 @@ function applyItemSizing(item, index, itemSizing, scrollAxis) {
 export function populateItems(
   wrapper,
   insertBefore,
-  { itemCount, effect, createItem = defaultCreateItem, itemSizing, scrollAxis, onItemClick }
+  { itemCount, effect, createItem = defaultCreateItem, itemSizing, onItemClick }
 ) {
   for (let i = 0; i < itemCount; i++) {
     const snapFixDiv = document.createElement("div");
@@ -61,7 +51,7 @@ export function populateItems(
     effect.onItemCreated(item);
     // Before createItem, so a caller that wants to size one item specially
     // can still do it there without this overwriting the result.
-    applyItemSizing(item, i, itemSizing, scrollAxis);
+    applyItemSizing(item, i, itemSizing);
     createItem(item, i);
 
     snapFixDiv.appendChild(item);

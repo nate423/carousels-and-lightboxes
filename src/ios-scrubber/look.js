@@ -91,7 +91,7 @@ function onItemCreated(item) {
 // frame.
 export function iosScrubberCssEffect({ progressDriver = "auto" } = {}) {
   function setup(ctx) {
-    const { wrapper, scrollDistance, offsetSize, offsetFromStart, getAlignmentFraction, getScrollPadding } = ctx;
+    const { wrapper, getAlignmentFraction, getScrollPadding } = ctx;
     const items = [...wrapper.querySelectorAll(".carousel-item")];
     const style = getComputedStyle(wrapper);
     const itemWidth = parseFloat(style.getPropertyValue("--ios-item-width")) || 20;
@@ -119,15 +119,7 @@ export function iosScrubberCssEffect({ progressDriver = "auto" } = {}) {
       `@keyframes ${animationName} {\n  from { --ios-progress: 0; }\n  to { --ios-progress: ${items.length - 1}; }\n}`
     );
 
-    const { anchors } = getItemMetrics(
-      wrapper,
-      items,
-      offsetFromStart,
-      offsetSize,
-      scrollDistance,
-      alignment,
-      getScrollPadding(wrapper)
-    );
+    const { anchors } = getItemMetrics(wrapper, items, alignment, getScrollPadding(wrapper));
 
     stateByWrapper.set(wrapper, {
       stripId,
@@ -136,7 +128,7 @@ export function iosScrubberCssEffect({ progressDriver = "auto" } = {}) {
       items,
       anchors,
       alignment,
-      wrapperAnchorPoint: wrapperAnchor(wrapper[offsetSize], alignment, getScrollPadding(wrapper)),
+      wrapperAnchorPoint: wrapperAnchor(wrapper.offsetWidth, alignment, getScrollPadding(wrapper)),
       // Unset rather than false, so the first apply() always writes which
       // source is in use instead of assuming the wrapper already agrees.
       writingProgress: undefined
@@ -144,12 +136,12 @@ export function iosScrubberCssEffect({ progressDriver = "auto" } = {}) {
   }
 
   function apply(ctx) {
-    const { wrapper, scrollDistance, getScrollSource, getDrivenProgress, onProgress } = ctx;
+    const { wrapper, getScrollSource, getDrivenProgress, onProgress } = ctx;
     const state = stateByWrapper.get(wrapper);
     const { anchors, alignment, wrapperAnchorPoint, items, animationName } = state;
 
     const isDriven = getScrollSource() === "driven";
-    const scrollAnchor = wrapper[scrollDistance] + wrapperAnchorPoint;
+    const scrollAnchor = wrapper.scrollLeft + wrapperAnchorPoint;
     const currentProgress = isDriven ? getDrivenProgress() : computeCurrentProgress(anchors, scrollAnchor);
 
     const writingProgress = progressDriver === "js" || (progressDriver === "auto" && isDriven);

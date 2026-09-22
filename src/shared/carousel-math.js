@@ -51,26 +51,19 @@ export function wrapperAnchor(wrapperSize, alignment, scrollPadding) {
   );
 }
 
-export function getItemMetrics(
-  wrapper,
-  items,
-  offsetFromStart,
-  offsetSize,
-  scrollDistance,
-  alignment,
-  scrollPadding = 0
-) {
+// The only two functions here that touch the DOM, and they touch it only to
+// read two numbers per item. Everything else below takes numbers and returns
+// numbers, which is why the axis never had to reach any further than this.
+export function getItemMetrics(wrapper, items, alignment, scrollPadding = 0) {
   const scrollAnchor =
-    wrapper[scrollDistance] +
-    wrapperAnchor(wrapper[offsetSize], alignment, scrollPadding);
+    wrapper.scrollLeft + wrapperAnchor(wrapper.offsetWidth, alignment, scrollPadding);
   const anchors = [];
   const sizes = [];
 
   items.forEach((item) => {
-    const itemOffsetFromWrapperStart =
-      item[offsetFromStart] - wrapper[offsetFromStart];
-    sizes.push(item[offsetSize]);
-    anchors.push(itemOffsetFromWrapperStart + item[offsetSize] * alignment);
+    const itemOffsetFromWrapperStart = item.offsetLeft - wrapper.offsetLeft;
+    sizes.push(item.offsetWidth);
+    anchors.push(itemOffsetFromWrapperStart + item.offsetWidth * alignment);
   });
 
   return { anchors, sizes, scrollAnchor };
@@ -79,19 +72,11 @@ export function getItemMetrics(
 // Scroll offset (relative to the wrapper) that puts this item's anchor point
 // at the wrapper's anchor point - i.e. where to scroll to bring it "current"
 // under the given alignment. Shared by click-to-scroll and page-dot clicks.
-export function computeScrollTarget(
-  wrapper,
-  item,
-  offsetFromStart,
-  offsetSize,
-  alignment,
-  scrollPadding = 0
-) {
+export function computeScrollTarget(wrapper, item, alignment, scrollPadding = 0) {
   return (
-    item[offsetFromStart] -
-    wrapper[offsetFromStart] -
-    (wrapperAnchor(wrapper[offsetSize], alignment, scrollPadding) -
-      item[offsetSize] * alignment)
+    item.offsetLeft -
+    wrapper.offsetLeft -
+    (wrapperAnchor(wrapper.offsetWidth, alignment, scrollPadding) - item.offsetWidth * alignment)
   );
 }
 

@@ -117,7 +117,7 @@ function getWrapperState(wrapper) {
 // under animation-composition, but what contrast scales is each value's
 // *distance from neutral* - 1 + c * (s - 1) - and that is not any factor
 // depending on c alone.
-function setItemCurrentKeyframes(state, item, peakX, range, translateStops, scrollAxis, usesContrast) {
+function setItemCurrentKeyframes(state, item, peakX, range, translateStops, usesContrast) {
   const currentName = `item-current-${item.dataset.itemId}`;
   state.currentKeyframeSheet.set(
     currentName,
@@ -139,7 +139,7 @@ function setItemCurrentKeyframes(state, item, peakX, range, translateStops, scro
     .map(({ percent, value }) =>
       usesContrast
         ? `${percent}% { --item-shift: ${value}px; }`
-        : `${percent}% { translate: ${scrollAxis === "x" ? `${value}px 0` : `0 ${value}px`}; }`
+        : `${percent}% { translate: ${value}px 0; }`
     )
     .join("\n      ");
   state.translateKeyframeSheet.set(translateName, `@keyframes ${translateName} {\n      ${stops}\n    }`);
@@ -198,28 +198,19 @@ function onItemCreated(item) {
 // would just be hard-coding an unrelated, undocumented implementation
 // detail rather than a value that falls out of this math.
 function setup(ctx) {
-  const {
-    wrapper,
-    scrollDistance,
-    scrollSize,
-    offsetSize,
-    offsetFromStart,
-    getAlignmentFraction,
-    getScrollPadding,
-    getNoncurrentScale
-  } = ctx;
+  const { wrapper, getAlignmentFraction, getScrollPadding, getNoncurrentScale } = ctx;
   const state = getWrapperState(wrapper);
   const usesContrast = ctx.usesContrast();
   const { items, anchors, sizes, alignment, wrapperAnchorPoint } = ctx.getGeometry();
   const scrollPadding = getScrollPadding(wrapper);
-  const ranges = computeAnimationRanges(anchors, sizes, wrapper[offsetSize], alignment, scrollPadding);
+  const ranges = computeAnimationRanges(anchors, sizes, wrapper.offsetWidth, alignment, scrollPadding);
 
   // Native scroll-timeline progress is 0%/100% at raw scroll offset
   // 0/maxScroll, not at wrapperAnchorPoint - scrollAnchor = scrollOffset +
   // wrapperAnchorPoint (see getItemMetrics), so the reachable scrollAnchor
   // range is [wrapperAnchorPoint, wrapperAnchorPoint + maxScroll]. These are
   // the true breakpoint boundaries (see computeTranslationBreakpoints).
-  const maxScroll = wrapper[scrollSize] - wrapper[offsetSize];
+  const maxScroll = wrapper.scrollWidth - wrapper.offsetWidth;
   const percentFor = (scrollAnchor) =>
     maxScroll <= 0
       ? 0
@@ -238,7 +229,7 @@ function setup(ctx) {
       percent: percentFor(bp.scrollAnchor),
       value: bp.translations[i]
     }));
-    setItemCurrentKeyframes(state, item, ranges[i].peakX, ranges[i], translateStops, ctx.scrollAxis, usesContrast);
+    setItemCurrentKeyframes(state, item, ranges[i].peakX, ranges[i], translateStops, usesContrast);
   });
   flushKeyframeStyles(state);
 } // End setup function

@@ -7,7 +7,7 @@ import { computeSpacerSize } from "../carousel-math.js";
 // geometry). Created once and resized in place, rather than recreated, so
 // callers can hold a stable reference to the trailing spacer as the
 // insertion point for populated items.
-export function createSpacers(wrapper, { getItems, offsetSize, scrollAxis, getAlignmentFraction, getScrollPadding }) {
+export function createSpacers(wrapper, { getItems, getAlignmentFraction, getScrollPadding }) {
   const firstSpacer = document.createElement("div");
   const lastSpacer = document.createElement("div");
   firstSpacer.classList.add("spacer");
@@ -29,9 +29,9 @@ export function createSpacers(wrapper, { getItems, offsetSize, scrollAxis, getAl
       const item = index === 0 ? firstItem : lastItem;
       const size = Math.max(
         0,
-        computeSpacerSize(wrapper[offsetSize], item[offsetSize], edgeFraction, gapSize, scrollPadding)
+        computeSpacerSize(wrapper.offsetWidth, item.offsetWidth, edgeFraction, gapSize, scrollPadding)
       );
-      spacer.style[scrollAxis === "x" ? "width" : "height"] = size + "px";
+      spacer.style.width = size + "px";
     });
   }
 

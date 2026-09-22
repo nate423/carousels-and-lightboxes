@@ -43,12 +43,6 @@ export function createCarousel(wrapper, options = {}) {
 
   wrapper.dataset.scrollAlignment ||= DEFAULT_ALIGNMENT;
 
-  const scrollAxis = wrapper.getAttribute("data-scroll-axis") || "x";
-  const scrollDistance = scrollAxis === "x" ? "scrollLeft" : "scrollTop";
-  const offsetSize = scrollAxis === "x" ? "offsetWidth" : "offsetHeight";
-  const offsetFromStart = scrollAxis === "x" ? "offsetLeft" : "offsetTop";
-  const scrollSize = scrollAxis === "x" ? "scrollWidth" : "scrollHeight";
-
   function getAlignment() {
     return wrapper.dataset.scrollAlignment || DEFAULT_ALIGNMENT;
   }
@@ -83,22 +77,8 @@ export function createCarousel(wrapper, options = {}) {
   const snap = createSnapSuspension(wrapper);
   const attribution = createScrollAttribution(wrapper, { onSelfReclaim: snap.restore });
   const contrast = createContrastPolicy(wrapper, removeContrastWhileScrolling);
-  const geometry = createGeometryCache({
-    wrapper,
-    getItems,
-    offsetFromStart,
-    offsetSize,
-    scrollDistance,
-    getAlignmentFraction,
-    getScrollPadding
-  });
-  const spacers = createSpacers(wrapper, {
-    getItems,
-    offsetSize,
-    scrollAxis,
-    getAlignmentFraction,
-    getScrollPadding
-  });
+  const geometry = createGeometryCache({ wrapper, getItems, getAlignmentFraction, getScrollPadding });
+  const spacers = createSpacers(wrapper, { getItems, getAlignmentFraction, getScrollPadding });
 
   // Reads motion off attribution and writes it through to the contrast
   // policy - the one-line seam between the two modules. Return value (did
@@ -142,19 +122,9 @@ export function createCarousel(wrapper, options = {}) {
     // for its own reasons and propagates through a link.
     attribution.noteSelfCommand();
 
-    const scrollTarget = computeScrollTarget(
-      wrapper,
-      item,
-      offsetFromStart,
-      offsetSize,
-      getAlignmentFraction(),
-      getScrollPadding()
-    );
+    const scrollTarget = computeScrollTarget(wrapper, item, getAlignmentFraction(), getScrollPadding());
 
-    wrapper.scrollTo({
-      [scrollAxis === "x" ? "left" : "top"]: scrollTarget,
-      behavior
-    });
+    wrapper.scrollTo({ left: scrollTarget, behavior });
   }
 
   // Manually takes over the scroll position to match an externally-driven
@@ -168,7 +138,7 @@ export function createCarousel(wrapper, options = {}) {
     snap.suspend();
 
     const { anchors, wrapperAnchorPoint } = geometry.get();
-    wrapper[scrollDistance] = computeScrollAnchorForProgress(anchors, progress) - wrapperAnchorPoint;
+    wrapper.scrollLeft = computeScrollAnchorForProgress(anchors, progress) - wrapperAnchorPoint;
 
     // Render here rather than waiting for the scroll event this write usually
     // causes, because it does not always cause one: a scroll position is
@@ -187,7 +157,6 @@ export function createCarousel(wrapper, options = {}) {
       effect,
       createItem,
       itemSizing,
-      scrollAxis,
       onItemClick: (index) => goToIndex(index, { behavior: "smooth" })
     });
     updateSpacers();
@@ -199,11 +168,6 @@ export function createCarousel(wrapper, options = {}) {
   // createCarousel returns.
   const ctx = {
     wrapper,
-    scrollDistance,
-    offsetSize,
-    offsetFromStart,
-    scrollSize,
-    scrollAxis,
     getAlignmentFraction,
     getScrollPadding,
     getNoncurrentScale,
@@ -327,7 +291,6 @@ export function createCarousel(wrapper, options = {}) {
 
   return {
     wrapper,
-    scrollAxis,
     getItems,
     goToIndex,
     getCurrentProgress: geometry.getCurrentProgress,
