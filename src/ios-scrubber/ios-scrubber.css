@@ -1,46 +1,31 @@
 /* === Page: a carousel navigated by an iOS Photos-style scrubber ===
    Only what is true of this page alone. The page chrome and the carousel
    and item boxes are in shared/base.css; the fade the main carousel draws is
-   in shared/fade-look.css, which the one .fade wrapper here answers to. */
+   in shared/fade-look.css (which the one .fade wrapper here answers to),
+   and the strip's own look is shared/expand-look.css (which the
+   .expand-effect wrapper, added by expand-effect.js, answers to). */
 
-/* --- What the strip's look draws, and how much of it is showing --------
-   Two values the strip's look is written in terms of:
-
-     --item-progress  how far this item has come from its noncurrent state
-                      to its current one, 0 to 1 - the same itemProgress
-                      carousel-math.js defines.
-     --item-shift     how far this item is displaced along the scroll axis
-                      by whatever expansion is happening elsewhere.
-
-   Both describe the look at full strength. The contrast multiplier is
-   applied where they are read, not where they are written, and that split
-   is the whole trick: a scroll-driven animation can keep writing them at
-   full strength every frame while the collapse eases independently
-   underneath. Animations beat transitions in the cascade, so a transition
-   on a drawn property itself could never ease away from what an animation
-   is asserting - it would be ignored while the animation ran and snap the
-   moment it stopped.
+/* --- How much of the strip's look is showing -----------------------------
+   expand-look.css's --item-progress/--item-shift describe the look at full
+   strength; --contrast-amount is this page's own dimmer on top of it, and
+   --item-progress-effective is where the two combine. The multiplier is
+   applied where --item-progress is read, not where it's written, and that
+   split is the whole trick: a scroll-driven animation can keep writing
+   --item-progress at full strength every frame while the collapse eases
+   independently underneath. Animations beat transitions in the cascade, so
+   a transition on a drawn property itself could never ease away from what
+   an animation is asserting - it would be ignored while the animation ran
+   and snap the moment it stopped.
 
    Registered so they interpolate at all: an unregistered custom property is
    an untyped token string, which keyframes and transitions can only swap at
-   the halfway mark. --item-progress inherits so that a look can build an
-   item out of nested elements and have them all see their own item's value
-   (the iOS filmstrip's thumb does exactly this), and starts at 1 rather
-   than 0 so an item whose animation never resolves - the polyfill failing
-   to load, say - degrades to the plain undistorted item rather than to
-   every item stuck at its noncurrent size. Same neutral fallback the
-   .carousel-item rule above states outright, reached the same way. */
-@property --item-progress {
-  syntax: "<number>";
-  inherits: true;
-  initial-value: 1;
-}
-
-@property --item-shift {
-  syntax: "<length>";
-  inherits: false;
-  initial-value: 0px;
-}
+   the halfway mark. --item-progress-effective inherits for the same reason
+   expand-look.css's --item-progress does - so a nested thumb sees its own
+   item's value - and starts at 1 rather than 0 so an item whose animation
+   never resolves - the polyfill failing to load, say - degrades to the
+   plain undistorted item rather than to every item stuck at its noncurrent
+   size. Same neutral fallback the .carousel-item rule below states
+   outright, reached the same way. */
 
 /* How much of the look is showing at all: 1 fully, 0 not at all. strip.js
    writes data-contrast from the carousel's motion state, and this is the only
@@ -104,9 +89,9 @@
    for what went wrong when it could. overflow is visible for the same
    reason: the expanded
    thumb is deliberately wider than the box it lives in. */
-.ios-thumbnail-scrubber-item {
+.expand-effect-item {
   flex: 0 0 auto;
-  width: var(--ios-item-width);
+  width: var(--expand-item-width);
   height: 100%;
   overflow: visible;
   display: flex;
@@ -124,96 +109,12 @@
   transition: transform 200ms ease;
 }
 
-.ios-thumbnail-scrubber-thumb {
+.expand-effect-thumb {
   /* Never shrink to fit the (narrower) fixed item box around it. */
   flex: 0 0 auto;
-  width: var(--ios-item-width);
+  width: var(--expand-item-width);
   height: 100%;
   border-radius: 4px;
   transition: width 200ms ease, transform 200ms ease;
   background-color: hsl(220, 14%, 70%);
-}
-
-/* --- The iOS scrubber look, painted natively ---------------------------
-   The other half of this page's look.js. See that file's
-   header for the derivation these rules rest on - it explains why one
-   animation advancing one number is enough for the whole strip.
-
-   Horizontal only, like the look it mirrors: the translates below are
-   written on X. A vertical filmstrip would want the same formula on Y and
-   a block-axis timeline. */
-
-/* Registered so they interpolate. An unregistered custom property is an
-   untyped token string, which keyframes and transitions can only swap at
-   the halfway mark rather than animate through. All three inherit because
-   the wrapper is what animates them and the items are what read them. */
-@property --ios-progress {
-  syntax: "<number>";
-  inherits: true;
-  initial-value: 0;
-}
-
-.ios-scrubber-css {
-  /* This page declares only the timeline this look needs. The scale-fade
-     pages hang a per-item view-timeline off .carousel-item as well, which
-     would drive an item-current scale/opacity animation this look does not
-     want - so that scaffolding simply is not in this stylesheet. */
-  scroll-timeline-name: --carousel-scroll;
-  scroll-timeline-axis: inline;
-
-  /* The one animation driving the entire look. Its @keyframes is generated
-     per wrapper, since it needs the item count. */
-  animation-timeline: --carousel-scroll;
-  animation-fill-mode: both;
-  animation-timing-function: linear;
-}
-
-/* The hand-computed variant's permanent transitions have to go here, and
-   their absence is the point rather than a workaround. There, JS writes a
-   discrete transform/width target per item per frame and the transition is
-   what turns that stream of targets into motion. Here the outputs are
-   already continuous - they follow --ios-progress, which the animation
-   advances - so transitioning them would add real lag to every frame and
-   restart the easing curve on each one. All the easing this look needs is
-   on the collapse, and that rides on --contrast-amount. */
-.ios-scrubber-css .ios-thumbnail-scrubber-item,
-.ios-scrubber-css .ios-thumbnail-scrubber-thumb {
-  transition: none;
-}
-
-.ios-scrubber-css .ios-thumbnail-scrubber-item {
-  /* How many items away this one is from current, signed, and the two
-     clamped ramps both outputs are built from. Split out so the formula
-     below reads like the derivation rather than one long expression, and
-     because the two outputs share them. */
-  --u: calc(var(--ios-index) - var(--ios-progress));
-  --lo: clamp(0, calc(1 + var(--u)), 1);
-  --hi: clamp(0, var(--u), 1);
-
-  /* The two values this look draws from - see their block above. Written at
-     full (raw) strength; --item-progress-effective folds in --contrast-amount
-     at the point of use. Unlike the scale+fade look, which gets these from
-     per-item keyframes, they come from a calc() over one shared progress.
-
-     --item-progress is a triangle centered on this item's own index,
-     written without abs() by subtracting the two ramps. It inherits, which
-     is what lets the thumb inside the item read its own item's value. */
-  --item-progress: calc(var(--lo) - var(--hi));
-
-  /* The general form was F * (a*lo + (1-a)*hi - a - bend), for anchor
-     fraction a. Centred, a is 1/2 and the two ramps weigh the same, and bend
-     - a quadratic correction in frac(progress) - is identically zero. That
-     term was the only part of the formula that was not a function of an
-     item's own index, and so the only thing the effect had to write per
-     frame; without it this rule is entirely static. */
-  --item-shift: calc(var(--ios-footprint-growth) * ((var(--lo) + var(--hi)) * 0.5 - 0.5));
-
-  transform: translate3d(calc(var(--item-shift) * var(--contrast-amount) + var(--scroll-error)), 0, 0);
-}
-
-.ios-scrubber-css .ios-thumbnail-scrubber-thumb {
-  /* No transform to re-centre the thumb inside the footprint its neighbours
-     made room for: that correction was proportional to (0.5 - a), and the
-     anchor point is now the item's own centre. */
-  width: calc(var(--ios-item-width) + var(--item-progress-effective) * var(--ios-thumb-growth));
 }

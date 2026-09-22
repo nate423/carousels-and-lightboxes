@@ -9,14 +9,14 @@
 // carousel - linked to the main carousel via the same linkCarousels used
 // there (defaults: this strip follows continuously, the main carousel
 // follows instantly). All of the "only the centered item is bigger" visual
-// logic lives in look.js, which paints it with a native
-// scroll-driven animation, and this file just wires up fixed-size, non-aspect-ratio-preserving items (unlike the
+// logic lives in shared/effects/expand-effect.js, which paints it with a
+// native scroll-driven animation, and this file just wires up fixed-size, non-aspect-ratio-preserving items (unlike the
 // original, whose thumbnails mirror each source item's real aspect ratio),
 // the sizes as CSS custom properties the effect reads, and the contrast
 // policy that makes the thumbnails flatten while the strip itself is being
 // dragged.
 import { createCarousel } from "../shared/carousel-engine.js";
-import { iosScrubberCssEffect } from "./look.js";
+import { expandEffect } from "../shared/effects/expand-effect.js";
 import { linkCarousels } from "../shared/linked-scrolling/link.js";
 
 export function attachIosScrubber(mainCarousel, scrubberWrapper, options = {}) {
@@ -24,13 +24,13 @@ export function attachIosScrubber(mainCarousel, scrubberWrapper, options = {}) {
   const itemCount = mainCarousel.getItems().length;
 
   scrubberWrapper.style.setProperty("--wrapper-gap", gap + "px");
-  scrubberWrapper.style.setProperty("--ios-item-width", itemWidth + "px");
-  scrubberWrapper.style.setProperty("--ios-expanded-width", expandedWidth + "px");
-  scrubberWrapper.style.setProperty("--ios-expanded-padding", expandedPadding + "px");
+  scrubberWrapper.style.setProperty("--expand-item-width", itemWidth + "px");
+  scrubberWrapper.style.setProperty("--expand-grown-width", expandedWidth + "px");
+  scrubberWrapper.style.setProperty("--expand-grown-padding", expandedPadding + "px");
 
   const scrubber = createCarousel(scrubberWrapper, {
     itemCount,
-    effect: iosScrubberCssEffect(),
+    effect: expandEffect(),
     itemSizing: {
       crossSize: itemHeight,
       // One ratio for the whole strip, rather than each thumbnail keeping

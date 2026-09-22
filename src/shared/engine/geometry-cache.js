@@ -8,10 +8,10 @@ import { getItemMetrics, computeCurrentProgress, wrapperAnchor } from "../carous
 //
 // What makes that safe is that no effect changes an item's border box. They
 // draw with transforms and with properties confined inside the box
-// (the iOS scrubber look is built around this: letting an item's box grow
+// (the expand look is built around this: letting an item's box grow
 // feeds the geometry back into the progress derived from it, which is why
-// its expansion is drawn as overflow and a transform - see
-// .ios-thumbnail-scrubber-item in that page's stylesheet). offsetLeft and
+// its growth is drawn as overflow and a transform - see
+// .expand-effect-item in shared/expand-look.css). offsetLeft and
 // offsetWidth therefore cannot move between rebuilds,
 // and an effect that did move them would opt out of its own correctness,
 // not just this cache's.

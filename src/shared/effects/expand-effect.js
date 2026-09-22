@@ -1,5 +1,10 @@
-// The iOS Photos scrubber's look, painted by a native scroll-driven
-// animation. The same look computed by hand is archived at
+// A carousel look for fixed-size items at a constant gap, where only the one
+// nearest the center grows - both its own box and the room its neighbours
+// leave around it - drawn as overflow and a transform rather than a bigger
+// layout box. Used by the iOS-Photos-style scrubber strip, but nothing here
+// is specific to that page.
+//
+// The same look computed by hand is archived at
 // archive/proto-v1/js/effects/ios-scrubber-effect.js (settle-effect.js
 // wrapped around looks/ios-box-look.js) - the reference implementation this
 // one's derivation below was checked against.
@@ -33,7 +38,7 @@
 // dependent place for every item, forcing a generated @keyframes rule each
 // - the whole strip needs exactly one animation, advancing one number from
 // 0 to n-1 across the scroll range. Each item's own index is a static
-// custom property, and this page's stylesheet does the rest.
+// custom property, and expand-look.css does the rest.
 //
 // Item *sizes* drop out of that derivation entirely: the translate is the
 // difference between two layouts, and each item's size appears identically
@@ -51,20 +56,18 @@
 import {
   computeCurrentProgress,
   computeCurrentIndex,
-  computeScrollAnchorForProgress,
-  getItemMetrics,
-  wrapperAnchor
-} from "../shared/carousel-math.js";
-import { replaceStyleEl } from "../shared/effects/style-swap.js";
+  computeScrollAnchorForProgress
+} from "../carousel-math.js";
+import { replaceStyleEl } from "./style-swap.js";
 
 let nextStripId = 0;
 
 const stateByWrapper = new WeakMap();
 
 function onItemCreated(item) {
-  item.classList.add("ios-thumbnail-scrubber-item");
+  item.classList.add("expand-effect-item");
   const thumb = document.createElement("div");
-  thumb.classList.add("ios-thumbnail-scrubber-thumb");
+  thumb.classList.add("expand-effect-thumb");
   item.appendChild(thumb);
 }
 
@@ -97,35 +100,33 @@ function onItemCreated(item) {
 // `progressDriver` pins that choice for comparison: "css" always reads the
 // scroll position, "js" always writes progress. The default picks per
 // frame.
-export function iosScrubberCssEffect({ progressDriver = "auto" } = {}) {
+export function expandEffect({ progressDriver = "auto" } = {}) {
   function setup(ctx) {
-    const { wrapper } = ctx;
-    const items = [...wrapper.querySelectorAll(".carousel-item")];
+    const { wrapper, getGeometry } = ctx;
+    const { items, anchors } = getGeometry();
     const style = getComputedStyle(wrapper);
-    const itemWidth = parseFloat(style.getPropertyValue("--ios-item-width")) || 20;
-    const expandedWidth = parseFloat(style.getPropertyValue("--ios-expanded-width")) || 30;
-    const expandedPadding = parseFloat(style.getPropertyValue("--ios-expanded-padding")) || 10;
+    const itemWidth = parseFloat(style.getPropertyValue("--expand-item-width")) || 20;
+    const grownWidth = parseFloat(style.getPropertyValue("--expand-grown-width")) || 30;
+    const grownPadding = parseFloat(style.getPropertyValue("--expand-grown-padding")) || 10;
 
     const previous = stateByWrapper.get(wrapper);
     const stripId = previous ? previous.stripId : nextStripId++;
 
-    wrapper.classList.add("ios-scrubber-css");
-    // How much wider the thumb itself draws when fully expanded, versus how
-    // much room the expanded item takes from its neighbours - which also
+    wrapper.classList.add("expand-effect");
+    // How much wider the thumb itself draws when fully grown, versus how
+    // much room the grown item takes from its neighbours - which also
     // includes the breathing space either side of it. Both are drawn as
     // overflow around the item's own fixed box, so only the second decides
     // how far the neighbours are pushed away.
-    wrapper.style.setProperty("--ios-thumb-growth", expandedWidth - itemWidth + "px");
-    wrapper.style.setProperty("--ios-footprint-growth", expandedWidth - itemWidth + 2 * expandedPadding + "px");
-    items.forEach((item, i) => item.style.setProperty("--ios-index", i));
+    wrapper.style.setProperty("--expand-thumb-growth", grownWidth - itemWidth + "px");
+    wrapper.style.setProperty("--expand-footprint-growth", grownWidth - itemWidth + 2 * grownPadding + "px");
+    items.forEach((item, i) => item.style.setProperty("--expand-index", i));
 
-    const animationName = `ios-progress-${stripId}`;
+    const animationName = `expand-progress-${stripId}`;
     const styleEl = replaceStyleEl(
       previous?.styleEl,
-      `@keyframes ${animationName} {\n  from { --ios-progress: 0; }\n  to { --ios-progress: ${items.length - 1}; }\n}`
+      `@keyframes ${animationName} {\n  from { --expand-progress: 0; }\n  to { --expand-progress: ${items.length - 1}; }\n}`
     );
-
-    const { anchors } = getItemMetrics(wrapper, items);
 
     stateByWrapper.set(wrapper, {
       stripId,
@@ -133,7 +134,6 @@ export function iosScrubberCssEffect({ progressDriver = "auto" } = {}) {
       animationName,
       items,
       anchors,
-      wrapperAnchorPoint: wrapperAnchor(wrapper.offsetWidth),
       // Unset rather than false, so the first apply() always writes which
       // source is in use instead of assuming the wrapper already agrees.
       writingProgress: undefined
@@ -141,12 +141,12 @@ export function iosScrubberCssEffect({ progressDriver = "auto" } = {}) {
   }
 
   function apply(ctx) {
-    const { wrapper, getScrollSource, getDrivenProgress, onProgress } = ctx;
+    const { wrapper, getScrollSource, getDrivenProgress, onProgress, currentScrollAnchor } = ctx;
     const state = stateByWrapper.get(wrapper);
-    const { anchors, wrapperAnchorPoint, items, animationName } = state;
+    const { anchors, items, animationName } = state;
 
     const isDriven = getScrollSource() === "driven";
-    const scrollAnchor = wrapper.scrollLeft + wrapperAnchorPoint;
+    const scrollAnchor = currentScrollAnchor();
     const currentProgress = isDriven ? getDrivenProgress() : computeCurrentProgress(anchors, scrollAnchor);
 
     const writingProgress = progressDriver === "js" || (progressDriver === "auto" && isDriven);
@@ -156,13 +156,13 @@ export function iosScrubberCssEffect({ progressDriver = "auto" } = {}) {
       // both be live - handing over means turning the other one off.
       wrapper.style.animationName = writingProgress ? "none" : animationName;
       if (!writingProgress) {
-        wrapper.style.removeProperty("--ios-progress");
+        wrapper.style.removeProperty("--expand-progress");
         wrapper.style.removeProperty("--scroll-error");
       }
     }
 
     if (writingProgress) {
-      wrapper.style.setProperty("--ios-progress", currentProgress);
+      wrapper.style.setProperty("--expand-progress", currentProgress);
       // Where the items' boxes actually are, against where the progress
       // being painted says they should be. The formula this look draws with
       // reduces to a function of progress alone precisely by assuming those
