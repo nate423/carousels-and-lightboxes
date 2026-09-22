@@ -13,7 +13,7 @@
    number that could drift from the look's actual default; uncomment and
    edit to override. */
 .main-carousel {
-  /* --noncurrent-opacity: 0.5; */
+  --noncurrent-opacity: 0.4;
 }
 
 /* --- How much of the strip's look is showing -----------------------------

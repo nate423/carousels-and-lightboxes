@@ -91,32 +91,27 @@
 
   /*
    * Letterbox insets around the media (read by Slide padding and the snug
-   * width formula). Mobile: equal top/bottom so the media is vertically
-   * centered — 4rem clears the close-button row above and the caption +
-   * counter below (no thumbnail strip on mobile).
+   * width formula). Same top/bottom budget at every viewport — the bottom
+   * band is sized for thumbnail-strip row (5.125rem: 4.5rem thumbs +
+   * indicator padding) + one-line caption bar (~1.75rem incl. gap), the top
+   * for the close-button row above, so the strip has room to sit under the
+   * media instead of overlapping it. Inline stays viewport-specific: 0 on
+   * mobile (edge-to-edge media), a gutter on desktop (below).
    */
-  --lb-inset-top: calc(4rem + env(safe-area-inset-top, 0px));
-  --lb-inset-bottom: calc(4rem + env(safe-area-inset-bottom, 0px));
+  --lb-inset-top: calc(4.5rem + env(safe-area-inset-top, 0px));
+  --lb-inset-bottom: calc(8.625rem + env(safe-area-inset-bottom, 0px));
   --lb-inset-inline: 0px;
+}
+
+/* Solo (single item — no thumbnail strip): only the caption placard sits
+   below, so match the top inset and keep the letterbox symmetric. */
+.lb-content-solo {
+  --lb-inset-bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
 }
 
 @media (min-width: 768px) {
   .lb-content {
-    /*
-     * Roomier desktop letterbox. Bottom = thumbnail-strip row (5.125rem:
-     * 4.5rem thumbs + indicator padding) + one-line caption bar (~1.75rem
-     * incl. gap) + the same optical gap the media keeps to the corner
-     * controls above, so the letterbox reads symmetric.
-     */
-    --lb-inset-top: calc(4.5rem + env(safe-area-inset-top, 0px));
-    --lb-inset-bottom: calc(8.625rem + env(safe-area-inset-bottom, 0px));
     --lb-inset-inline: 3rem;
-  }
-
-  /* Solo (single item — no thumbnail strip): only the caption placard sits
-     below, so match the top inset and keep the letterbox symmetric. */
-  .lb-content-solo {
-    --lb-inset-bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
   }
 
   /* Snug: the horizontal inset is a scrollport gutter consumed by the card
@@ -406,20 +401,18 @@
   color: #a3a3a3;
 }
 
-/* md+: the thumbnail strip shows position, so the counter collapses to
-   sr-only and keeps only its aria-live announcement role. */
-@media (min-width: 768px) {
-  .lb-counter {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    margin: -1px;
-    padding: 0;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    white-space: nowrap;
-    border: 0;
-  }
+/* The thumbnail strip shows position at every viewport, so the counter
+   collapses to sr-only and keeps only its aria-live announcement role. */
+.lb-counter {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 /* ── Controls (iOS-style liquid glass) ──────────────────────────────────── */
