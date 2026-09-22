@@ -2,22 +2,19 @@
    wrapper-level scroll-timeline that shared/effects/scale-fade.js hangs
    its generated per-item animation-name/-range off.
 
-   Scoped to .scale-fade, a class a wrapper opts into, rather than to every
-   .carousel-wrapper on the page. Which carousels want this look varies: the
-   scale-fade page's one carousel, both of the filmstrip page's, and only the
-   main carousel on the iOS page, whose strip draws itself with width and
-   displacement instead. Each page used to say that with its own selector,
-   which is how the iOS page once ended up with the effect running and no
-   timeline for it to run against - a flat carousel, from CSS that was missing
-   rather than wrong. A class is visible in the markup, where leaving it off
-   is something you can see. */
+   Scoped to .scale-fade, a class a wrapper opts into, rather than to
+   every .carousel-wrapper on the page - because which carousels want
+   this look varies (the scale-fade page's one carousel, both of the
+   filmstrip page's, but only the main carousel on the iOS page, whose
+   strip draws itself with width and displacement instead). Each page
+   used to say that with its own selector, which is how the iOS page once
+   ended up with the effect running and no timeline for it to run against
+   - a flat carousel, from CSS that was missing rather than wrong. A
+   class is visible in the markup, where leaving it off is something you
+   can see. */
 
 /* --- The scale-fade look ------------------------------------------------- */
 
-/* The scale-fade look's scaffolding: the per-item view-timeline and the
-   wrapper-level scroll-timeline that scale-fade.js hangs its
-   generated per-item animation-name/-range off. Every carousel on this page
-   wants it, so nothing here is gated. */
 .scale-fade .carousel-item {
   view-timeline-name: --item-reveal;
   view-timeline-axis: inline;
@@ -34,27 +31,28 @@
 }
 
 /* Second, wrapper-level named timeline (distinct from the per-item
-   --item-reveal view-timeline above) tracking raw scroll offset across the
-   whole scrollable range - drives the gap-compensating translate, which
-   (unlike scale/opacity) needs global state a per-item view-timeline can't
-   see. Items reference it directly since they're descendants of the wrapper
-   - see setItemCurrentKeyframes in scale-fade.js for the generated per-item
-   @keyframes and computeTranslationBreakpoints in carousel-math.js for why
-   this is exactly reconstructable rather than sampled. */
+   --item-reveal view-timeline above), tracking raw scroll offset across
+   the whole scrollable range. Drives the gap-compensating translate,
+   which (unlike scale/opacity) needs global state a per-item
+   view-timeline can't see. Items reference it directly since they're
+   descendants of the wrapper - see setItemCurrentKeyframes in
+   scale-fade.js for the generated per-item @keyframes, and
+   computeTranslationBreakpoints in gap-compensation.js for why this is
+   exact rather than sampled. */
 .scale-fade {
   scroll-timeline-name: --carousel-scroll;
   scroll-timeline-axis: inline;
 }
 
 /* Scale, opacity and translate are written by the generated per-item
-   keyframes themselves (see setItemCurrentKeyframes in
-   shared/effects/scale-fade.js), which is what keeps this look on the
-   compositor. Nothing is left here to interpolate.
+   keyframes themselves (see setItemCurrentKeyframes in scale-fade.js),
+   which is what keeps this look on the compositor. Nothing is left here
+   to interpolate.
 
-   The scroll-error correction stays, on its own property: the animation owns
-   translate and nothing can be added to it there, but translate and transform
-   compose, so the correction lands either way. It is static - and therefore
-   free - on any carousel that is not currently being driven. */
+   The scroll-error correction stays on its own property: the animation
+   owns translate, so nothing can be added to it there, but translate and
+   transform compose, so the correction lands either way. Static, and so
+   free, on any carousel that isn't currently being driven. */
 .scale-fade .carousel-item {
   transform: translateX(var(--scroll-error));
 }

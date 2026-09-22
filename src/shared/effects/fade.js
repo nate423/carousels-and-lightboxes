@@ -1,26 +1,25 @@
-// The scale-fade look with the scale taken out: the current item at full
-// opacity, its neighbours faded, and nothing moving. Used where a carousel is
-// context rather than the subject - the iOS scrubber page, whose main carousel
-// is there to show what the strip is scrubbing.
+// The scale-fade look with the scale removed: the current item at full
+// opacity, its neighbours faded, nothing moving. Used where a carousel is
+// context rather than the subject - e.g. the iOS scrubber page's main
+// carousel, which just shows what the strip is scrubbing.
 //
-// Same falloff as scale-fade, and for the same reason: each item's animation
-// range is clamped to its own neighbouring anchors, so an item reaches full
-// fade exactly as its neighbour becomes current, whatever the two sizes are.
-// That clamping is what puts an item's peak somewhere other than the middle of
-// its range, which is why each item still needs a generated @keyframes rule of
-// its own (see scale-fade.js's header for the mechanics, which this
-// shares).
+// Same falloff as scale-fade, for the same reason: each item's animation
+// range is clamped to its neighbouring anchors, so it reaches full fade
+// exactly as that neighbour becomes current, whatever their sizes. That's
+// also why each item needs its own generated @keyframes rule instead of a
+// shared one - see scale-fade.js's header for the mechanics, which this
+// look shares.
 //
-// What it does not need is gap-compensation. Nothing here changes an item's
-// drawn size, so no gap opens between neighbours and there is nothing to close.
+// No gap-compensation needed: nothing here changes an item's size, so no
+// gap ever opens between neighbours.
 import { computeCurrentProgress, computeCurrentIndex, computeAnimationRanges } from "../carousel-math.js";
 import { RuleSheet } from "./helpers/style-swap.js";
 
 let nextItemId = 0;
 const stateByWrapper = new WeakMap();
 
-// One set of generated rules per wrapper, not per page - see
-// scale-fade.js for what goes wrong when carousels share them.
+// One set of generated rules per wrapper, not per page - see scale-fade.js
+// for what goes wrong when carousels share them.
 function getWrapperState(wrapper) {
   let state = stateByWrapper.get(wrapper);
   if (!state) {
@@ -57,7 +56,7 @@ function setup(ctx) {
     item.style.animationTimeline = "--item-reveal";
     item.style.animationRange = range;
 
-    // Also as a real selector rule: the scroll-timeline polyfill cannot see
+    // Also as a real selector rule: the scroll-timeline polyfill can't see
     // these as inline styles.
     state.positionSheet.set(
       item.dataset.itemId,
@@ -74,7 +73,7 @@ function setup(ctx) {
 }
 
 // The timelines draw everything; this only reports which item is current,
-// which no timeline can hand back to JS.
+// since that's the one thing no timeline can hand back to JS.
 function apply(ctx) {
   const { getGeometry, currentScrollAnchor, onProgress } = ctx;
   if (!onProgress) return;

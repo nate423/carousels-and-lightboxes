@@ -6,15 +6,14 @@ import { getItemMetrics, computeCurrentProgress, wrapperAnchor } from "../carous
 // through (see spacers.js and carousel-engine.js's updateSpacers). So this is
 // computed once per such event rather than per frame.
 //
-// What makes that safe is that no effect changes an item's border box. They
-// draw with transforms and with properties confined inside the box
+// What makes that safe is that no effect changes an item's border box.
+// They draw with transforms and with properties confined inside the box
 // (the expand look is built around this: letting an item's box grow
-// feeds the geometry back into the progress derived from it, which is why
-// its growth is drawn as overflow and a transform - see
-// .expand-effect-item in shared/effects/expand.css). offsetLeft and
-// offsetWidth therefore cannot move between rebuilds,
-// and an effect that did move them would opt out of its own correctness,
-// not just this cache's.
+// would feed the geometry back into the progress derived from it, which
+// is why its growth is drawn as overflow and a transform instead - see
+// .expand-effect-item in shared/effects/expand.css). So offsetLeft and
+// offsetWidth can't move between rebuilds, and an effect that did move
+// them would opt out of its own correctness, not just this cache's.
 //
 // Driving one carousel from another used to cost three full passes over
 // every item per frame - the leader's getCurrentProgress, the follower's

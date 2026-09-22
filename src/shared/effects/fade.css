@@ -36,12 +36,12 @@
   }
 }
 
-/* This look moves nothing, so the only thing left to write is the scroll-error
-   correction - which is not part of the look but the thing that makes it land
-   where it was asked to. It matters here because a driven carousel's scroll
-   position is quantised: without it, a carousel being scrubbed steps a whole
-   pixel at a time instead of gliding. Static, and therefore free, on any
-   carousel that is not currently being driven. */
+/* This look moves nothing, so the only thing left to write is the
+   scroll-error correction - not part of the look itself, but what makes
+   it land where it was asked to. It matters because a driven carousel's
+   scroll position is quantised: without this, a carousel being scrubbed
+   steps a whole pixel at a time instead of gliding. Static, and so free,
+   on any carousel that isn't currently being driven. */
 .fade .carousel-item {
   transform: translateX(var(--scroll-error));
 }

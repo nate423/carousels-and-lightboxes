@@ -1,12 +1,13 @@
-// This page's navigator: a filmstrip instead of dots. Unlike the scale-fade
-// page's page-dots.js, this isn't a small widget bolted onto the main
-// carousel's own wrapper - it's a second, independent carousel-engine
-// instance (own wrapper, own effect, own scroll), kept in sync with the main
-// one via shared/linked-scrolling/. It reuses the exact same scale/opacity "current item
-// pops up, neighbors shrink" effect the main carousel already has, just
-// tuned smaller (see .thumbnail-scrubber-strip's --noncurrent-scale in
-// this page's stylesheet) - no bespoke visual code needed for the "current thumbnail is
-// bigger" look.
+// This page's navigator: a filmstrip instead of dots. Unlike the
+// scale-fade page's page-dots.js, this isn't a small widget bolted onto
+// the main carousel's own wrapper - it's a second, independent
+// carousel-engine instance (own wrapper, own effect, own scroll), kept
+// in sync with the main one via shared/linked-scrolling/. It reuses the
+// exact same scale/opacity "current item pops up, neighbours shrink"
+// effect the main carousel already has, just tuned smaller (see
+// .thumbnail-scrubber-strip's --noncurrent-scale in this page's
+// stylesheet) - no bespoke visual code needed for the "current thumbnail
+// is bigger" look.
 import { createCarousel } from "../shared/carousel-engine.js";
 import { scaleFadeEffect } from "../shared/effects/scale-fade.js";
 import { linkCarousels } from "../shared/linked-scrolling/link.js";

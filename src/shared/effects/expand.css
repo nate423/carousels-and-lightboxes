@@ -25,13 +25,13 @@
    page's own stylesheet for that); both are read with a fallback here so a
    page that doesn't define them still gets the look at full strength. */
 
-/* Registered so they interpolate. An unregistered custom property is an
+/* Registered so they interpolate - an unregistered custom property is an
    untyped token string, which keyframes and transitions can only swap at
-   the halfway mark rather than animate through. Both inherit because the
-   wrapper is what animates --expand-progress and the item is what computes
-   --item-progress/--item-shift from it; --item-progress additionally needs
-   to reach a nested thumb, which is why it inherits rather than staying
-   scoped to the item itself. */
+   the halfway mark, not animate through. --expand-progress and
+   --item-progress inherit: the wrapper animates the first, the item
+   computes the second from it, and a nested thumb needs to read that
+   same value. --item-shift doesn't inherit - only the item that computes
+   it ever reads it. */
 @property --expand-progress {
   syntax: "<number>";
   inherits: true;
@@ -51,29 +51,28 @@
 }
 
 .expand-effect {
-  /* A page using this look declares only the timeline it needs. The
-     scale-fade pages hang a per-item view-timeline off .carousel-item as
-     well, which would drive an item-current scale/opacity animation this
-     look does not want - so that scaffolding simply is not here. */
+  /* Only the timeline this look needs. The scale-fade look also hangs a
+     per-item view-timeline off .carousel-item, which would drive a
+     scale/opacity animation this look doesn't want - so that scaffolding
+     simply isn't here. */
   scroll-timeline-name: --carousel-scroll;
   scroll-timeline-axis: inline;
 
-  /* The one animation driving the entire look. Its @keyframes is generated
-     per wrapper, since it needs the item count. */
+  /* The one animation driving the entire look. Its @keyframes is
+     generated per wrapper, since it needs the item count. */
   animation-timeline: --carousel-scroll;
   animation-fill-mode: both;
   animation-timing-function: linear;
 }
 
-/* The hand-computed variant's permanent transitions have to go here, and
-   their absence is the point rather than a workaround. There, JS writes a
-   discrete transform/width target per item per frame and the transition is
-   what turns that stream of targets into motion. Here the outputs are
-   already continuous - they follow --expand-progress, which the animation
-   advances - so transitioning them would add real lag to every frame and
-   restart the easing curve on each one. Any easing a page layers on top
-   (e.g. easing a contrast collapse) rides on the property it multiplies
-   this look's output by, not on the output itself. */
+/* No transition here, on purpose. The hand-computed variant needs one:
+   JS writes a discrete transform/width target per item per frame, and
+   the transition is what turns that stream of targets into motion. Here
+   the outputs are already continuous - they follow --expand-progress,
+   which the animation advances - so a transition would just add lag and
+   restart its easing curve every frame. Any easing a page wants (e.g.
+   easing a contrast collapse) belongs on the property it multiplies this
+   look's output by, not on the output itself. */
 .expand-effect .expand-effect-item,
 .expand-effect .expand-effect-thumb {
   transition: none;

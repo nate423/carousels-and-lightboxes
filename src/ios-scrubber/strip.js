@@ -1,20 +1,21 @@
-// This page's navigator. The filmstrip page has the other style of the same
-// idea - every item scaling continuously toward center - where this one shows fixed-size thumbnails at a constant gap, where only the
-// item nearest the center grows (both its thumbnail and the padding around
+// This page's navigator. The filmstrip page has the other style of the
+// same idea - every item scaling continuously toward center - where this
+// one shows fixed-size thumbnails at a constant gap, and only the item
+// nearest the center grows (both its thumbnail and the padding around
 // it), matching iOS Photos' scrubber.
 //
-// Built exactly the same way as the original: its own createCarousel
-// instance - real native scroll + scroll-snap, so dragging/flicking it gets
-// native momentum and snapping for free, not a custom pointer/transform
-// carousel - linked to the main carousel via the same linkCarousels used
-// there (defaults: this strip follows continuously, the main carousel
-// follows instantly). All of the "only the centered item is bigger" visual
-// logic lives in shared/effects/expand.js, which paints it with a
-// native scroll-driven animation, and this file just wires up fixed-size, non-aspect-ratio-preserving items (unlike the
-// original, whose thumbnails mirror each source item's real aspect ratio),
-// the sizes as CSS custom properties the effect reads, and the contrast
-// policy that makes the thumbnails flatten while the strip itself is being
-// dragged.
+// Built the same way as the original: its own createCarousel instance -
+// real native scroll + scroll-snap, so dragging/flicking gets native
+// momentum and snapping for free, not a custom pointer/transform carousel
+// - linked to the main carousel via the same linkCarousels used
+// elsewhere (defaults: this strip follows continuously, the main
+// carousel follows instantly). All of the "only the centered item is
+// bigger" visual logic lives in shared/effects/expand.js; this file just
+// wires up fixed-size, non-aspect-ratio-preserving items (unlike the
+// original, whose thumbnails mirror each source item's real aspect
+// ratio), the sizes as CSS custom properties the effect reads, and the
+// contrast policy that flattens the thumbnails while the strip itself is
+// being dragged.
 import { createCarousel } from "../shared/carousel-engine.js";
 import { expandEffect } from "../shared/effects/expand.js";
 import { linkCarousels } from "../shared/linked-scrolling/link.js";
@@ -45,14 +46,15 @@ export function attachIosScrubber(mainCarousel, scrubberWrapper, options = {}) {
     createItem: () => {}
   });
 
-  // This style's defining behavior: the thumbnails flatten out while you are
-  // dragging the strip itself, and whichever one you come to rest on grows.
-  // While it is merely following the main carousel it keeps its contrast and
-  // tracks along expanded, so "leading" and not any other motion state.
+  // This style's defining behavior: the thumbnails flatten out while
+  // you're dragging the strip itself, and whichever one you come to rest
+  // on grows. While it's merely following the main carousel, it keeps
+  // its contrast and tracks along grown - so only "leading" flattens it,
+  // no other motion state.
   //
-  // The look reads data-contrast from CSS (see --contrast-amount in this
-  // page's stylesheet, and the transition on it that turns this step change
-  // into motion), so nothing here has to re-render anything.
+  // The look reads data-contrast from CSS (see --contrast-amount and its
+  // transition in this page's stylesheet), so nothing here has to
+  // re-render anything.
   scrubber.onMotionChange((state) => {
     scrubberWrapper.dataset.contrast = state === "leading" ? "off" : "on";
   });

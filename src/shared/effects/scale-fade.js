@@ -1,21 +1,20 @@
 // The default carousel look: every item scales and fades toward its
-// noncurrent state the further it sits from the current one, with a
-// translate compensating for the gap that scaling opens between neighbours.
+// noncurrent state the further it sits from current, with a translate that
+// compensates for the gap scaling opens between neighbours.
 //
-// All of it comes from native scroll-driven animations (`animation-range`
-// plus per-item @keyframes) on .carousel-item - scale and opacity off the
-// per-item --item-reveal view-timeline, translate off the wrapper-level
-// --carousel-scroll scroll-timeline, both declared in the page's stylesheet.
-// This module only precomputes that animation geometry (setup); apply()
-// derives the current index for a navigator, which is the one thing no
-// timeline can hand back to JS.
+// All native: `animation-range` plus per-item @keyframes on .carousel-item
+// drive scale/opacity off a per-item view-timeline, and translate off a
+// wrapper-level scroll-timeline (both declared in the page's stylesheet).
+// This module only precomputes that animation geometry in setup(); apply()
+// just derives the current index for a navigator, since that's the one
+// thing no timeline can hand back to JS.
 //
-// Shared by the scale-fade page and the filmstrip page, whose strip is this
-// same look tuned smaller.
-// The same look computed by hand, item by item, on every scroll frame
-// instead of once as @keyframes, is archived at
-// archive/proto-v1/js/effects/looks/scale-fade-look.js - the reference
-// implementation to check this one's output against.
+// Shared by the scale-fade page and by the filmstrip page, whose strip is
+// this same look tuned smaller.
+//
+// The same look computed by hand instead of via @keyframes is archived at
+// archive/proto-v1/js/effects/looks/scale-fade-look.js - the reference this
+// one's output was checked against.
 import {
   computeCurrentProgress,
   computeCurrentIndex,
@@ -25,41 +24,37 @@ import {
 import { computeTranslationBreakpoints } from "./helpers/gap-compensation.js";
 import { RuleSheet } from "./helpers/style-swap.js";
 
-// `animation-timing-function` (including the linear() control-point syntax)
-// applies independently *within* each keyframe-to-keyframe segment, re-based
-// to that segment's own local 0-1 - it can't shift *where* a keyframe's
-// value actually falls across the overall range. Placing an item's peak at
-// an arbitrary, per-item asymmetric position (see computeAnimationRanges'
-// peakX) instead requires giving that item its own @keyframes rule with the
-// "scale: 1" stop declared at that exact percentage. Every item needs a
-// distinct, stable id for this (assigned in onItemCreated) and a shared
-// stylesheet holding one generated rule per item, rebuilt whenever setup()
-// recomputes geometry. The gap-compensating translate gets the same
-// treatment (see computeTranslationBreakpoints in gap-compensation.js for why
-// it's exactly representable this way too), just off a second, wrapper-level
-// scroll-timeline instead of the per-item view-timeline - see the page's
-// stylesheet.
-// Item ids just need to be unique site-wide (they're used in a
-// `[data-item-id="N"]` selector - see below), so this counter alone stays
-// module-global; it never needs resetting.
+// `animation-timing-function` only reshapes the curve *within* one
+// keyframe-to-keyframe segment - it can't move *where* a keyframe's value
+// falls across the whole range. Each item's peak sits at its own
+// asymmetric position (computeAnimationRanges' peakX), so placing it
+// correctly means giving that item its own @keyframes rule with "scale: 1"
+// at that exact percentage. That needs a distinct, stable id per item
+// (assigned in onItemCreated) and a shared stylesheet holding one
+// generated rule per item, rebuilt whenever setup() recomputes geometry.
+// The gap-compensating translate gets the same treatment - off a second,
+// wrapper-level scroll-timeline instead of the per-item one - see
+// computeTranslationBreakpoints in gap-compensation.js for why that's
+// exactly representable too.
+//
+// Ids only need to be unique site-wide (they're used in the
+// `[data-item-id="N"]` selector below), so this counter is module-global
+// and never resets.
 let nextItemId = 0;
 
-// Everything else - the generated keyframe/position rules and the <style>
-// elements holding them - is kept one-per-wrapper (via this WeakMap) rather
-// than as module-level singletons. With a single shared set, every
-// carousel using this look (the filmstrip page runs two at once - its main
-// carousel and the strip navigating it)
-// would flush the exact same 3 <style> elements on every one of their setup()
-// calls, so each carousel's own resize/alignment churn forces a full
-// teardown-and-reinsert of every OTHER carousel's rules too. The
-// scroll-timeline polyfill (see below) only (re)parses a <style> element at
-// the moment it's inserted, so that churn means it's constantly re-discovering
-// rules for items whose animations may already be running - a window where a
-// freshly-(re)dispatched animationstart can race the polyfill's own
-// MutationObserver-driven parse of the very rule it needs, permanently
-// missing the timeline hijack for whichever items lose that race. Scoping
-// the rules/style-elements per wrapper means one carousel's churn no longer
-// touches another's.
+// The generated rules and the <style> elements holding them are kept
+// one-per-wrapper (via this WeakMap), not as module-level singletons. A
+// single shared set would mean every carousel using this look (the
+// filmstrip page runs two at once) flushes the same 3 <style> elements on
+// every setup() call, so one carousel's resize churn forces a full
+// teardown-and-reinsert of every other carousel's rules too. The
+// scroll-timeline polyfill (below) only (re)parses a <style> element the
+// moment it's inserted, so that churn keeps re-discovering rules for items
+// whose animations may already be running - and a freshly-dispatched
+// animationstart can race the polyfill's own parse of the very rule it
+// needs, permanently missing the hijack for whichever item loses that
+// race. Scoping rules per wrapper means one carousel's churn never touches
+// another's.
 const stateByWrapper = new WeakMap();
 
 function getWrapperState(wrapper) {
@@ -68,16 +63,14 @@ function getWrapperState(wrapper) {
     state = {
       currentKeyframeSheet: new RuleSheet(),
       translateKeyframeSheet: new RuleSheet(),
-      // The scroll-timeline polyfill (Safari) doesn't support
-      // animation-timeline et al. set as inline styles - it works by parsing
-      // real stylesheet rules for those properties and matching their
-      // selectors against the DOM (see getAnimationTimelineOptions in
-      // vendor/scroll-timeline.js), the same way it discovers everything
-      // else here. Inline styles are invisible to it. So every item's
-      // animation-name/-timeline/-range also gets a generated selector rule
-      // here, in addition to the inline styles below (which native engines
-      // read directly, and which win in the CSSOM anyway - same values, so
-      // no conflict).
+      // Safari's scroll-timeline polyfill can't see animation-timeline etc.
+      // set as inline styles - it only discovers them by parsing real
+      // stylesheet rules and matching selectors against the DOM (see
+      // getAnimationTimelineOptions in vendor/scroll-timeline.js). So every
+      // item's animation-name/-timeline/-range also gets a generated
+      // selector rule here, alongside the inline styles below (which
+      // native engines read directly and which win in the CSSOM anyway -
+      // same values, no conflict).
       positionSheet: new RuleSheet()
     };
     stateByWrapper.set(wrapper, state);
@@ -85,34 +78,31 @@ function getWrapperState(wrapper) {
   return state;
 }
 
-// Only builds the rule text and points the item at it - doesn't touch the
-// shared stylesheets' textContent. Setting textContent is a full
-// reparse/recalc of every rule in it, so setup() batches all n items' rules
-// and writes each stylesheet exactly once after its items.forEach loop.
-// Writing per-item instead would reparse the whole, growing rule set on
-// every one of the n writes - O(n^2) - which would show up as jank or
-// freezing on window resize, since resize has no debounce and calls setup()
-// on every native 'resize' event.
-// The keyframes write scale, opacity and translate outright, which are
-// properties the compositor understands, so the whole look keeps running when
-// the main thread is busy.
+// Builds the rule text and points the item at it, but doesn't touch the
+// shared stylesheet's textContent yet - setting that is a full reparse of
+// every rule in it, so setup() batches all n items' rules and writes each
+// stylesheet once, after the items.forEach loop. Writing per-item instead
+// would reparse the whole, growing rule set on every write - O(n^2) -
+// which shows up as jank on window resize, since resize has no debounce.
 //
-// There used to be a second shape of this same animation, for a carousel that
-// could drop its contrast while moving: every drawn value then has to be
-// multiplied by how much contrast is showing, every frame, which means the
-// keyframes write --item-progress and --item-shift and a calc() in the
-// stylesheet turns those into what is drawn. That is nothing the compositor
-// can evaluate, so the style engine has to resolve the animation every frame
-// instead - measured by blocking the main thread for three seconds and
-// scrolling, which froze that shape outright where this one kept animating.
+// The keyframes write scale, opacity and translate outright, properties
+// the compositor understands on its own, so the look keeps animating even
+// when the main thread is busy.
 //
-// No carousel using this look drops its contrast any more. The iOS scrubber,
-// which does, has its own look and pays that cost there. Worth knowing that
-// contrast cannot simply be composed on top as a second animation, which
-// would have avoided the split in the first place: transform lists do compose
-// multiplicatively under animation-composition, but what contrast scales is
-// each value's *distance from neutral* - 1 + c * (s - 1) - and that is not
-// any factor depending on c alone.
+// A contrast-dimmable version of this look used to exist: every drawn
+// value multiplied by how much contrast is showing, which meant the
+// keyframes wrote --item-progress/--item-shift and a calc() in the
+// stylesheet turned those into the real values. calc() is nothing the
+// compositor can evaluate, so the browser had to resolve the animation on
+// the main thread every frame instead - measured to freeze solid under
+// three seconds of main-thread load, where this simpler version keeps
+// animating.
+//
+// No carousel using this look drops contrast any more; the iOS scrubber,
+// which does, pays that cost in its own look instead. Contrast can't just
+// be composed on top as a second animation either: transforms do compose
+// multiplicatively, but what contrast scales is each value's *distance
+// from neutral* (1 + c * (s - 1)), not a plain factor of c.
 function setItemCurrentKeyframes(state, item, peakX, range, translateStops) {
   const currentName = `item-current-${item.dataset.itemId}`;
   state.currentKeyframeSheet.set(
@@ -158,31 +148,24 @@ function onItemCreated(item) {
   item.dataset.itemId = String(nextItemId++);
 }
 
-// Sets each item's `animation-range` from its own geometry, sized to the
-// real pixel gap to each neighboring anchor so the falloff reaches
-// exactly 0 exactly when that neighbor becomes current (asymmetric
-// whenever neighboring items differ in size, which they always do here).
-// That asymmetry means the item's own peak (where it's genuinely
-// "current") generally doesn't sit at the range's arithmetic midpoint, so
-// each item gets its own @keyframes rule (see setItemCurrentKeyframes) with
-// the "scale: 1" stop placed at peakX instead of a fixed 50%, keeping the
-// peak exactly at this item's real anchor crossing. Pure layout math -
-// only needs recomputing when geometry or alignment changes, not on
-// scroll.
+// Sets each item's `animation-range` from its own geometry - sized to the
+// real pixel gap to each neighbouring anchor, so the falloff reaches
+// exactly 0 exactly when that neighbour becomes current (asymmetric
+// whenever neighbours differ in size, which they always do here). That
+// asymmetry means an item's real peak generally isn't at the range's
+// midpoint, so each item gets its own @keyframes rule
+// (setItemCurrentKeyframes) with "scale: 1" placed at peakX instead of a
+// fixed 50%. Pure layout math - only needs recomputing when geometry or
+// alignment changes, not on scroll.
 //
-// Known limitation (verified, not a bug here): right after an item
-// crosses INTO a fresh animation-range - either this custom sub-range or
-// even the plain default `cover 0%`/`100%` - Chromium holds it clamped at
-// the boundary's keyframe value for several more pixels of real scroll
-// before it starts interpolating, even though the declared range and
-// computeTranslationBreakpoints' prediction are both already correct at that point.
-// Confirmed at the painted-layout level (getBoundingClientRect, not just
-// getComputedStyle) and reproduces identically with no custom range at
-// all, so it's inherent to the browser's view-timeline boundary-crossing
-// detection, not something derivable from - or fixable via - our own
-// geometry. Not compensated for here: any pixel offset that "fixed" it
-// would just be hard-coding an unrelated, undocumented implementation
-// detail rather than a value that falls out of this math.
+// Known limitation, not a bug: right after an item enters a fresh
+// animation-range, Chromium holds it clamped at the boundary's keyframe
+// value for a few more pixels of scroll before it starts interpolating,
+// even though the declared range is already correct at that point.
+// Confirmed at the painted-layout level and reproduces even with the
+// default range, so it's a browser quirk in view-timeline boundary
+// detection, not something our geometry can fix - and not worth
+// hard-coding an undocumented pixel offset for.
 function setup(ctx) {
   const { wrapper, getNoncurrentScale } = ctx;
   const state = getWrapperState(wrapper);
@@ -192,8 +175,8 @@ function setup(ctx) {
   // Native scroll-timeline progress is 0%/100% at raw scroll offset
   // 0/maxScroll, not at wrapperAnchorPoint - scrollAnchor = scrollOffset +
   // wrapperAnchorPoint (see getItemMetrics), so the reachable scrollAnchor
-  // range is [wrapperAnchorPoint, wrapperAnchorPoint + maxScroll]. These are
-  // the true breakpoint boundaries (see computeTranslationBreakpoints).
+  // range is [wrapperAnchorPoint, wrapperAnchorPoint + maxScroll]. These
+  // are the true breakpoint boundaries (see computeTranslationBreakpoints).
   const maxScroll = wrapper.scrollWidth - wrapper.offsetWidth;
   const percentFor = (scrollAnchor) =>
     maxScroll <= 0
@@ -216,7 +199,7 @@ function setup(ctx) {
     setItemCurrentKeyframes(state, item, ranges[i].peakX, ranges[i], translateStops);
   });
   flushKeyframeStyles(state);
-} // End setup function
+}
 
 // Scale/opacity/translate are all driven entirely by the CSS scroll-driven
 // animations on .carousel-item; this only computes the discrete current
@@ -229,19 +212,17 @@ function apply(ctx) {
   const { items, anchors } = getGeometry();
   const scrollAnchor = currentScrollAnchor();
 
-  // While something else is driving this carousel, the driver's progress is
-  // the exact one and the scroll position written from it is quantised, so
-  // every item's box sits a fraction of a pixel from where that progress
-  // belongs. Everything the timelines draw is derived from the scroll
-  // position and therefore carries the same error, which is invisible in
-  // scale and opacity - fractions of a percent - and plainly visible in
-  // position, where it makes the whole strip step a whole quantum at a time
-  // instead of gliding. --scroll-error is what the items' translate adds to
-  // land where the driver actually asked for; see its block in the page's
-  // stylesheet.
+  // While something else drives this carousel, its progress is exact but
+  // the scroll position written from it is quantised, so every item sits
+  // a fraction of a pixel off from where it belongs. The timelines draw
+  // everything from that scroll position, so they inherit the same error
+  // - invisible in scale/opacity (fractions of a percent) but visible in
+  // position, where it makes the whole strip step instead of glide.
+  // --scroll-error is what the translate adds back to land where the
+  // driver actually asked for.
   //
-  // Zero, and removed, whenever this carousel is scrolling itself: progress
-  // is derived from the scroll position then, so the two cannot disagree.
+  // Zero and removed whenever this carousel scrolls itself, since progress
+  // comes straight from the scroll position then - the two can't disagree.
   const isDriven = getScrollSource() === "driven";
   const currentProgress = isDriven ? getDrivenProgress() : computeCurrentProgress(anchors, scrollAnchor);
 
@@ -255,6 +236,6 @@ function apply(ctx) {
   }
 
   onProgress?.(computeCurrentIndex(currentProgress, items.length), currentProgress);
-} // End apply function
+}
 
 export const scaleFadeEffect = { onItemCreated, setup, apply };
