@@ -17,7 +17,8 @@ export default defineConfig(({ command }) => ({
         filmstrip: resolve(__dirname, "filmstrip/index.html"),
         iosScrubber: resolve(__dirname, "ios-scrubber/index.html"),
         archiveProtoV1: resolve(__dirname, "archive/proto-v1/index.html"),
-        ramka: resolve(__dirname, "ramka/index.html")
+        ramka: resolve(__dirname, "ramka/index.html"),
+        ramkaScrubber: resolve(__dirname, "ramka-scrubber/index.html")
       }
     }
   }

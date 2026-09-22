@@ -1,0 +1,149 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, sans-serif;
+}
+
+.grid {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.grid-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+}
+
+.grid-tile {
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  overflow: hidden;
+  aspect-ratio: 4 / 3;
+  background: #eee;
+}
+
+.grid-tile img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* --- Scrubber strip -------------------------------------------------------
+   Sized/skinned here rather than in ios-scrubber.css, which this page
+   doesn't load - --wrapper-width defaults to 100vw (see shared/base.css),
+   wrong for a strip living inside the lightbox's bottom bar rather than
+   full document width. */
+.carousel-wrapper.ios-thumbnail-scrubber-strip {
+  width: 100%;
+  height: 72px;
+  --wrapper-gap: 4px;
+  --expand-item-height: 48px;
+  /* expand.css only derives --expand-item-width/-width-grown FROM
+     --expand-item-height inside its own .expand-effect rule - and that
+     class is added by expand.js's effect.setup(), which carousel-engine.js
+     calls AFTER populateItems() has already measured items to size the
+     spacers (see spacers.js). So the very first read of --expand-item-width
+     - the one the initial spacer size is permanently computed from - lands
+     between this override taking effect and .expand-effect being added,
+     and falls back to the property's own @property initial-value (24px)
+     instead of the 32px this override actually means. Invisible on
+     ios-scrubber.css, which never overrides the height away from the
+     default that initial-value already matches. Restating the same
+     calc() here, unconditional on .expand-effect, means the correct value
+     is available immediately regardless of that ordering. */
+  --expand-item-width: calc(var(--expand-item-height) * 2 / 3);
+  --expand-item-width-grown: var(--expand-item-height);
+  /* .lb-bottom (this strip's parent) is click-through by default - see
+     lightbox.css - so the strip has to opt back in the same way .lb-caption
+     does, or every drag/click on it falls through to the backdrop. */
+  pointer-events: auto;
+}
+
+/* Registered so it interpolates at all - see ios-scrubber.css's own copy of
+   this rule for why an unregistered custom property can't transition. */
+@property --contrast-amount {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 1;
+}
+
+@property --item-progress-effective {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 1;
+}
+
+.ios-thumbnail-scrubber-strip {
+  transition: --contrast-amount 200ms ease;
+}
+
+.ios-thumbnail-scrubber-strip[data-contrast='off'] {
+  --contrast-amount: 0;
+}
+
+/* Same split as ios-scrubber.css: --item-progress-effective is where the
+   look's raw --item-progress and this page's --contrast-amount dimmer
+   combine, read by expand.css's thumb-width formula (its --item-shift
+   transform reads --contrast-amount directly and needs no such indirection). */
+.ios-thumbnail-scrubber-strip .carousel-item {
+  --item-progress-effective: calc(var(--contrast-amount) * var(--item-progress));
+}
+
+/* Fixed height/flex always, but NOT width - see ios-scrubber.css's own copy
+   of this rule for the item box, which is right to stay fixed (the item's
+   growth is drawn as overflow and a transform, never a bigger box, so this
+   scroller's snap points/offset reads can't move as a side effect of the
+   look). The thumb is different: expand.css's own .expand-effect-thumb rule
+   (shared/effects/expand.css) already owns its width with the growth
+   formula - var(--expand-item-width) + --item-progress-effective *
+   --expand-thumb-growth. Restating a static width here matches that rule's
+   specificity and loads after it, so it silently won every time regardless
+   of --item-progress-effective - the current thumb never grew, and
+   flattening contrast during a drag had nothing visible to flatten. */
+.ios-thumbnail-scrubber-strip .expand-effect-item {
+  flex: 0 0 auto;
+  width: var(--expand-item-width);
+  height: var(--expand-item-height);
+  overflow: visible;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ios-thumbnail-scrubber-strip .expand-effect-thumb {
+  flex: 0 0 auto;
+  height: var(--expand-item-height);
+  border-radius: 4px;
+  overflow: hidden;
+  background-color: hsl(220, 14%, 70%);
+}
+
+/* expand.css ships transition: none on both, and this page keeps that,
+   unlike ios-scrubber.css. That page re-enables a 200ms transform/width
+   transition because its strip is driven by a carousel roughly 8x its own
+   length (see expand.js's header) - the strip's own pitch badly undersamples
+   writes coming that sparsely, so the transition is what turns visible
+   discrete jumps into motion. This page's strip is driven by ramka's Slides,
+   whose scroll listener writes --expand-progress every rAF-throttled scroll
+   frame already (shared/carousel-engine.js) - already-smooth input, so
+   adding a 200ms ease on top only trails it by half that (confirmed: ~100ms
+   visible lag while the main image drove the strip). It also compounded
+   with --contrast-amount's own transition on scrollend, since
+   --item-progress-effective already carries that transition through its own
+   calc() chain without a separate declaration here - together they made the
+   strip's re-expansion read as slower and more drawn out than the reference
+   page instead of matching it. */
+
+.ios-thumbnail-scrubber-strip .expand-effect-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}

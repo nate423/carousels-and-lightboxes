@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Carousels and Lightboxes</title>
+    <link rel="stylesheet" href="../shared/base.css" />
+    <link rel="stylesheet" href="../shared/effects/expand.css" />
+  </head>
+  <body>
+    <nav>
+      <a href="../">index</a>
+      <a href="../scale-fade/">scale-fade</a>
+      <a href="../filmstrip/">filmstrip</a>
+      <a href="../ios-scrubber/">ios scrubber</a>
+      <a href="../archive/proto-v1/">archive</a>
+      <a href="../ramka/">ramka</a>
+      <a href="../ramka-scrubber/" class="current">ramka scrubber</a>
+    </nav>
+    <div id="root"></div>
+    <script>
+      // Same polyfill gate as the ios-scrubber page: the scrubber strip's
+      // expand look uses animation-timeline when it's scrolling itself (see
+      // shared/effects/expand.js), so browsers without native support need
+      // this loaded before that CSS runs.
+      if (!CSS.supports("animation-timeline: --works")) {
+        const s = document.createElement("script");
+        s.src = "../shared/vendor/scroll-timeline.js";
+        s.async = false;
+        document.currentScript.after(s);
+      }
+    </script>
+    <script type="module" src="/src/ramka-scrubber/main.jsx"></script>
+  </body>
+</html>

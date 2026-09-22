@@ -27,6 +27,12 @@ implements.
 `endFollowing`. `carousel-engine.js` implements all of them, and builds the
 attribution and snap suspension above as part of doing so.
 
+`ramka-slides-controller.js` is a second implementer, adapting a scrollport
+this codebase doesn't own the internals of (ramka's Lightbox `Slides`
+viewport, reached only through its public `data-ramka-slides`/`data-ramka-slide`
+data attributes) so `link.js` can drive it the same way, with no knowledge
+that it isn't a carousel-engine wrapper. See the ramka-scrubber page.
+
 ## The part that is easy to get wrong
 
 A driven carousel cannot trust its own `scrollend`. Its scroll position is
