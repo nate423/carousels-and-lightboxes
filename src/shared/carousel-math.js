@@ -101,7 +101,7 @@ export function computeCurrentIndex(currentProgress, itemCount) {
 // out-of-[0, n-1]) currentProgress, reconstructs the scrollAnchor that would
 // have produced it against this array of anchors. Used to manually drive one
 // carousel's scroll position from another carousel's live currentProgress
-// (see carousel-link.js) - a direct write, not a native scrollTo(), since the
+// (see linked-scrolling/link.js) - a direct write, not a native scrollTo(), since the
 // source's progress is itself continuously changing during a live scroll/drag
 // and native smooth-scroll only makes sense against a fixed destination.
 export function computeScrollAnchorForProgress(anchors, progress) {

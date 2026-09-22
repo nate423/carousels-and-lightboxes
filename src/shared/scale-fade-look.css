@@ -1,0 +1,78 @@
+/* The scale-fade look's scaffolding: the per-item view-timeline and the
+   wrapper-level scroll-timeline that shared/effects/scale-fade-effect.js hangs
+   its generated per-item animation-name/-range off.
+
+   Scoped to .scale-fade, a class a wrapper opts into, rather than to every
+   .carousel-wrapper on the page. Which carousels want this look varies: the
+   scale-fade page's one carousel, both of the filmstrip page's, and only the
+   main carousel on the iOS page, whose strip draws itself with width and
+   displacement instead. Each page used to say that with its own selector,
+   which is how the iOS page once ended up with the effect running and no
+   timeline for it to run against - a flat carousel, from CSS that was missing
+   rather than wrong. A class is visible in the markup, where leaving it off
+   is something you can see. */
+
+/* --- The scale-fade look ------------------------------------------------- */
+
+/* The scale-fade look's scaffolding: the per-item view-timeline and the
+   wrapper-level scroll-timeline that effects/scale-fade-effect.js hangs its
+   generated per-item animation-name/-range off. Every carousel on this page
+   wants it, so nothing here is gated. */
+.scale-fade .carousel-item {
+  view-timeline-name: --item-reveal;
+  view-timeline-axis: inline;
+
+  /* animation-range is computed and set per item in JS
+     (setItemCurrentKeyframes in shared/effects/scale-fade-effect.js), from the
+     same anchor/alignment math as everything else in
+     carousel-math.js - keyword ranges (entry/exit/contain) don't track a
+     custom alignment anchor point across items of wildly different sizes. */
+  animation-name: item-current;
+  animation-timeline: --item-reveal;
+  animation-fill-mode: both;
+  animation-timing-function: linear;
+}
+
+/* Second, wrapper-level named timeline (distinct from the per-item
+   --item-reveal view-timeline above) tracking raw scroll offset across the
+   whole scrollable range - drives the gap-compensating translate, which
+   (unlike scale/opacity) needs global state a per-item view-timeline can't
+   see. Items reference it directly since they're descendants of the wrapper
+   - see setItemCurrentKeyframes in scale-fade-effect.js for the generated per-item
+   @keyframes and computeTranslationBreakpoints in carousel-math.js for why
+   this is exactly reconstructable rather than sampled. */
+.scale-fade {
+  scroll-timeline-name: --carousel-scroll;
+  scroll-timeline-axis: inline;
+}
+
+/* Scale, opacity and translate are written by the generated per-item
+   keyframes themselves (see setItemCurrentKeyframes in
+   shared/effects/scale-fade-effect.js), which is what keeps this look on the
+   compositor. Nothing is left here to interpolate.
+
+   The scroll-error correction stays, on its own property: the animation owns
+   translate and nothing can be added to it there, but translate and transform
+   compose, so the correction lands either way. It is static - and therefore
+   free - on any carousel that is not currently being driven. */
+.scale-fade .carousel-item {
+  transform: translateX(var(--scroll-error));
+}
+
+/* The shared default, used until scale-fade-effect.js replaces it with a
+   per-item rule whose peak sits where that item's own geometry puts it rather
+   than at a flat 50%. Draws the same properties the generated ones do. */
+@keyframes item-current {
+  0% {
+    scale: var(--noncurrent-scale);
+    opacity: var(--noncurrent-opacity);
+  }
+  50% {
+    scale: 1;
+    opacity: 1;
+  }
+  100% {
+    scale: var(--noncurrent-scale);
+    opacity: var(--noncurrent-opacity);
+  }
+}

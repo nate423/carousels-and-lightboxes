@@ -1,7 +1,7 @@
 // The iOS scrubber page: a carousel navigated by a strip of fixed-size
 // thumbnails where only the one nearest the centre expands, matching iOS
 // Photos. The strip is a real carousel of its own - native scroll, native
-// snap - linked to the main one through shared/carousel-link.js.
+// snap - linked to the main one through shared/linked-scrolling/.
 //
 // The main carousel has to exist before the strip is built from it, which is
 // where the strip gets its item count.

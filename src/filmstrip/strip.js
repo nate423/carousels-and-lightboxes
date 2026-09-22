@@ -2,14 +2,14 @@
 // page's page-dots.js, this isn't a small widget bolted onto the main
 // carousel's own wrapper - it's a second, independent carousel-engine
 // instance (own wrapper, own effect, own scroll), kept in sync with the main
-// one via shared/carousel-link.js. It reuses the exact same scale/opacity "current item
+// one via shared/linked-scrolling/. It reuses the exact same scale/opacity "current item
 // pops up, neighbors shrink" effect the main carousel already has, just
 // tuned smaller (see .thumbnail-scrubber-strip's --noncurrent-scale in
 // this page's stylesheet) - no bespoke visual code needed for the "current thumbnail is
 // bigger" look.
 import { createCarousel } from "../shared/carousel-engine.js";
 import { scaleFadeEffect } from "../shared/effects/scale-fade-effect.js";
-import { linkCarousels } from "../shared/carousel-link.js";
+import { linkCarousels } from "../shared/linked-scrolling/link.js";
 
 export function attachFilmstrip(mainCarousel, scrubberWrapper, options = {}) {
   const { thumbnailCrossSize = 32 } = options;
@@ -36,7 +36,7 @@ export function attachFilmstrip(mainCarousel, scrubberWrapper, options = {}) {
 
   // The strip, while following, comes along continuously; the main carousel,
   // while following, jumps the instant the strip's current item changes.
-  // Spelled out rather than left to carousel-link.js's defaults, because it
+  // Spelled out rather than left to linked-scrolling/link.js's defaults, because it
   // is a decision this page made rather than one it inherited.
   linkCarousels(mainCarousel, scrubber, {
     aWhileFollowing: "instant",

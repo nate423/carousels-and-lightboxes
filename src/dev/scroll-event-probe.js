@@ -25,7 +25,7 @@
 //   - 'scrollend' carries no target (it's a plain Event, not a SnapEvent).
 //   - A programmatic scroll position write is its own complete scroll
 //     operation: it starts and finishes in the same frame and fires its own
-//     'scrollend'. So while carousel-link.js relays a gesture frame by
+//     'scrollend'. So while linked-scrolling/link.js relays a gesture frame by
 //     frame, the driven side emits one 'scrollend' per relayed write -
 //     measured at 17 scroll / 17 scrollend on the strip for a single flick
 //     of the main carousel, against 1 scrollend on the main carousel

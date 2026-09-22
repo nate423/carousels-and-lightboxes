@@ -16,8 +16,8 @@
 // carousel-math.js.
 import { computeScrollTarget, computeScrollAnchorForProgress } from "./carousel-math.js";
 import { rafThrottle } from "./engine/raf-throttle.js";
-import { createScrollAttribution } from "./engine/scroll-attribution.js";
-import { createSnapSuspension } from "./engine/snap-suspension.js";
+import { createScrollAttribution } from "./linked-scrolling/scroll-attribution.js";
+import { createSnapSuspension } from "./linked-scrolling/snap-suspension.js";
 import { createGeometryCache } from "./engine/geometry-cache.js";
 import { createSpacers } from "./engine/spacers.js";
 import { populateItems as populateItemsInto } from "./engine/populate-items.js";
@@ -44,7 +44,7 @@ export function createCarousel(wrapper, options = {}) {
 
   // snap-suspension has no dependents, so it can be built first; attribution
   // reclaims it (onSelfReclaim) the instant real input takes the carousel
-  // back from a drive - see scroll-attribution.js and snap-suspension.js for
+  // back from a drive - see linked-scrolling/ for
   // why that instant, rather than the suspension's own timer, is what has to
   // hand snap back.
   const snap = createSnapSuspension(wrapper);
@@ -114,7 +114,7 @@ export function createCarousel(wrapper, options = {}) {
   // currentProgress (e.g. another carousel's live scroll) - a direct write,
   // not wrapper.scrollTo(), since the source progress is itself
   // continuously changing during a live scroll/drag and native smooth-scroll
-  // only makes sense against a fixed destination. See carousel-link.js.
+  // only makes sense against a fixed destination. See linked-scrolling/link.js.
   function setProgressDirect(progress) {
     attribution.noteDirectWrite(progress);
     notifyMotion();
@@ -243,7 +243,7 @@ export function createCarousel(wrapper, options = {}) {
 
   // Ends "following", called by the link once the carousel actually driving
   // this one reports that *its* gesture is over - see onScrollEnd below and
-  // carousel-link.js.
+  // linked-scrolling/link.js.
   function endFollowing() {
     if (!attribution.endFollowing()) return;
     notifyMotion();
@@ -267,7 +267,7 @@ export function createCarousel(wrapper, options = {}) {
     isMovingItself: attribution.isMovingItself,
     selfScrollStartedAt: attribution.selfScrollStartedAt,
     // Notified once per scroll frame, after effect.apply, with the
-    // attribution of that scroll - see scroll-attribution.js.
+    // attribution of that scroll - see linked-scrolling/scroll-attribution.js.
     // Returns an unsubscribe function.
     onScroll(listener) {
       scrollListeners.add(listener);

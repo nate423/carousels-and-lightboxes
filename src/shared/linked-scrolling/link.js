@@ -28,7 +28,7 @@
 // controllers' public surface: onScroll's `source`, getScrollSource,
 // isMovingItself, selfScrollStartedAt, getCurrentProgress, setProgressDirect,
 // onScrollEnd and endFollowing.
-import { computeCurrentIndex } from "./carousel-math.js";
+import { computeCurrentIndex } from "../carousel-math.js";
 
 function currentIndexOf(carousel) {
   return computeCurrentIndex(carousel.getCurrentProgress(), carousel.getItems().length);

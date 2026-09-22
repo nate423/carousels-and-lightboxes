@@ -17,7 +17,7 @@
 // dragged.
 import { createCarousel } from "../shared/carousel-engine.js";
 import { iosScrubberCssEffect } from "./look.js";
-import { linkCarousels } from "../shared/carousel-link.js";
+import { linkCarousels } from "../shared/linked-scrolling/link.js";
 
 export function attachIosScrubber(mainCarousel, scrubberWrapper, options = {}) {
   const { itemWidth = 20, itemHeight = 30, gap = 3, expandedWidth = 30, expandedPadding = 10 } = options;

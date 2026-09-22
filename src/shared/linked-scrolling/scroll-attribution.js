@@ -145,7 +145,7 @@ export function createScrollAttribution(wrapper, { onSelfReclaim } = {}) {
     },
 
     // Ends "following" - called once the carousel actually driving this one
-    // reports that *its* gesture is over (see carousel-link.js), not off
+    // reports that *its* gesture is over (see link.js), not off
     // this wrapper's own 'scrollend': a driven carousel's scroll position is
     // quantised (noteDirectWrite's note above), so most frames of a slow
     // drive leave it sitting on the same pixel for a stretch well past what
