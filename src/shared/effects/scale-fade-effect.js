@@ -1,10 +1,17 @@
-// CSS-driven variant: scale/opacity/translate all come from native
-// scroll-driven animations (`animation-range` + per-item @keyframes) on
-// .carousel-item - scale/opacity off the per-item --item-reveal
-// view-timeline, translate off the wrapper-level --carousel-scroll
-// scroll-timeline (see main.css). This module only precomputes that
-// animation geometry (setup); apply() just derives the current index for
-// the page dots, which is the one thing no timeline can hand back to JS.
+// The default carousel look: every item scales and fades toward its
+// noncurrent state the further it sits from the current one, with a
+// translate compensating for the gap that scaling opens between neighbours.
+//
+// All of it comes from native scroll-driven animations (`animation-range`
+// plus per-item @keyframes) on .carousel-item - scale and opacity off the
+// per-item --item-reveal view-timeline, translate off the wrapper-level
+// --carousel-scroll scroll-timeline, both declared in the page's stylesheet.
+// This module only precomputes that animation geometry (setup); apply()
+// derives the current index for a navigator, which is the one thing no
+// timeline can hand back to JS.
+//
+// Shared by the scale-fade page and the filmstrip page, whose strip is this
+// same look tuned smaller.
 // The same look computed by hand, item by item, on every scroll frame
 // instead of once as @keyframes, is archived at
 // archive/proto-v1/js/effects/looks/scale-fade-look.js - the reference
@@ -30,7 +37,8 @@ import { RuleSheet } from "./style-swap.js";
 // recomputes geometry. The gap-compensating translate gets the same
 // treatment (see computeTranslationBreakpoints in carousel-math.js for why
 // it's exactly representable this way too), just off a second, wrapper-level
-// scroll-timeline instead of the per-item view-timeline - see main.css.
+// scroll-timeline instead of the per-item view-timeline - see the page's
+// stylesheet.
 // Item ids just need to be unique site-wide (they're used in a
 // `[data-item-id="N"]` selector - see below), so this counter alone stays
 // module-global; it never needs resetting.
@@ -39,8 +47,8 @@ let nextItemId = 0;
 // Everything else - the generated keyframe/position rules and the <style>
 // elements holding them - is kept one-per-wrapper (via this WeakMap) rather
 // than as module-level singletons. With a single shared set, every
-// cssEffect-driven carousel on the page (there can be several at once - see
-// thumbnail-scrubber.js, which runs two more alongside the main carousel)
+// carousel using this look (the filmstrip page runs two at once - its main
+// carousel and the strip navigating it)
 // would flush the exact same 3 <style> elements on every one of their setup()
 // calls, so each carousel's own resize/alignment churn forces a full
 // teardown-and-reinsert of every OTHER carousel's rules too. The
@@ -96,7 +104,8 @@ function getWrapperState(wrapper) {
 //
 // A carousel whose contrast can change needs every drawn value multiplied
 // by it, every frame. That has to happen in a calc() reading an animated
-// custom property (main.css turns the two values below into what is drawn),
+// custom property (the page's stylesheet turns the two values below into what
+// is drawn),
 // and nothing the compositor can evaluate - the animation has to be
 // resolved by the style engine each frame instead. Verified the hard way:
 // with only this second shape, blocking the main thread for three seconds
@@ -253,7 +262,8 @@ function apply(ctx) {
   // scale and opacity - fractions of a percent - and plainly visible in
   // position, where it makes the whole strip step a whole quantum at a time
   // instead of gliding. --scroll-error is what the items' translate adds to
-  // land where the driver actually asked for; see its block in main.css.
+  // land where the driver actually asked for; see its block in the page's
+  // stylesheet.
   //
   // Zero, and removed, whenever this carousel is scrolling itself: progress
   // is derived from the scroll position then, so the two cannot disagree.
@@ -272,4 +282,4 @@ function apply(ctx) {
   onProgress?.(computeCurrentIndex(currentProgress, items.length), currentProgress);
 } // End apply function
 
-export const cssEffect = { name: "css", onItemCreated, setup, apply };
+export const scaleFadeEffect = { onItemCreated, setup, apply };

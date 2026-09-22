@@ -181,7 +181,8 @@ function computeItemProgress(currentProgress, i) {
 // it applies independently *within* each keyframe-to-keyframe segment
 // (re-based to that segment's own local 0-1), not as a single remap across
 // the whole animation, so it can't shift where a keyframe's value actually
-// lands. Instead main.js (setItemCurrentKeyframes) gives each item its own
+// lands. Instead scale-fade-effect.js (setItemCurrentKeyframes) gives each
+// item its own
 // generated `@keyframes` rule with the "scale: 1" stop placed directly at
 // `peakX%` - the only way to put a keyframe value at an arbitrary per-item
 // position. (The gap-compensating translate math below doesn't need peakX
@@ -254,7 +255,7 @@ function computeTranslations(anchors, sizes, scales, currentProgress) {
 // Precomputes the exact breakpoints needed to reconstruct computeTranslations'
 // output as a native CSS @keyframes curve (one per item, driven by a
 // scroll-timeline spanning the wrapper's whole scrollable range - see
-// css-effect.js). As a function of raw scroll offset, every item's
+// effects/scale-fade-effect.js). As a function of raw scroll offset, every item's
 // translation is piecewise-linear: computeItemProgress's how-current-is-it
 // curve (derived from the real anchor-to-anchor pixel distances via
 // computeCurrentProgress, same as it is for the JS effect) reaches exactly 0

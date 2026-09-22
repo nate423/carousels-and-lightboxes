@@ -21,11 +21,11 @@
 //   bend    = (1 - 2a) * frac(P) * (1 - frac(P))
 //
 // Every item runs that identical formula against its own index, so unlike
-// css-effect.js - whose per-item peak sits at a different, geometry-
+// scale-fade-effect.js - whose per-item peak sits at a different, geometry-
 // dependent place for every item, forcing a generated @keyframes rule each
 // - the whole strip needs exactly one animation, advancing one number from
 // 0 to n-1 across the scroll range. Each item's own index is a static
-// custom property, and main.css does the rest.
+// custom property, and this page's stylesheet does the rest.
 //
 // Item *sizes* drop out of that derivation entirely: the translate is the
 // difference between two layouts, and each item's size appears identically
@@ -33,7 +33,7 @@
 // same amount - an item expanding to some width of its own (its source
 // media's aspect, say) makes F per-item, and then the two global terms
 // stop being reconstructable from an item's own index. That case wants
-// generated per-item keyframes, the way css-effect.js already does it. It
+// generated per-item keyframes, the way scale-fade-effect.js already does it. It
 // would still be this one wrapper-level timeline, not a timeline each.
 //
 // The mapping from scroll offset to progress is linear here because this
@@ -46,8 +46,8 @@ import {
   computeScrollAnchorForProgress,
   getItemMetrics,
   wrapperAnchor
-} from "../carousel-math.js";
-import { replaceStyleEl } from "./style-swap.js";
+} from "../shared/carousel-math.js";
+import { replaceStyleEl } from "../shared/effects/style-swap.js";
 
 let nextStripId = 0;
 

@@ -1,9 +1,8 @@
-// Generalized carousel engine, extracted out of what used to be main.js's
-// setupCarousel/populateCarousel/updateSpacers/setAlignment. Knows nothing
-// about page dots, thumbnail scrubbers, or demo-page concerns like
-// placeholder boxes vs. images - callers supply item content via
-// `createItem`, and attach whatever navigation UI they want (or none) by
-// reading the returned controller's progress and calling its seek methods.
+// The carousel engine every page here builds on. Knows nothing about page
+// dots, thumbnail scrubbers, or what an item contains - callers supply item
+// content via `createItem`, and attach whatever navigation UI they want (or
+// none) by reading the returned controller's progress and calling its seek
+// methods.
 //
 // The stateful pieces below - scroll attribution, snap suspension, contrast
 // policy, geometry caching, spacers, item population - each live in their
@@ -289,7 +288,7 @@ export function createCarousel(wrapper, options = {}) {
   // Recovers from an item's size changing for reasons outside this module's
   // own control (e.g. a placeholder image finishing its load mid-scroll).
   // Effects that resize items themselves as their normal scroll-driven
-  // behavior (see effects/ios-scrubber-css-effect.js) opt out via
+  // behavior (see the iOS scrubber's look.js) opt out via
   // effect.skipItemResizeObserver - without that, every write the effect
   // makes would itself be observed here as "an item's size changed
   // unexpectedly", re-triggering refreshGeometry (and so effect.apply

@@ -2,129 +2,51 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Carousels and Lightboxes</title>
-  <link rel="stylesheet" href="css/main.css" />
+  <style>
+    :root { color-scheme: light dark; }
+    body {
+      margin: 0;
+      padding: 80px 24px;
+      font: 14px/1.6 ui-monospace, monospace;
+      background: light-dark(#fff, hsl(220, 14%, 8%));
+      color: light-dark(hsl(220, 14%, 20%), hsl(220, 14%, 80%));
+    }
+    main { max-width: 46rem; margin: 0 auto; }
+    h1 { font-size: 14px; font-weight: normal; opacity: 0.6; margin: 0 0 32px; }
+    ul { list-style: none; margin: 0; padding: 0; }
+    li { margin: 0 0 20px; }
+    a { color: inherit; font-weight: bold; }
+    p { margin: 4px 0 0; opacity: 0.7; }
+    .archive { margin-top: 48px; padding-top: 24px; border-top: 1px solid currentColor; opacity: 0.55; }
+  </style>
 </head>
 
 <body>
-
   <main>
-    <div class="alignment-controls">
-      <label><input type="radio" name="scroll-alignment" value="start" /> Start</label>
-      <label><input type="radio" name="scroll-alignment" value="center" checked /> Center</label>
-      <label><input type="radio" name="scroll-alignment" value="end" /> End</label>
-      <span class="build-stamp" id="build-stamp"></span>
-    </div>
-    <div class="carousels">
-      <div class="carousel-comparison">
-        <h2>Scale-fade carousel (page-dot navigator)</h2>
-        <div class="carousel-with-controls">
-          <div class="carousel-wrapper comparison-wrapper" id="h-scroll" data-scroll-axis="x"></div>
-          <div class="page-controls" for="h-scroll">
-            <div class="page-indicator-dot"></div>
-            <div class="page-indicator-dot current"></div>
-          </div>
-        </div>
-      </div>
-      <div class="carousel-comparison">
-        <h2>Thumbnail scrubber (filmstrip navigator instead of dots)</h2>
-        <div class="carousel-controls">
-          <label>
-            Main, while following
-            <select data-link-follower="main">
-              <option value="instant" selected>Instant</option>
-              <option value="continuous">Continuous</option>
-            </select>
-          </label>
-          <label>
-            Strip, while following
-            <select data-link-follower="strip">
-              <option value="instant">Instant</option>
-              <option value="continuous" selected>Continuous</option>
-            </select>
-          </label>
-          <label>
-            Main, remove contrast
-            <select data-contrast-for="main">
-              <option value="never" selected>Never</option>
-              <option value="leading">Leading</option>
-              <option value="following">Following</option>
-              <option value="always">Always</option>
-            </select>
-          </label>
-          <label>
-            Strip, remove contrast
-            <select data-contrast-for="strip">
-              <option value="never" selected>Never</option>
-              <option value="leading">Leading</option>
-              <option value="following">Following</option>
-              <option value="always">Always</option>
-            </select>
-          </label>
-        </div>
-        <div class="carousel-wrapper comparison-wrapper placeholder-boxes thumbnail-scrubber-main" id="h-scroll-scrubber-main" data-scroll-axis="x"></div>
-        <div class="carousel-wrapper placeholder-boxes thumbnail-scrubber-strip" id="h-scroll-scrubber-strip" data-scroll-axis="x"></div>
-      </div>
-      <div class="carousel-comparison">
-        <h2>Thumbnail scrubber (iOS style - fixed-size thumbnails, only the centered one expands)</h2>
-        <div class="carousel-controls">
-          <label>
-            Main, while following
-            <select data-link-follower="main">
-              <option value="instant" selected>Instant</option>
-              <option value="continuous">Continuous</option>
-            </select>
-          </label>
-          <label>
-            Strip, while following
-            <select data-link-follower="strip">
-              <option value="instant">Instant</option>
-              <option value="continuous" selected>Continuous</option>
-            </select>
-          </label>
-          <label>
-            Main, remove contrast
-            <select data-contrast-for="main">
-              <option value="never" selected>Never</option>
-              <option value="leading">Leading</option>
-              <option value="following">Following</option>
-              <option value="always">Always</option>
-            </select>
-          </label>
-          <label>
-            Strip, remove contrast
-            <select data-contrast-for="strip">
-              <option value="never">Never</option>
-              <option value="leading" selected>Leading</option>
-              <option value="following">Following</option>
-              <option value="always">Always</option>
-            </select>
-          </label>
-        </div>
-        <div class="carousel-wrapper comparison-wrapper placeholder-boxes thumbnail-scrubber-main" id="h-scroll-ios-scrubber-main" data-scroll-axis="x"></div>
-        <div class="carousel-wrapper ios-thumbnail-scrubber-strip" id="h-scroll-ios-scrubber-strip" data-scroll-axis="x"></div>
-      </div>
-      <div class="carousel-wrapper" data-scroll-axis="y"></div>
-      <!--<div class="carousel-wrapper placeholder-images" data-scroll-axis="y"></div>
-    <div class="carousel-wrapper placeholder-images" data-scroll-axis="x"></div>-->
+    <h1>Carousels and Lightboxes</h1>
+    <ul>
+      <li>
+        <a href="scale-fade/">Scale-fade carousel</a>
+        <p>The current item at full size and opacity, its neighbours falling away. Page dots below.</p>
+      </li>
+      <li>
+        <a href="filmstrip/">Filmstrip scrubber</a>
+        <p>The same look, navigated by a second carousel whose thumbnails keep each item's aspect ratio.</p>
+      </li>
+      <li>
+        <a href="ios-scrubber/">iOS scrubber</a>
+        <p>Fixed-size thumbnails at a constant gap, where only the one nearest the centre expands.</p>
+      </li>
+    </ul>
+
+    <div class="archive">
+      <!-- The trailing slash matters: without it the static server resolves
+           this page's relative paths against /archive/ and every asset 404s. -->
+      <a href="archive/proto-v1/">archive/proto-v1</a>
+      <p>The frozen prototype these were reduced from - all four effect variants side by side, with live controls. Kept as the reference implementation and the A/B baseline.</p>
     </div>
   </main>
-
-  <script>
-    // Loaded ahead of main.js, synchronously, so every rule the effects
-    // generate is inserted into a document that already has the polyfill's
-    // MutationObserver watching for it. The polyfill patches CSS.supports to
-    // report animation-timeline as supported, which is deliberate - it keeps
-    // feature queries in the page's own CSS from skipping the declarations it
-    // exists to interpret - and nothing here asks that question any more.
-    if (!CSS.supports("animation-timeline: --works")) {
-      const s = document.createElement("script");
-      s.src = "js/vendor/scroll-timeline.js";
-      s.async = false;
-      document.currentScript.after(s);
-    }
-  </script>
-  <script type="module" src="js/main.js"></script>
 </body>
 </html>

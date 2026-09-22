@@ -11,7 +11,8 @@ import { getItemMetrics, computeCurrentProgress, wrapperAnchor } from "../carous
 // (the iOS scrubber look is built around this: letting an item's box grow
 // feeds the geometry back into the progress derived from it, which is why
 // its expansion is drawn as overflow and a transform - see
-// .ios-thumbnail-scrubber-item in main.css). offsetLeft and offsetWidth therefore cannot move between rebuilds,
+// .ios-thumbnail-scrubber-item in that page's stylesheet). offsetLeft and
+// offsetWidth therefore cannot move between rebuilds,
 // and an effect that did move them would opt out of its own correctness,
 // not just this cache's.
 //

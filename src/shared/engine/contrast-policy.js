@@ -26,7 +26,8 @@ export function createContrastPolicy(wrapper, initialMode) {
   let removal = CONTRAST_REMOVAL[mode];
 
   // Whether this carousel's contrast can ever change. A look may be able to
-  // draw itself more cheaply when it cannot - see css-effect.js, which can
+  // draw itself more cheaply when it cannot - see effects/scale-fade-effect.js,
+  // which can
   // hand its whole look to the compositor in that case and cannot when a
   // multiplier has to be applied to it every frame.
   function usesContrast() {

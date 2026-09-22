@@ -1,24 +1,23 @@
-// The other of two interchangeable navigator UIs for a carousel (see
-// page-controls.js) - an iOS-Photos-style filmstrip instead of dots. Unlike
-// page-controls, this isn't a small widget bolted onto the main carousel's
-// own wrapper - it's a second, independent carousel-engine instance (own
-// wrapper, own effect, own scroll), kept in sync with the main one via
-// carousel-link.js. It reuses the exact same scale/opacity "current item
+// This page's navigator: a filmstrip instead of dots. Unlike the scale-fade
+// page's page-dots.js, this isn't a small widget bolted onto the main
+// carousel's own wrapper - it's a second, independent carousel-engine
+// instance (own wrapper, own effect, own scroll), kept in sync with the main
+// one via shared/carousel-link.js. It reuses the exact same scale/opacity "current item
 // pops up, neighbors shrink" effect the main carousel already has, just
 // tuned smaller (see .thumbnail-scrubber-strip's --noncurrent-scale in
-// main.css) - no bespoke visual code needed for the "current thumbnail is
+// this page's stylesheet) - no bespoke visual code needed for the "current thumbnail is
 // bigger" look.
-import { createCarousel } from "../carousel-engine.js";
-import { cssEffect } from "../effects/css-effect.js";
-import { linkCarousels } from "../carousel-link.js";
+import { createCarousel } from "../shared/carousel-engine.js";
+import { scaleFadeEffect } from "../shared/effects/scale-fade-effect.js";
+import { linkCarousels } from "../shared/carousel-link.js";
 
-export function attachThumbnailScrubber(mainCarousel, scrubberWrapper, options = {}) {
+export function attachFilmstrip(mainCarousel, scrubberWrapper, options = {}) {
   const { thumbnailCrossSize = 32 } = options;
   const sourceItems = mainCarousel.getItems();
 
   const scrubber = createCarousel(scrubberWrapper, {
     itemCount: sourceItems.length,
-    effect: cssEffect,
+    effect: scaleFadeEffect,
     itemSizing: {
       crossSize: thumbnailCrossSize,
       // Each thumbnail keeps the ratio of the item it stands for, so a strip

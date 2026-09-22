@@ -1,8 +1,9 @@
 // Shared by every effect that generates its own stylesheet rules
-// (css-effect.js, ios-scrubber-css-effect.js): both of them hand geometry to
+// (scale-fade-effect.js and the iOS scrubber's look.js): both of them hand
+// geometry to
 // the scroll-timeline polyfill (Safari) through real stylesheet rules rather
 // than inline styles, because the polyfill only discovers
-// animation-name/-timeline/-range - and, for css-effect.js, the @keyframes
+// animation-name/-timeline/-range - and, for scale-fade-effect.js, the @keyframes
 // themselves - by parsing a <style>
 // element's contents, and only does that parsing once, at the moment the
 // element is inserted into the DOM. A later `.textContent =` on an

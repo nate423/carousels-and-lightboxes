@@ -1,6 +1,5 @@
-// The other of two filmstrip-navigator *styles* (see thumbnail-scrubber.js
-// for the original "every item scales continuously toward center" look) -
-// this one shows fixed-size thumbnails at a constant gap, where only the
+// This page's navigator. The filmstrip page has the other style of the same
+// idea - every item scaling continuously toward center - where this one shows fixed-size thumbnails at a constant gap, where only the
 // item nearest the center grows (both its thumbnail and the padding around
 // it), matching iOS Photos' scrubber.
 //
@@ -10,17 +9,17 @@
 // carousel - linked to the main carousel via the same linkCarousels used
 // there (defaults: this strip follows continuously, the main carousel
 // follows instantly). All of the "only the centered item is bigger" visual
-// logic lives in ios-scrubber-css-effect.js, which paints it with a native
+// logic lives in look.js, which paints it with a native
 // scroll-driven animation, and this file just wires up fixed-size, non-aspect-ratio-preserving items (unlike the
 // original, whose thumbnails mirror each source item's real aspect ratio),
 // the sizes as CSS custom properties the effect reads, and the contrast
 // policy that makes the thumbnails flatten while the strip itself is being
 // dragged.
-import { createCarousel } from "../carousel-engine.js";
-import { iosScrubberCssEffect } from "../effects/ios-scrubber-css-effect.js";
-import { linkCarousels } from "../carousel-link.js";
+import { createCarousel } from "../shared/carousel-engine.js";
+import { iosScrubberCssEffect } from "./look.js";
+import { linkCarousels } from "../shared/carousel-link.js";
 
-export function attachIosThumbnailScrubber(mainCarousel, scrubberWrapper, options = {}) {
+export function attachIosScrubber(mainCarousel, scrubberWrapper, options = {}) {
   const { itemWidth = 20, itemHeight = 30, gap = 3, expandedWidth = 30, expandedPadding = 10 } = options;
   const itemCount = mainCarousel.getItems().length;
 
@@ -28,18 +27,6 @@ export function attachIosThumbnailScrubber(mainCarousel, scrubberWrapper, option
   scrubberWrapper.style.setProperty("--ios-item-width", itemWidth + "px");
   scrubberWrapper.style.setProperty("--ios-expanded-width", expandedWidth + "px");
   scrubberWrapper.style.setProperty("--ios-expanded-padding", expandedPadding + "px");
-
-  // Opts this wrapper out of the native scroll-driven item-current
-  // scale/opacity animation main.css otherwise applies to every
-  // .carousel-item (see the `:not([data-scroll-timelines="off"])` rules
-  // there) - this style's "current item" look is entirely width and
-  // displacement, and owns its own rendering either way.
-  //
-  // True for both implementations of it, including the natively painted
-  // one: that opts out of the generic scaffolding for the same reason, and
-  // declares the wrapper-level timeline it does want under its own class
-  // rather than taking the one those rules would give it.
-  scrubberWrapper.dataset.scrollTimelines = "off";
 
   const scrubber = createCarousel(scrubberWrapper, {
     itemCount,

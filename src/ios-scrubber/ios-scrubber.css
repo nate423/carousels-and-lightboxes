@@ -1,3 +1,7 @@
+/* === Page: a carousel navigated by an iOS Photos-style scrubber === */
+
+/* --- Base ---------------------------------------------------------------- */
+
 :root {
   color-scheme: light dark;
 
@@ -13,7 +17,7 @@
      scroll math; has no visible effect at alignment="center". */
   --carousel-scroll-padding: 24px;
 
-  --body-padding: 100px 0 0 0;
+  --body-padding: 28px 0 0 0;
   /*   --wrapper-margin: 0 0 100px 0; */
 
   --color-background: #fff;
@@ -47,56 +51,48 @@ body {
   padding: var(--body-padding);
 }
 
-.carousels {
+/* Jump between the pages without going back to the index each time. */
+nav {
   display: flex;
   flex-wrap: wrap;
-  gap: 100px;
-  padding: 0;
+  gap: 16px;
+  padding: 0 24px 20px;
+  font: 12px monospace;
 }
 
-.alignment-controls {
-  position: fixed;
-  top: 12px;
-  left: 12px;
-  z-index: 10;
+nav a {
+  color: var(--bg-offset-60);
+  text-decoration: none;
+  opacity: 0.65;
+}
+
+nav a:hover {
+  opacity: 1;
+}
+
+nav a.current {
+  opacity: 1;
+  font-weight: bold;
+  text-decoration: underline;
+}
+
+/* Page chrome: the title line, which also carries the build stamp. */
+h1 {
   display: flex;
+  align-items: baseline;
   gap: 12px;
-  padding: 8px 12px;
-  background: var(--bg-offset-2);
-  border-radius: 10px;
-  font-size: 13px;
+  margin: 0 0 16px;
+  padding: 0 24px;
+  font: 13px monospace;
+  font-weight: normal;
+  color: var(--bg-offset-60);
 }
 
-.alignment-controls label {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  cursor: pointer;
-}
-
-/* Filled in by main.js - see showBuildStamp there for what it reports. */
+/* Filled in by dev/build-stamp.js - see there for what it reports. */
 .build-stamp {
-  align-self: center;
   font: 11px/1 ui-monospace, monospace;
   color: var(--bg-offset-60);
   opacity: 0.7;
-}
-
-.carousel-controls {
-  display: flex;
-  gap: 16px;
-  margin-bottom: 12px;
-  padding: 8px 12px;
-  background: var(--bg-offset-2);
-  border-radius: 10px;
-  font-size: 13px;
-  width: fit-content;
-}
-
-.carousel-controls label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
 }
 
 .carousel-wrapper {
@@ -119,15 +115,16 @@ body {
   --noncurrent-opacity: 0.5;
 }
 
-.carousel-with-controls .carousel-wrapper::-webkit-scrollbar {
+/* Every carousel here scrolls natively and none of them wants the bar drawn;
+   the position is shown by the look itself, or by a navigator. */
+.carousel-wrapper::-webkit-scrollbar {
   display: none;
 }
 
-.carousel-wrapper[data-scroll-axis="y"] {
-  flex-direction: column;
-  overflow-x: hidden;
-  overflow-y: auto;
-  scroll-snap-type: y mandatory;
+/* The carousel a page is actually about, as opposed to a filmstrip
+   navigating it. */
+.main-carousel {
+  height: 45vh;
 }
 
 .carousel-item,
@@ -136,6 +133,13 @@ body {
   flex: 0 0 auto;
   display: flex;
   font-size: 12px;
+}
+
+.spacer {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center left;
 }
 
 .carousel-item {
@@ -158,6 +162,19 @@ body {
      stable stacking/compositing context, which keeps the clip and
      transform composited together. */
   isolation: isolate;
+}
+
+/* Demo content only - see placeholder-items.js. */
+.placeholder-boxes .carousel-item {
+  padding: 6px;
+  background-color: hsl(220, 14%, 70%);
+}
+
+.carousel-item-snap-fix {
+  /*   flex: 0 0 auto; */
+  scroll-snap-align: center;
+  /*   scroll-snap-stop: always; */
+  box-shadow: inset 0 0 0 1px rgb(255 0 0 / 0);
 }
 
 /* --- What a look draws, and how much of it showing ---------------------
@@ -267,228 +284,26 @@ body {
   --contrast-amount: 0;
 }
 
-/* The scale-fade look's scaffolding: the per-item view-timeline and the
-   wrapper-level scroll-timeline that css-effect.js hangs its generated
-   per-item animation-name/-range off.
+/* --- Demo controls ------------------------------------------------------- */
 
-   data-scroll-timelines="off" opts a wrapper out of all of it. The one
-   wrapper that does so is the iOS strip, whose "current item" look is width
-   and displacement rather than scale and opacity, and which declares the one
-   timeline it does want under its own class further down. Once each
-   implementation owns its own stylesheet there is nothing to opt out of and
-   the attribute goes. */
-.carousel-wrapper:not([data-scroll-timelines="off"]) .carousel-item {
-  view-timeline-name: --item-reveal;
-  view-timeline-axis: inline;
-
-  /* animation-range is computed and set per item in JS
-     (setItemCurrentKeyframes in css-effect.js), from the same anchor/alignment math as everything else in
-     carousel-math.js - keyword ranges (entry/exit/contain) don't track a
-     custom alignment anchor point across items of wildly different sizes. */
-  animation-name: item-current;
-  animation-timeline: --item-reveal;
-  animation-fill-mode: both;
-  animation-timing-function: linear;
-}
-
-/* Redeclares view-timeline-name alongside the axis override rather than
-   relying on the cascade to layer just view-timeline-axis on top of the
-   rule above - the scroll-timeline polyfill's stylesheet parser reads each
-   rule's own declaration block as an isolated unit (see
-   saveSubjectSelectorToViewTimeline in vendor/scroll-timeline.js: it bails
-   out entirely unless that same rule's text contains view-timeline-name),
-   it doesn't resolve the real cascade the way a browser does. An
-   axis-only override rule is therefore invisible to it, so it kept
-   tracking every carousel's timeline on the inline axis regardless of
-   data-scroll-axis="y" - the vertical demo's items never got a non-zero
-   timeline progress since inline-axis (x) scroll never changes there. */
-.carousel-wrapper[data-scroll-axis="y"]:not([data-scroll-timelines="off"]) .carousel-item {
-  view-timeline-name: --item-reveal;
-  view-timeline-axis: block;
-  animation-name: item-current;
-  animation-timeline: --item-reveal;
-  animation-fill-mode: both;
-  animation-timing-function: linear;
-}
-
-/* view-timeline-inset defaults to "auto", which on browsers with native
-   scroll-driven-animations support resolves to the scroller's
-   scroll-padding on each side - silently double-applying it on top of the
-   scrollPadding term computeAnimationRanges already bakes into its own
-   peak/range math (via wrapperAnchor), throwing every "cover" percentage
-   off by the scroll-padding amount whenever alignment isn't center (where
-   the two insets happen to cancel out, masking this everywhere else).
-   Gated behind the same native-support test index.html uses to decide
-   whether to load the scroll-timeline polyfill at all (`CSS.supports(
-   "animation-timeline: --works")`) - the polyfill's own inset handling
-   already defaults an unset view-timeline-inset to {0, 0} rather than
-   "auto"-into-scroll-padding, so it never had this bug and doesn't need
-   (or need to safely parse) this override. */
-@supports (animation-timeline: --works) {
-  .carousel-wrapper:not([data-scroll-timelines="off"]) .carousel-item {
-    view-timeline-inset: 0px;
-  }
-}
-
-/* Second, wrapper-level named timeline (distinct from the per-item
-   --item-reveal view-timeline above) tracking raw scroll offset across the
-   whole scrollable range - drives the gap-compensating translate, which
-   (unlike scale/opacity) needs global state a per-item view-timeline can't
-   see. Items reference it directly since they're descendants of the wrapper
-   - see setItemCurrentKeyframes in css-effect.js for the generated per-item
-   @keyframes and computeTranslationBreakpoints in carousel-math.js for why
-   this is exactly reconstructable rather than sampled. */
-.carousel-wrapper:not([data-scroll-timelines="off"]) {
-  scroll-timeline-name: --carousel-scroll;
-  scroll-timeline-axis: inline;
-}
-
-/* Same reasoning as the view-timeline-axis override above - the polyfill's
-   parser needs scroll-timeline-name in the same rule as the axis it's
-   overriding, or it never sees the override at all. */
-.carousel-wrapper[data-scroll-axis="y"]:not([data-scroll-timelines="off"]) {
-  scroll-timeline-name: --carousel-scroll;
-  scroll-timeline-axis: block;
-}
-
-/* The scale+fade look: the current item at full size and opacity, the rest
-   scaled down and faded, interpolated by --item-progress-effective (see its
-   block above). This look's rest-progress is 1 - at contrast 0, every item
-   is left exactly as laid out, which is what "no contrast" means here -
-   nothing distinguishing any item from any other. css-effect.js generates
-   the per-item keyframes that drive --item-progress; these rules are the
-   other half of it.
-
-   An unset --item-shift is 0, so a wrapper whose generated keyframes write
-   no translate leaves that line a no-op. */
-.carousel-wrapper:not([data-scroll-timelines="off"]) .carousel-item {
-  --rest-progress: 1;
-  scale: calc(var(--noncurrent-scale) + var(--item-progress-effective) * (1 - var(--noncurrent-scale)));
-  opacity: calc(var(--noncurrent-opacity) + var(--item-progress-effective) * (1 - var(--noncurrent-opacity)));
-  translate: calc(var(--item-shift) * var(--contrast-amount)) 0;
-
-  /* On its own property rather than folded into the translate above,
-     because a carousel whose contrast never changes has its translate
-     written by the animation itself (see setItemCurrentKeyframes) and
-     nothing can be added to it there. translate and transform compose, so
-     the correction lands either way, and it stays static - and therefore
-     free - on any carousel that is not currently being driven. */
-  transform: translateX(var(--scroll-error));
-}
-
-.carousel-wrapper[data-scroll-axis="y"]:not([data-scroll-timelines="off"]) .carousel-item {
-  translate: 0 calc(var(--item-shift) * var(--contrast-amount));
-  transform: translateY(var(--scroll-error));
-}
-
-/* The shared default, used until css-effect.js replaces it with a per-item
-   rule whose peak sits where that item's own geometry puts it. Writes the
-   same input the generated ones do. */
-@keyframes item-current {
-  0% {
-    --item-progress: 0;
-  }
-  50% {
-    --item-progress: 1;
-  }
-  100% {
-    --item-progress: 0;
-  }
-}
-
-.carousel-item-snap-fix {
-  /*   flex: 0 0 auto; */
-  scroll-snap-align: center;
-  /*   scroll-snap-stop: always; */
-  box-shadow: inset 0 0 0 1px rgb(255 0 0 / 0);
-}
-
-.carousel-wrapper[data-scroll-alignment="start"] .carousel-item-snap-fix {
-  scroll-snap-align: start;
-}
-
-.carousel-wrapper[data-scroll-alignment="end"] .carousel-item-snap-fix {
-  scroll-snap-align: end;
-}
-
-
-.carousel-with-controls {
-  position: relative;
-  overflow: hidden;
-}
-
-.carousel-comparison {
-  width: 100%;
-}
-
-.carousel-comparison h2 {
-  margin: 0 0 12px;
-  font: 13px monospace;
-  color: var(--bg-offset-60);
-}
-
-.carousel-wrapper.comparison-wrapper {
-  height: 45vh;
-}
-
-.page-controls {
+.carousel-controls {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 12px;
+  padding: 8px 12px;
   background: var(--bg-offset-2);
-  width: auto;
-  height: auto;
-  padding: 12px;
-  border-radius: 16px;
-  position: absolute;
-  bottom: 16px;
-  left: 50%;
-  transform: translateX(-50%);
+  border-radius: 10px;
+  font-size: 13px;
+  width: fit-content;
+}
+
+.carousel-controls label {
   display: flex;
   align-items: center;
-  justify-content: center;
   gap: 6px;
 }
 
-.page-indicator-dot {
-  width: 8px;
-  height: 8px;
-  background: var(--bg-offset-10);
-  border-radius: 10px;
-  /*   padding: 6px; */
-  /*   box-shadow: inset 0 0 0 6px var(--bg-offset-2); */
-  /*   transition: all 0.1s ease-out; */
-}
-
-.page-indicator-dot:hover {
-}
-
-.page-indicator-dot.current {
-  background: var(--bg-offset-60);
-  /*   box-shadow: inset 0 0 0 2px var(--bg-offset-2), */
-  /*     inset 0 0 0 1px var(--bg-offset-60); */
-}
-
-.placeholder-boxes .carousel-item {
-  padding: 6px;
-}
-
-/* The filmstrip navigator (see navigators/thumbnail-scrubber.js) - a second,
-   independent carousel synced to the main one, not a bolted-on widget. Its
-   items keep the main carousel's real per-item aspect ratio (set inline, in
-   JS) at this fixed height; a tighter --noncurrent-scale than the default
-   0.8 makes the current-vs-neighbor size difference read clearly at
-   filmstrip scale. Height is taller than any single thumbnail so the
-   scaled-up current one has room without the wrapper's own
-   overflow-y: hidden clipping it. */
-.thumbnail-scrubber-strip {
-  height: 100px;
-  --noncurrent-scale: 0.6;
-  --noncurrent-opacity: 0.6;
-}
-
-.thumbnail-scrubber-strip::-webkit-scrollbar,
-.thumbnail-scrubber-main::-webkit-scrollbar,
-.ios-thumbnail-scrubber-strip::-webkit-scrollbar {
-  display: none;
-}
+/* --- The iOS scrubber ---------------------------------------------------- */
 
 /* The other filmstrip-navigator style (see navigators/ios-thumbnail-scrubber.js)
    - fixed-size thumbnails at a constant gap, where only the item nearest
@@ -569,9 +384,10 @@ body {
 }
 
 .ios-scrubber-css {
-  /* Declared here rather than inherited from the generic rule above, which
-     is gated on data-scroll-timelines and would also bring the scale/opacity
-     item-current animation this look does not want. */
+  /* This page declares only the timeline this look needs. The scale-fade
+     pages hang a per-item view-timeline off .carousel-item as well, which
+     would drive an item-current scale/opacity animation this look does not
+     want - so that scaffolding simply is not in this stylesheet. */
   scroll-timeline-name: --carousel-scroll;
   scroll-timeline-axis: inline;
 
@@ -637,29 +453,4 @@ body {
     0,
     0
   );
-}
-
-.spacer {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  justify-content: center left;
-}
-
-.placeholder-boxes .carousel-item {
-  background-color: hsl(220, 14%, 70%);
-  /*   transform-origin: left; */
-}
-/*
-.placeholder-boxes .carousel-item:nth-child(odd) {
-  background-color: hsl(220, 14%, 85%);
-} */
-
-.placeholder-images .carousel-item img {
-  max-width: 100%;
-  max-height: 100%;
-  width: auto;
-  height: auto;
-  display: block;
-  margin: 0 auto;
 }

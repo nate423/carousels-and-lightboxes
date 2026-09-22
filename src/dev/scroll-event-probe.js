@@ -1,5 +1,6 @@
 // Temporary diagnostic - flip PROBE_ENABLED off (or delete this file and its
-// import in main.js) once the scroll/snap event behavior is settled.
+// import from a page's entry script) once the scroll/snap event behavior is
+// settled.
 //
 // Exists because the interesting questions here are all device-dependent and
 // the device that matters least resembles a desktop dev console: iOS. What

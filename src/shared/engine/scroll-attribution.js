@@ -1,7 +1,7 @@
 // Every scroll a carousel wrapper emits is attributed to one of two sources,
 // and anything watching it - a link relaying it to another carousel, an
 // effect that renders differently depending on who is moving it (see
-// ../effects/ios-scrubber-css-effect.js) - reads that attribution instead of trying to
+// the iOS scrubber's look.js) - reads that attribution instead of trying to
 // reconstruct it from raw DOM events of its own.
 //
 //   "self"   - this carousel is moving for its own reasons: a real gesture
