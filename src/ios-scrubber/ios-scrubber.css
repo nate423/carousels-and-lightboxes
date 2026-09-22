@@ -284,6 +284,104 @@ h1 {
   --contrast-amount: 0;
 }
 
+/* --- The scale-fade look, on the main carousel ---------------------------- */
+
+/* The carousel this page is about runs the same look the scale-fade page
+   does - see shared/effects/scale-fade-effect.js, which generates the
+   per-item @keyframes these timelines drive.
+
+   Scoped to .main-carousel rather than .carousel-wrapper because the strip
+   below is a carousel too, and it must not get any of this: its current-item
+   look is width and displacement, drawn from its own timeline further down.
+   The single-stylesheet version said the same thing the other way round,
+   with the strip setting data-scroll-timelines="off" to opt out. */
+.main-carousel .carousel-item {
+  view-timeline-name: --item-reveal;
+  view-timeline-axis: inline;
+
+  /* animation-range is computed and set per item in JS
+     (setItemCurrentKeyframes in shared/effects/scale-fade-effect.js), from the
+     same anchor/alignment math as everything else in
+     carousel-math.js - keyword ranges (entry/exit/contain) don't track a
+     custom alignment anchor point across items of wildly different sizes. */
+  animation-name: item-current;
+  animation-timeline: --item-reveal;
+  animation-fill-mode: both;
+  animation-timing-function: linear;
+}
+
+/* view-timeline-inset defaults to "auto", which on browsers with native
+   scroll-driven-animations support resolves to the scroller's
+   scroll-padding on each side - silently double-applying it on top of the
+   scrollPadding term computeAnimationRanges already bakes into its own
+   peak/range math (via wrapperAnchor), throwing every "cover" percentage
+   off by the scroll-padding amount whenever alignment isn't center (where
+   the two insets happen to cancel out, masking this everywhere else).
+   Gated behind the same native-support test index.html uses to decide
+   whether to load the scroll-timeline polyfill at all (`CSS.supports(
+   "animation-timeline: --works")`) - the polyfill's own inset handling
+   already defaults an unset view-timeline-inset to {0, 0} rather than
+   "auto"-into-scroll-padding, so it never had this bug and doesn't need
+   (or need to safely parse) this override. */
+@supports (animation-timeline: --works) {
+  .main-carousel .carousel-item {
+    view-timeline-inset: 0px;
+  }
+}
+
+/* Second, wrapper-level named timeline (distinct from the per-item
+   --item-reveal view-timeline above) tracking raw scroll offset across the
+   whole scrollable range - drives the gap-compensating translate, which
+   (unlike scale/opacity) needs global state a per-item view-timeline can't
+   see. Items reference it directly since they're descendants of the wrapper
+   - see setItemCurrentKeyframes in scale-fade-effect.js for the generated per-item
+   @keyframes and computeTranslationBreakpoints in carousel-math.js for why
+   this is exactly reconstructable rather than sampled. */
+.main-carousel {
+  scroll-timeline-name: --carousel-scroll;
+  scroll-timeline-axis: inline;
+}
+
+/* The scale+fade look: the current item at full size and opacity, the rest
+   scaled down and faded, interpolated by --item-progress-effective (see its
+   block above). This look's rest-progress is 1 - at contrast 0, every item
+   is left exactly as laid out, which is what "no contrast" means here -
+   nothing distinguishing any item from any other. scale-fade-effect.js generates
+   the per-item keyframes that drive --item-progress; these rules are the
+   other half of it.
+
+   An unset --item-shift is 0, so a wrapper whose generated keyframes write
+   no translate leaves that line a no-op. */
+.main-carousel .carousel-item {
+  --rest-progress: 1;
+  scale: calc(var(--noncurrent-scale) + var(--item-progress-effective) * (1 - var(--noncurrent-scale)));
+  opacity: calc(var(--noncurrent-opacity) + var(--item-progress-effective) * (1 - var(--noncurrent-opacity)));
+  translate: calc(var(--item-shift) * var(--contrast-amount)) 0;
+
+  /* On its own property rather than folded into the translate above,
+     because a carousel whose contrast never changes has its translate
+     written by the animation itself (see setItemCurrentKeyframes) and
+     nothing can be added to it there. translate and transform compose, so
+     the correction lands either way, and it stays static - and therefore
+     free - on any carousel that is not currently being driven. */
+  transform: translateX(var(--scroll-error));
+}
+
+/* The shared default, used until scale-fade-effect.js replaces it with a per-item
+   rule whose peak sits where that item's own geometry puts it. Writes the
+   same input the generated ones do. */
+@keyframes item-current {
+  0% {
+    --item-progress: 0;
+  }
+  50% {
+    --item-progress: 1;
+  }
+  100% {
+    --item-progress: 0;
+  }
+}
+
 /* --- Demo controls ------------------------------------------------------- */
 
 .carousel-controls {
@@ -357,7 +455,7 @@ h1 {
 }
 
 /* --- The iOS scrubber look, painted natively ---------------------------
-   The other half of effects/ios-scrubber-css-effect.js. See that file's
+   The other half of this page's look.js. See that file's
    header for the derivation these rules rest on - it explains why one
    animation advancing one number is enough for the whole strip.
 

@@ -295,7 +295,8 @@ h1 {
   view-timeline-axis: inline;
 
   /* animation-range is computed and set per item in JS
-     (setItemCurrentKeyframes in css-effect.js), from the same anchor/alignment math as everything else in
+     (setItemCurrentKeyframes in shared/effects/scale-fade-effect.js), from the
+     same anchor/alignment math as everything else in
      carousel-math.js - keyword ranges (entry/exit/contain) don't track a
      custom alignment anchor point across items of wildly different sizes. */
   animation-name: item-current;
@@ -328,7 +329,7 @@ h1 {
    whole scrollable range - drives the gap-compensating translate, which
    (unlike scale/opacity) needs global state a per-item view-timeline can't
    see. Items reference it directly since they're descendants of the wrapper
-   - see setItemCurrentKeyframes in css-effect.js for the generated per-item
+   - see setItemCurrentKeyframes in scale-fade-effect.js for the generated per-item
    @keyframes and computeTranslationBreakpoints in carousel-math.js for why
    this is exactly reconstructable rather than sampled. */
 .carousel-wrapper {
@@ -340,7 +341,7 @@ h1 {
    scaled down and faded, interpolated by --item-progress-effective (see its
    block above). This look's rest-progress is 1 - at contrast 0, every item
    is left exactly as laid out, which is what "no contrast" means here -
-   nothing distinguishing any item from any other. css-effect.js generates
+   nothing distinguishing any item from any other. scale-fade-effect.js generates
    the per-item keyframes that drive --item-progress; these rules are the
    other half of it.
 
@@ -361,7 +362,7 @@ h1 {
   transform: translateX(var(--scroll-error));
 }
 
-/* The shared default, used until css-effect.js replaces it with a per-item
+/* The shared default, used until scale-fade-effect.js replaces it with a per-item
    rule whose peak sits where that item's own geometry puts it. Writes the
    same input the generated ones do. */
 @keyframes item-current {
