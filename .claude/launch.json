@@ -2,13 +2,6 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "carousels-and-lightboxes",
-      "runtimeExecutable": "npx",
-      "runtimeArgs": ["serve", "src"],
-      "port": 56576,
-      "autoPort": false
-    },
-    {
       "name": "ios-scrubber-lightbox",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["--prefix", "ios-scrubber-lightbox", "run", "dev", "--", "--port", "5183", "--strictPort"],
