@@ -20,7 +20,7 @@ import { iosScrubberCssEffect } from "./look.js";
 import { linkCarousels } from "../shared/linked-scrolling/link.js";
 
 export function attachIosScrubber(mainCarousel, scrubberWrapper, options = {}) {
-  const { itemWidth = 20, itemHeight = 30, gap = 3, expandedWidth = 30, expandedPadding = 10 } = options;
+  const { itemWidth = 24, itemHeight = 36, gap = 3, expandedWidth = 36, expandedPadding = 12 } = options;
   const itemCount = mainCarousel.getItems().length;
 
   scrubberWrapper.style.setProperty("--wrapper-gap", gap + "px");

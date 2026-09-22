@@ -73,7 +73,7 @@
 }
 
 .ios-thumbnail-scrubber-strip {
-  transition: --contrast-amount 130ms ease;
+  transition: --contrast-amount 200ms ease;
 }
 
 .ios-thumbnail-scrubber-strip[data-contrast="off"] {
@@ -82,17 +82,18 @@
 
 /* --- The iOS scrubber ---------------------------------------------------- */
 
-/* The other filmstrip-navigator style (see navigators/ios-thumbnail-scrubber.js)
-   - fixed-size thumbnails at a constant gap, where only the item nearest
-   the center is bigger, instead of thumbnail-scrubber-strip's "every item
-   scales continuously toward the center". A real carousel-engine wrapper
-   like any other (native scroll + scroll-snap, from the shared
-   .carousel-wrapper rules) - no custom drag/transform here. Height matches
-   the (constant) item height exactly - unlike thumbnail-scrubber-strip,
-   nothing here ever grows taller, only wider, so no extra headroom is
-   needed. */
+/* The other filmstrip-navigator style (see strip.js) - fixed-size thumbnails
+   at a constant gap, where only the item nearest the center is bigger,
+   instead of the filmstrip page's "every item scales continuously toward the
+   center". A real carousel-engine wrapper like any other (native scroll +
+   scroll-snap, from the shared .carousel-wrapper rules) - no custom
+   drag/transform here.
+
+   The height is breathing room, not a measurement: nothing here ever grows
+   taller, only wider, so the thumbnails need no headroom and simply sit
+   centred in it. */
 .ios-thumbnail-scrubber-strip {
-  height: 30px;
+  height: 100px;
 }
 
 /* Fixed width, always - the current item's expansion is drawn as overflow
@@ -120,7 +121,7 @@
      overwritten by the next one before this transition can catch up to it,
      so only the item the scroll actually comes to rest on ever gets the
      full duration to arrive. */
-  transition: transform 130ms ease;
+  transition: transform 200ms ease;
 }
 
 .ios-thumbnail-scrubber-thumb {
@@ -128,8 +129,8 @@
   flex: 0 0 auto;
   width: var(--ios-item-width);
   height: 100%;
-  border-radius: 3px;
-  transition: width 130ms ease, transform 130ms ease;
+  border-radius: 4px;
+  transition: width 200ms ease, transform 200ms ease;
   background-color: hsl(220, 14%, 70%);
 }
 
