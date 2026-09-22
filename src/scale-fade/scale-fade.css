@@ -11,12 +11,6 @@
   --wrapper-gap: 10px;
   --item-border-radius: 5px;
 
-  /* Room to leave open at the wrapper's start/end edge for a start- or
-     end-aligned item to sit in, so it doesn't land flush against whatever
-     borders the wrapper (the viewport, a container, etc). Read by the JS
-     scroll math; has no visible effect at alignment="center". */
-  --carousel-scroll-padding: 24px;
-
   --body-padding: 28px 0 0 0;
   /*   --wrapper-margin: 0 0 100px 0; */
 
@@ -105,10 +99,6 @@ h1 {
   overflow-x: auto;
   overflow-y: hidden;
   scroll-snap-type: x mandatory;
-  /* Keeps native scroll-snap in sync with the JS-computed anchor point -
-     without this, scroll-snap-align: start/end snaps flush to the true
-     edge, fighting the --carousel-scroll-padding inset applied in JS. */
-  scroll-padding: var(--carousel-scroll-padding);
   box-shadow: inset 0 0 0 1px rgb(255 0 0 / 0.3);
 
   --noncurrent-scale: 0.8;
@@ -303,25 +293,6 @@ h1 {
   animation-timeline: --item-reveal;
   animation-fill-mode: both;
   animation-timing-function: linear;
-}
-
-/* view-timeline-inset defaults to "auto", which on browsers with native
-   scroll-driven-animations support resolves to the scroller's
-   scroll-padding on each side - silently double-applying it on top of the
-   scrollPadding term computeAnimationRanges already bakes into its own
-   peak/range math (via wrapperAnchor), throwing every "cover" percentage
-   off by the scroll-padding amount whenever alignment isn't center (where
-   the two insets happen to cancel out, masking this everywhere else).
-   Gated behind the same native-support test index.html uses to decide
-   whether to load the scroll-timeline polyfill at all (`CSS.supports(
-   "animation-timeline: --works")`) - the polyfill's own inset handling
-   already defaults an unset view-timeline-inset to {0, 0} rather than
-   "auto"-into-scroll-padding, so it never had this bug and doesn't need
-   (or need to safely parse) this override. */
-@supports (animation-timeline: --works) {
-  .carousel-wrapper .carousel-item {
-    view-timeline-inset: 0px;
-  }
 }
 
 /* Second, wrapper-level named timeline (distinct from the per-item

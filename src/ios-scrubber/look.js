@@ -7,18 +7,26 @@
 // --- Why this needs no keyframes per item -------------------------------
 //
 // The archived ios-box-look.js lays every item out a second time in visual
-// terms - each
-// occupying its real expanded footprint - and translates each item by the
-// difference between that layout and its own fixed box. Written out, with
-// F = footprintGrowth, a = alignment, P = currentProgress and u = i - P
-// (how many items away item i is from current, signed), all of it reduces
-// to:
+// terms - each occupying its real expanded footprint - and translates each
+// item by the difference between that layout and its own fixed box. Written
+// out, with F = footprintGrowth, P = currentProgress and u = i - P (how many
+// items away item i is from current, signed), all of it reduces to:
 //
 //   lo(u)   = clamp(0, 1 + u, 1)
 //   hi(u)   = clamp(0, u, 1)
 //   grow_i  = lo - hi                                (the 0-1 itemProgress)
+//   shift_i = F * ((lo + hi)/2 - 1/2)
+//
+// The general form, for an anchor fraction a anywhere across the item, was
+//
 //   shift_i = F * (a*lo + (1-a)*hi - a - bend)
 //   bend    = (1 - 2a) * frac(P) * (1 - frac(P))
+//
+// which is worth keeping in view because bend is where the cost was: it is
+// the one term that is not a function of an item's own index, so it had to be
+// written from JS on every frame. At a = 1/2 it is identically zero, the two
+// ramps weigh the same, and what is left is static enough to live entirely in
+// the stylesheet.
 //
 // Every item runs that identical formula against its own index, so unlike
 // scale-fade-effect.js - whose per-item peak sits at a different, geometry-
@@ -91,13 +99,12 @@ function onItemCreated(item) {
 // frame.
 export function iosScrubberCssEffect({ progressDriver = "auto" } = {}) {
   function setup(ctx) {
-    const { wrapper, getAlignmentFraction, getScrollPadding } = ctx;
+    const { wrapper } = ctx;
     const items = [...wrapper.querySelectorAll(".carousel-item")];
     const style = getComputedStyle(wrapper);
     const itemWidth = parseFloat(style.getPropertyValue("--ios-item-width")) || 20;
     const expandedWidth = parseFloat(style.getPropertyValue("--ios-expanded-width")) || 30;
     const expandedPadding = parseFloat(style.getPropertyValue("--ios-expanded-padding")) || 10;
-    const alignment = getAlignmentFraction(wrapper);
 
     const previous = stateByWrapper.get(wrapper);
     const stripId = previous ? previous.stripId : nextStripId++;
@@ -110,7 +117,6 @@ export function iosScrubberCssEffect({ progressDriver = "auto" } = {}) {
     // how far the neighbours are pushed away.
     wrapper.style.setProperty("--ios-thumb-growth", expandedWidth - itemWidth + "px");
     wrapper.style.setProperty("--ios-footprint-growth", expandedWidth - itemWidth + 2 * expandedPadding + "px");
-    wrapper.style.setProperty("--ios-alignment", alignment);
     items.forEach((item, i) => item.style.setProperty("--ios-index", i));
 
     const animationName = `ios-progress-${stripId}`;
@@ -119,7 +125,7 @@ export function iosScrubberCssEffect({ progressDriver = "auto" } = {}) {
       `@keyframes ${animationName} {\n  from { --ios-progress: 0; }\n  to { --ios-progress: ${items.length - 1}; }\n}`
     );
 
-    const { anchors } = getItemMetrics(wrapper, items, alignment, getScrollPadding(wrapper));
+    const { anchors } = getItemMetrics(wrapper, items);
 
     stateByWrapper.set(wrapper, {
       stripId,
@@ -127,8 +133,7 @@ export function iosScrubberCssEffect({ progressDriver = "auto" } = {}) {
       animationName,
       items,
       anchors,
-      alignment,
-      wrapperAnchorPoint: wrapperAnchor(wrapper.offsetWidth, alignment, getScrollPadding(wrapper)),
+      wrapperAnchorPoint: wrapperAnchor(wrapper.offsetWidth),
       // Unset rather than false, so the first apply() always writes which
       // source is in use instead of assuming the wrapper already agrees.
       writingProgress: undefined
@@ -138,7 +143,7 @@ export function iosScrubberCssEffect({ progressDriver = "auto" } = {}) {
   function apply(ctx) {
     const { wrapper, getScrollSource, getDrivenProgress, onProgress } = ctx;
     const state = stateByWrapper.get(wrapper);
-    const { anchors, alignment, wrapperAnchorPoint, items, animationName } = state;
+    const { anchors, wrapperAnchorPoint, items, animationName } = state;
 
     const isDriven = getScrollSource() === "driven";
     const scrollAnchor = wrapper.scrollLeft + wrapperAnchorPoint;
@@ -172,15 +177,6 @@ export function iosScrubberCssEffect({ progressDriver = "auto" } = {}) {
         "--scroll-error",
         (scrollAnchor - computeScrollAnchorForProgress(anchors, currentProgress)).toFixed(3) + "px"
       );
-    }
-
-    // The one term of the formula that isn't a function of an item's own
-    // index - it needs frac(progress), which has no dependable CSS spelling
-    // yet. It is identically zero at center alignment, which is the default,
-    // so away from center is the only case that costs a write.
-    if (alignment !== 0.5) {
-      const t = currentProgress - Math.floor(currentProgress);
-      wrapper.style.setProperty("--ios-bend", (1 - 2 * alignment) * t * (1 - t));
     }
 
     onProgress?.(computeCurrentIndex(currentProgress, items.length), currentProgress);

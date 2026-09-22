@@ -198,12 +198,11 @@ function onItemCreated(item) {
 // would just be hard-coding an unrelated, undocumented implementation
 // detail rather than a value that falls out of this math.
 function setup(ctx) {
-  const { wrapper, getAlignmentFraction, getScrollPadding, getNoncurrentScale } = ctx;
+  const { wrapper, getNoncurrentScale } = ctx;
   const state = getWrapperState(wrapper);
   const usesContrast = ctx.usesContrast();
-  const { items, anchors, sizes, alignment, wrapperAnchorPoint } = ctx.getGeometry();
-  const scrollPadding = getScrollPadding(wrapper);
-  const ranges = computeAnimationRanges(anchors, sizes, wrapper.offsetWidth, alignment, scrollPadding);
+  const { items, anchors, sizes, wrapperAnchorPoint } = ctx.getGeometry();
+  const ranges = computeAnimationRanges(anchors, sizes, wrapper.offsetWidth);
 
   // Native scroll-timeline progress is 0%/100% at raw scroll offset
   // 0/maxScroll, not at wrapperAnchorPoint - scrollAnchor = scrollOffset +

@@ -26,23 +26,20 @@ import { getItemMetrics, computeCurrentProgress, wrapperAnchor } from "../carous
 // The scroll position is deliberately not part of it. That is the one thing
 // here that does change every frame, and it is a single read rather than one
 // per item.
-export function createGeometryCache({ wrapper, getItems, getAlignmentFraction, getScrollPadding }) {
+export function createGeometryCache({ wrapper, getItems }) {
   let geometry = null;
 
   function get() {
     if (geometry) return geometry;
 
     const items = getItems();
-    const alignment = getAlignmentFraction();
-    const scrollPadding = getScrollPadding();
-    const { anchors, sizes } = getItemMetrics(wrapper, items, alignment, scrollPadding);
+    const { anchors, sizes } = getItemMetrics(wrapper, items);
 
     geometry = {
       items,
       anchors,
       sizes,
-      alignment,
-      wrapperAnchorPoint: wrapperAnchor(wrapper.offsetWidth, alignment, scrollPadding)
+      wrapperAnchorPoint: wrapperAnchor(wrapper.offsetWidth)
     };
     return geometry;
   }

@@ -5,7 +5,7 @@
 // reconstruct it from raw DOM events of its own.
 //
 //   "self"   - this carousel is moving for its own reasons: a real gesture
-//              on it, or a goToIndex/setAlignment command aimed at it.
+//              on it, or a goToIndex command aimed at it.
 //              Authoritative motion, and the only kind worth relaying.
 //   "driven" - an outside driver is writing this carousel's scroll position
 //              directly through setProgressDirect. The scroll events that
@@ -108,7 +108,7 @@ export function createScrollAttribution(wrapper, { onSelfReclaim } = {}) {
     selfScrollStartedAt: () => selfScrollStartedAt,
     getDrivenProgress: () => lastDrivenProgress,
 
-    // Called by goToIndex/setAlignment: an explicit command to this
+    // Called by goToIndex: an explicit command to this
     // carousel, not an echo of something driving it, so the scrolling it is
     // about to do counts as moving for its own reasons and propagates
     // through a link. Unlike markSelfDriven this isn't a reclaim from a

@@ -15,20 +15,13 @@
 //     noncurrent/collapsed state to its current state (0 to 1).
 //     A pure function of currentProgress and the item's own index.
 //
-// None of the above cares *where* "current" is measured from within the
-// wrapper/item - that's a separate, orthogonal concept: alignment. Alignment
-// is a fraction (0 = start/leading edge, 0.5 = center, 1 = end/trailing
-// edge) applied identically to the wrapper and to every item to produce a
-// single "anchor point" for each. Everything below just asks "is the
-// wrapper's anchor point at the same scroll position as this item's anchor
-// point?" - the fraction itself never needs to leak past getItemMetrics and
-// the scroll-target helpers.
-
-const ALIGNMENT_FRACTIONS = { start: 0, center: 0.5, end: 1 };
-
-export function alignmentFraction(alignment) {
-  return ALIGNMENT_FRACTIONS[alignment] ?? ALIGNMENT_FRACTIONS.center;
-}
+// Where "current" is measured from is the centre, of the wrapper and of each
+// item alike - each gets a single "anchor point" there, and everything below
+// asks one question: is the wrapper's anchor point at the same scroll
+// position as this item's? That used to be a fraction threaded through every
+// formula here (0 for the leading edge, 0.5 for the centre, 1 for the
+// trailing edge), which is why several of them still read as the general case
+// collapsed rather than as something written for the centre.
 
 function progress(value, start, end) {
   return (value - start) / (end - start);
@@ -38,32 +31,29 @@ function transition(p, start, end) {
   return start + p * (end - start);
 }
 
-// The wrapper's anchor point, inset from its true start/end by
-// scrollPadding on each side - same idea as the CSS `scroll-padding`
-// property, reimplemented here because that property doesn't survive the
-// spacer-based trailing-edge workaround these carousels already rely on.
-// At alignment 0.5 the two insets cancel out (inset - 2*inset*0.5 = 0), so
-// scrollPadding is a no-op for center alignment and doesn't need to be
-// special-cased anywhere that calls this.
-export function wrapperAnchor(wrapperSize, alignment, scrollPadding) {
-  return (
-    scrollPadding + alignment * (wrapperSize - 2 * scrollPadding)
-  );
+// The wrapper's own anchor point: its middle.
+//
+// This used to carry a scrollPadding inset on each side, so a start- or
+// end-aligned item had room to sit in rather than landing flush against the
+// wrapper's edge. Centred, the two insets cancel exactly
+// (inset + 0.5 * (size - 2 * inset) = size / 2), so that parameter never had
+// any effect here and is gone along with the alignment it existed for.
+export function wrapperAnchor(wrapperSize) {
+  return wrapperSize / 2;
 }
 
 // The only two functions here that touch the DOM, and they touch it only to
 // read two numbers per item. Everything else below takes numbers and returns
 // numbers, which is why the axis never had to reach any further than this.
-export function getItemMetrics(wrapper, items, alignment, scrollPadding = 0) {
-  const scrollAnchor =
-    wrapper.scrollLeft + wrapperAnchor(wrapper.offsetWidth, alignment, scrollPadding);
+export function getItemMetrics(wrapper, items) {
+  const scrollAnchor = wrapper.scrollLeft + wrapperAnchor(wrapper.offsetWidth);
   const anchors = [];
   const sizes = [];
 
   items.forEach((item) => {
     const itemOffsetFromWrapperStart = item.offsetLeft - wrapper.offsetLeft;
     sizes.push(item.offsetWidth);
-    anchors.push(itemOffsetFromWrapperStart + item.offsetWidth * alignment);
+    anchors.push(itemOffsetFromWrapperStart + item.offsetWidth / 2);
   });
 
   return { anchors, sizes, scrollAnchor };
@@ -71,32 +61,20 @@ export function getItemMetrics(wrapper, items, alignment, scrollPadding = 0) {
 
 // Scroll offset (relative to the wrapper) that puts this item's anchor point
 // at the wrapper's anchor point - i.e. where to scroll to bring it "current"
-// under the given alignment. Shared by click-to-scroll and page-dot clicks.
-export function computeScrollTarget(wrapper, item, alignment, scrollPadding = 0) {
+// i.e. where to scroll to bring it "current". Shared by click-to-scroll and
+// page-dot clicks.
+export function computeScrollTarget(wrapper, item) {
   return (
-    item.offsetLeft -
-    wrapper.offsetLeft -
-    (wrapperAnchor(wrapper.offsetWidth, alignment, scrollPadding) - item.offsetWidth * alignment)
+    item.offsetLeft - wrapper.offsetLeft - (wrapperAnchor(wrapper.offsetWidth) - item.offsetWidth / 2)
   );
 }
 
-// Size of the spacer needed on one edge of the wrapper so that the item
-// touching that edge (edgeFraction 0 for the leading spacer, 1 for the
-// trailing one) can still reach the wrapper's anchor point. Generalizes the
-// plain "(wrapperSize - itemSize) * edgeFraction" case (scrollPadding 0)
-// with the same inset term as wrapperAnchor.
-export function computeSpacerSize(
-  wrapperSize,
-  itemSize,
-  edgeFraction,
-  gapSize,
-  scrollPadding = 0
-) {
-  return (
-    wrapperAnchor(wrapperSize, edgeFraction, scrollPadding) -
-    itemSize * edgeFraction -
-    gapSize
-  );
+// Size of the spacer needed at each edge of the wrapper so that the first and
+// last items can still reach its anchor point. Both edges take the same
+// amount now: the leading spacer used to be sized by the alignment fraction
+// and the trailing one by its complement, which are equal only at the centre.
+export function computeSpacerSize(wrapperSize, itemSize, gapSize) {
+  return (wrapperSize - itemSize) / 2 - gapSize;
 }
 
 // Inverse-interpolates scrollAnchor against the real item anchors: finds
@@ -175,15 +153,25 @@ function computeItemProgress(currentProgress, i) {
 // same how-current-is-it curve this asymmetric range encodes, just derived
 // directly from real anchor distances instead of by way of
 // cover-percent/peakX.)
-export function computeAnimationRanges(anchors, sizes, wrapperSize, alignment, scrollPadding) {
+export function computeAnimationRanges(anchors, sizes, wrapperSize) {
   const n = anchors.length;
-  const wrapperAnchorPoint = wrapperAnchor(wrapperSize, alignment, scrollPadding);
 
   return anchors.map((anchor, i) => {
     const itemSize = sizes[i];
     const span = wrapperSize + itemSize;
-    const currentLeadingEdge = wrapperAnchorPoint - itemSize * alignment;
-    const peak = (wrapperSize - currentLeadingEdge) / span;
+
+    // Where this item's own anchor crossing falls across its cover range.
+    // Centred, that is exactly halfway, for every item and every size:
+    //   leadingEdge = wrapperSize/2 - itemSize/2
+    //   peak        = (wrapperSize - leadingEdge) / (wrapperSize + itemSize)
+    //               = ((wrapperSize + itemSize) / 2) / (wrapperSize + itemSize)
+    //
+    // This does NOT make peakX below 0.5 as well, so it does not remove the
+    // need for a per-item @keyframes rule: peakX measures where the peak sits
+    // within the item's own clamped sub-range, which is asymmetric whenever
+    // its two neighbours are at different distances - which, at varying item
+    // sizes, is essentially always.
+    const peak = 0.5;
 
     const deltaPrev = i > 0 ? anchor - anchors[i - 1] : itemSize;
     const deltaNext = i < n - 1 ? anchors[i + 1] - anchor : itemSize;

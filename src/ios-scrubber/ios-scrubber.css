@@ -11,12 +11,6 @@
   --wrapper-gap: 10px;
   --item-border-radius: 5px;
 
-  /* Room to leave open at the wrapper's start/end edge for a start- or
-     end-aligned item to sit in, so it doesn't land flush against whatever
-     borders the wrapper (the viewport, a container, etc). Read by the JS
-     scroll math; has no visible effect at alignment="center". */
-  --carousel-scroll-padding: 24px;
-
   --body-padding: 28px 0 0 0;
   /*   --wrapper-margin: 0 0 100px 0; */
 
@@ -105,10 +99,6 @@ h1 {
   overflow-x: auto;
   overflow-y: hidden;
   scroll-snap-type: x mandatory;
-  /* Keeps native scroll-snap in sync with the JS-computed anchor point -
-     without this, scroll-snap-align: start/end snaps flush to the true
-     edge, fighting the --carousel-scroll-padding inset applied in JS. */
-  scroll-padding: var(--carousel-scroll-padding);
   box-shadow: inset 0 0 0 1px rgb(255 0 0 / 0.3);
 
   --noncurrent-scale: 0.8;
@@ -310,25 +300,6 @@ h1 {
   animation-timing-function: linear;
 }
 
-/* view-timeline-inset defaults to "auto", which on browsers with native
-   scroll-driven-animations support resolves to the scroller's
-   scroll-padding on each side - silently double-applying it on top of the
-   scrollPadding term computeAnimationRanges already bakes into its own
-   peak/range math (via wrapperAnchor), throwing every "cover" percentage
-   off by the scroll-padding amount whenever alignment isn't center (where
-   the two insets happen to cancel out, masking this everywhere else).
-   Gated behind the same native-support test index.html uses to decide
-   whether to load the scroll-timeline polyfill at all (`CSS.supports(
-   "animation-timeline: --works")`) - the polyfill's own inset handling
-   already defaults an unset view-timeline-inset to {0, 0} rather than
-   "auto"-into-scroll-padding, so it never had this bug and doesn't need
-   (or need to safely parse) this override. */
-@supports (animation-timeline: --works) {
-  .main-carousel .carousel-item {
-    view-timeline-inset: 0px;
-  }
-}
-
 /* Second, wrapper-level named timeline (distinct from the per-item
    --item-reveal view-timeline above) tracking raw scroll offset across the
    whole scrollable range - drives the gap-compensating translate, which
@@ -473,14 +444,6 @@ h1 {
   initial-value: 0;
 }
 
-/* The shared quadratic correction, nonzero only away from center alignment,
-   written per frame by the effect in that case. */
-@property --ios-bend {
-  syntax: "<number>";
-  inherits: true;
-  initial-value: 0;
-}
-
 .ios-scrubber-css {
   /* This page declares only the timeline this look needs. The scale-fade
      pages hang a per-item view-timeline off .carousel-item as well, which
@@ -530,25 +493,20 @@ h1 {
      is what lets the thumb inside the item read its own item's value. */
   --item-progress: calc(var(--lo) - var(--hi));
 
-  --item-shift: calc(
-    var(--ios-footprint-growth) *
-      (
-        var(--ios-alignment) * var(--lo) + (1 - var(--ios-alignment)) * var(--hi) - var(--ios-alignment) -
-          var(--ios-bend)
-      )
-  );
+  /* The general form was F * (a*lo + (1-a)*hi - a - bend), for anchor
+     fraction a. Centred, a is 1/2 and the two ramps weigh the same, and bend
+     - a quadratic correction in frac(progress) - is identically zero. That
+     term was the only part of the formula that was not a function of an
+     item's own index, and so the only thing the effect had to write per
+     frame; without it this rule is entirely static. */
+  --item-shift: calc(var(--ios-footprint-growth) * ((var(--lo) + var(--hi)) * 0.5 - 0.5));
 
   transform: translate3d(calc(var(--item-shift) * var(--contrast-amount) + var(--scroll-error)), 0, 0);
 }
 
 .ios-scrubber-css .ios-thumbnail-scrubber-thumb {
+  /* No transform to re-centre the thumb inside the footprint its neighbours
+     made room for: that correction was proportional to (0.5 - a), and the
+     anchor point is now the item's own centre. */
   width: calc(var(--ios-item-width) + var(--item-progress-effective) * var(--ios-thumb-growth));
-  /* Re-centers the thumb inside the footprint its neighbours made room for
-     when the anchor point is not the item's own center. Zero at center
-     alignment, same as the JS look's thumbOffset. */
-  transform: translate3d(
-    calc(var(--item-progress-effective) * var(--ios-footprint-growth) * (0.5 - var(--ios-alignment))),
-    0,
-    0
-  );
 }

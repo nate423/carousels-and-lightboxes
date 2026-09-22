@@ -7,19 +7,14 @@
 // The stateful pieces below - scroll attribution, snap suspension, contrast
 // policy, geometry caching, spacers, item population - each live in their
 // own module under engine/, self-contained apart from the accessors
-// (getItems, getAlignmentFraction, ...) and callbacks this file wires
+// (getItems, getNoncurrentScale, ...) and callbacks this file wires
 // between them. This file is the orchestrator: it owns nothing but the glue
 // - the event listeners, the ctx bundle effects read, and the public API -
 // and the seams between the pieces are exactly the places where two of them
 // have to agree, which is also where the comments explaining *why* now live.
 // The pure math they all build on was already factored out to
 // carousel-math.js.
-import {
-  alignmentFraction,
-  computeScrollTarget,
-  computeCurrentIndex,
-  computeScrollAnchorForProgress
-} from "./carousel-math.js";
+import { computeScrollTarget, computeScrollAnchorForProgress } from "./carousel-math.js";
 import { rafThrottle } from "./engine/raf-throttle.js";
 import { createScrollAttribution } from "./engine/scroll-attribution.js";
 import { createSnapSuspension } from "./engine/snap-suspension.js";
@@ -27,8 +22,6 @@ import { createContrastPolicy } from "./engine/contrast-policy.js";
 import { createGeometryCache } from "./engine/geometry-cache.js";
 import { createSpacers } from "./engine/spacers.js";
 import { populateItems as populateItemsInto } from "./engine/populate-items.js";
-
-const DEFAULT_ALIGNMENT = "center";
 
 export { rafThrottle };
 
@@ -40,24 +33,6 @@ export function createCarousel(wrapper, options = {}) {
     itemSizing,
     removeContrastWhileScrolling = "never"
   } = options;
-
-  wrapper.dataset.scrollAlignment ||= DEFAULT_ALIGNMENT;
-
-  function getAlignment() {
-    return wrapper.dataset.scrollAlignment || DEFAULT_ALIGNMENT;
-  }
-
-  function getAlignmentFraction() {
-    return alignmentFraction(getAlignment());
-  }
-
-  function getScrollPadding() {
-    return (
-      parseFloat(
-        getComputedStyle(wrapper).getPropertyValue("--carousel-scroll-padding")
-      ) || 0
-    );
-  }
 
   function getNoncurrentScale() {
     return (
@@ -77,8 +52,8 @@ export function createCarousel(wrapper, options = {}) {
   const snap = createSnapSuspension(wrapper);
   const attribution = createScrollAttribution(wrapper, { onSelfReclaim: snap.restore });
   const contrast = createContrastPolicy(wrapper, removeContrastWhileScrolling);
-  const geometry = createGeometryCache({ wrapper, getItems, getAlignmentFraction, getScrollPadding });
-  const spacers = createSpacers(wrapper, { getItems, getAlignmentFraction, getScrollPadding });
+  const geometry = createGeometryCache({ wrapper, getItems });
+  const spacers = createSpacers(wrapper, { getItems });
 
   // Reads motion off attribution and writes it through to the contrast
   // policy - the one-line seam between the two modules. Return value (did
@@ -122,7 +97,7 @@ export function createCarousel(wrapper, options = {}) {
     // for its own reasons and propagates through a link.
     attribution.noteSelfCommand();
 
-    const scrollTarget = computeScrollTarget(wrapper, item, getAlignmentFraction(), getScrollPadding());
+    const scrollTarget = computeScrollTarget(wrapper, item);
 
     wrapper.scrollTo({ left: scrollTarget, behavior });
   }
@@ -168,8 +143,6 @@ export function createCarousel(wrapper, options = {}) {
   // createCarousel returns.
   const ctx = {
     wrapper,
-    getAlignmentFraction,
-    getScrollPadding,
     getNoncurrentScale,
     getScrollSource: attribution.getScrollSource,
     getMotionState: attribution.getMotionState,
@@ -274,28 +247,12 @@ export function createCarousel(wrapper, options = {}) {
     applyIfReady();
   }
 
-  // Re-points the wrapper at a new alignment: keeps whichever item is
-  // currently "current" under the cursor of the new alignment (no smooth
-  // scroll, so it doesn't fight the user's next scroll gesture), then
-  // resizes the spacers and redraws to match.
-  function setAlignment(alignment) {
-    // Read before the change, so this is still the alignment the carousel
-    // is currently laid out under. updateSpacers below drops the cache.
-    const currentIndex = computeCurrentIndex(geometry.getCurrentProgress(), geometry.get().items.length);
-    wrapper.dataset.scrollAlignment = alignment;
-    updateSpacers();
-    effect.setup(ctx);
-    goToIndex(currentIndex, { behavior: "instant" });
-    effect.apply(ctx);
-  }
-
   return {
     wrapper,
     getItems,
     goToIndex,
     getCurrentProgress: geometry.getCurrentProgress,
     setProgressDirect,
-    setAlignment,
     getScrollSource: attribution.getScrollSource,
     getMotionState: attribution.getMotionState,
     // Which motion states drop contrast, changeable live (e.g. from a demo
