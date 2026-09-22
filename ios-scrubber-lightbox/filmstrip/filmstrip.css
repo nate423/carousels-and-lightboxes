@@ -34,7 +34,7 @@
    below rather than restated live, since it isn't actually overriding
    base.css's 5px - the slot is visible without a duplicate number that
    could drift from the real default. */
-.thumbnail-scrubber-strip {
+.carousel-wrapper.thumbnail-scrubber-strip {
   height: 100px;
   --wrapper-gap: 6px;
   --filmstrip-item-height: 36px;

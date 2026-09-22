@@ -87,7 +87,7 @@
    - left commented out below rather than restated live, so the slot is
    visible without a duplicate number that could drift from the look's
    actual default; uncomment and edit to actually override.*/
-.ios-thumbnail-scrubber-strip {
+.carousel-wrapper.ios-thumbnail-scrubber-strip {
   height: 100px;
   --wrapper-gap: 3px;
   /* --expand-item-height: 36px; */
