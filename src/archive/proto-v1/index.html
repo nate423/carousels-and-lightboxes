@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <title>Carousels and Lightboxes</title>
+  <link rel="stylesheet" href="css/main.css" />
+</head>
+
+<body>
+
+  <main>
+    <div class="alignment-controls">
+      <label><input type="radio" name="scroll-alignment" value="start" /> Start</label>
+      <label><input type="radio" name="scroll-alignment" value="center" checked /> Center</label>
+      <label><input type="radio" name="scroll-alignment" value="end" /> End</label>
+      <span class="build-stamp" id="build-stamp"></span>
+    </div>
+    <div class="carousels">
+      <div class="carousel-comparison">
+        <h2>CSS variant (native view-timeline, polyfilled where unsupported)</h2>
+        <div class="carousel-with-controls">
+          <div class="carousel-wrapper comparison-wrapper" id="h-scroll" data-scroll-axis="x"></div>
+          <div class="page-controls" for="h-scroll">
+            <div class="page-indicator-dot"></div>
+            <div class="page-indicator-dot current"></div>
+          </div>
+        </div>
+      </div>
+      <div class="carousel-comparison">
+        <h2>JS variant (scroll listener)</h2>
+        <div class="carousel-with-controls">
+          <div class="carousel-wrapper comparison-wrapper" id="h-scroll-js" data-scroll-axis="x" data-effect="js" data-scroll-timelines="off"></div>
+          <div class="page-controls" for="h-scroll-js">
+            <div class="page-indicator-dot"></div>
+            <div class="page-indicator-dot current"></div>
+          </div>
+        </div>
+      </div>
+      <div class="carousel-comparison">
+        <h2>Origin variant (native, transform-origin swap, no translate - assumes uniform item size)</h2>
+        <div class="carousel-with-controls">
+          <div class="carousel-wrapper comparison-wrapper placeholder-boxes uniform-size" id="h-scroll-origin" data-scroll-axis="x" data-effect="origin"></div>
+          <div class="page-controls" for="h-scroll-origin">
+            <div class="page-indicator-dot"></div>
+            <div class="page-indicator-dot current"></div>
+          </div>
+        </div>
+      </div>
+      <div class="carousel-comparison">
+        <h2>Thumbnail scrubber (filmstrip navigator instead of dots)</h2>
+        <div class="carousel-controls">
+          <label>
+            Main, while following
+            <select data-link-follower="main">
+              <option value="instant" selected>Instant</option>
+              <option value="continuous">Continuous</option>
+            </select>
+          </label>
+          <label>
+            Strip, while following
+            <select data-link-follower="strip">
+              <option value="instant">Instant</option>
+              <option value="continuous" selected>Continuous</option>
+            </select>
+          </label>
+          <label>
+            Main, remove contrast
+            <select data-contrast-for="main">
+              <option value="never" selected>Never</option>
+              <option value="leading">Leading</option>
+              <option value="following">Following</option>
+              <option value="always">Always</option>
+            </select>
+          </label>
+          <label>
+            Strip, remove contrast
+            <select data-contrast-for="strip">
+              <option value="never" selected>Never</option>
+              <option value="leading">Leading</option>
+              <option value="following">Following</option>
+              <option value="always">Always</option>
+            </select>
+          </label>
+        </div>
+        <div class="carousel-wrapper comparison-wrapper placeholder-boxes thumbnail-scrubber-main" id="h-scroll-scrubber-main" data-scroll-axis="x"></div>
+        <div class="carousel-wrapper placeholder-boxes thumbnail-scrubber-strip" id="h-scroll-scrubber-strip" data-scroll-axis="x"></div>
+      </div>
+      <div class="carousel-comparison">
+        <h2>Thumbnail scrubber (iOS style - fixed-size thumbnails, only the centered one expands)</h2>
+        <div class="carousel-controls">
+          <label>
+            Main, while following
+            <select data-link-follower="main">
+              <option value="instant" selected>Instant</option>
+              <option value="continuous">Continuous</option>
+            </select>
+          </label>
+          <label>
+            Strip, while following
+            <select data-link-follower="strip">
+              <option value="instant">Instant</option>
+              <option value="continuous" selected>Continuous</option>
+            </select>
+          </label>
+          <label>
+            Main, remove contrast
+            <select data-contrast-for="main">
+              <option value="never" selected>Never</option>
+              <option value="leading">Leading</option>
+              <option value="following">Following</option>
+              <option value="always">Always</option>
+            </select>
+          </label>
+          <label>
+            Strip, remove contrast
+            <select data-contrast-for="strip">
+              <option value="never">Never</option>
+              <option value="leading" selected>Leading</option>
+              <option value="following">Following</option>
+              <option value="always">Always</option>
+            </select>
+          </label>
+        </div>
+        <div class="carousel-wrapper comparison-wrapper placeholder-boxes thumbnail-scrubber-main" id="h-scroll-ios-scrubber-main" data-scroll-axis="x"></div>
+        <div class="carousel-wrapper ios-thumbnail-scrubber-strip" id="h-scroll-ios-scrubber-strip" data-scroll-axis="x"></div>
+      </div>
+      <div class="carousel-wrapper" data-scroll-axis="y"></div>
+      <div class="carousel-wrapper placeholder-boxes uniform-size" data-scroll-axis="y" data-effect="origin"></div>
+      <!--<div class="carousel-wrapper placeholder-images" data-scroll-axis="y"></div>
+    <div class="carousel-wrapper placeholder-images" data-scroll-axis="x"></div>-->
+    </div>
+  </main>
+
+  <script>
+    // Recorded before the polyfill below has a chance to load: it patches
+    // CSS.supports itself (so feature-detection *in the page's own CSS*
+    // doesn't see through it and skip declaring animation-timeline etc.) -
+    // by the time main.js could call CSS.supports("animation-timeline:
+    // --works") itself, it would always get back `true`, polyfilled or not.
+    // main.js's thumbnail-scrubber fallback (the one non-demo consumer that
+    // needs a real answer, not the polyfilled one) reads this instead.
+    window.__supportsScrollDrivenAnimations = CSS.supports("animation-timeline: --works");
+    if (!window.__supportsScrollDrivenAnimations) {
+      const s = document.createElement("script");
+      s.src = "js/vendor/scroll-timeline.js";
+      s.async = false;
+      document.currentScript.after(s);
+    }
+  </script>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
