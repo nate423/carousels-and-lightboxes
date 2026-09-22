@@ -20,9 +20,9 @@ import {
   computeCurrentProgress,
   computeCurrentIndex,
   computeScrollAnchorForProgress,
-  computeAnimationRanges,
-  computeTranslationBreakpoints
+  computeAnimationRanges
 } from "../carousel-math.js";
+import { computeTranslationBreakpoints } from "./gap-compensation.js";
 import { RuleSheet } from "./style-swap.js";
 
 // `animation-timing-function` (including the linear() control-point syntax)
@@ -35,7 +35,7 @@ import { RuleSheet } from "./style-swap.js";
 // distinct, stable id for this (assigned in onItemCreated) and a shared
 // stylesheet holding one generated rule per item, rebuilt whenever setup()
 // recomputes geometry. The gap-compensating translate gets the same
-// treatment (see computeTranslationBreakpoints in carousel-math.js for why
+// treatment (see computeTranslationBreakpoints in gap-compensation.js for why
 // it's exactly representable this way too), just off a second, wrapper-level
 // scroll-timeline instead of the per-item view-timeline - see the page's
 // stylesheet.

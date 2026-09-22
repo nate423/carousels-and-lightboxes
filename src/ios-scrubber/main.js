@@ -3,10 +3,14 @@
 // Photos. The strip is a real carousel of its own - native scroll, native
 // snap - linked to the main one through shared/linked-scrolling/.
 //
+// The main carousel takes the plain fade rather than scale-fade. It is context
+// for the strip, not the subject, so it wants the least logic that still reads
+// as a carousel - and fade needs no gap compensation at all.
+//
 // The main carousel has to exist before the strip is built from it, which is
 // where the strip gets its item count.
 import { createCarousel } from "../shared/carousel-engine.js";
-import { scaleFadeEffect } from "../shared/effects/scale-fade-effect.js";
+import { fadeEffect } from "../shared/effects/fade.js";
 import { attachIosScrubber } from "./strip.js";
 import { createPlaceholderItem } from "./placeholder-items.js";
 import { showBuildStamp } from "../dev/build-stamp.js";
@@ -18,7 +22,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const mainCarousel = createCarousel(document.getElementById("main-carousel"), {
     itemCount: 30,
-    effect: scaleFadeEffect,
+    effect: fadeEffect,
     createItem: createPlaceholderItem
   });
 
