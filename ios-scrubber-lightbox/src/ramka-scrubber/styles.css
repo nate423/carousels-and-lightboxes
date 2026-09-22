@@ -42,9 +42,9 @@ body {
    full document width. */
 .carousel-wrapper.ios-thumbnail-scrubber-strip {
   width: 100%;
-  height: 72px;
+  height: 60px;
   --wrapper-gap: 4px;
-  --expand-item-height: 48px;
+  --expand-item-height: 60px;
   /* expand.css only derives --expand-item-width/-width-grown FROM
      --expand-item-height inside its own .expand-effect rule - and that
      class is added by expand.js's effect.setup(), which carousel-engine.js
@@ -60,6 +60,7 @@ body {
      is available immediately regardless of that ordering. */
   --expand-item-width: calc(var(--expand-item-height) * 2 / 3);
   --expand-item-width-grown: var(--expand-item-height);
+  --expand-grown-padding: 16px;
   /* .lb-bottom (this strip's parent) is click-through by default - see
      lightbox.css - so the strip has to opt back in the same way .lb-caption
      does, or every drag/click on it falls through to the backdrop. */
