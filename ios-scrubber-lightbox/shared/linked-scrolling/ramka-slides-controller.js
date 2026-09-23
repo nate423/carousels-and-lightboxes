@@ -22,6 +22,7 @@
 import { createScrollAttribution } from "./scroll-attribution.js";
 import { computeCurrentProgress, computeScrollAnchorForProgress } from "../carousel-math.js";
 import { rafThrottle } from "../engine/raf-throttle.js";
+import { onScrollEnd } from "../engine/scroll-end.js";
 
 const SLIDE_SELECTOR = "[data-ramka-slide]";
 const SNAP_RESTORE_DELAY = 150;
@@ -150,7 +151,7 @@ export function createRamkaSlidesController(slidesEl) {
 
   slidesEl.addEventListener("scroll", () => attribution.noteScrollEvent(), { passive: true });
 
-  slidesEl.addEventListener("scrollend", () => {
+  onScrollEnd(slidesEl, () => {
     const wasLeading = attribution.endLeading();
     if (wasLeading) scrollEndListeners.forEach((listener) => listener());
   });

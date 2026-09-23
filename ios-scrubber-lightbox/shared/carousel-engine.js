@@ -20,6 +20,7 @@ import { createScrollAttribution } from "./linked-scrolling/scroll-attribution.j
 import { createSnapSuspension } from "./linked-scrolling/snap-suspension.js";
 import { createGeometryCache } from "./engine/geometry-cache.js";
 import { createSpacers } from "./engine/spacers.js";
+import { onScrollEnd } from "./engine/scroll-end.js";
 import { populateItems as populateItemsInto } from "./engine/populate-items.js";
 
 export { rafThrottle };
@@ -178,6 +179,7 @@ export function createCarousel(wrapper, options = {}) {
   // this synchronous loop.
   // 'scrollend' fires once a scroll operation - gesture, momentum and any snap
   // correction together - is over, which is what bounds a stretch of movement.
+  // onScrollEnd stands in for it where the browser doesn't have it.
   wrapper.addEventListener("scroll", () => {
     attribution.noteScrollEvent();
     notifyMotion();
@@ -194,7 +196,7 @@ export function createCarousel(wrapper, options = {}) {
   // ending (wasLeading), so a spurious/early scrollend while merely being
   // driven, or one with no motion behind it at all, never gets relayed as if
   // it were the authoritative "the gesture is over" signal.
-  wrapper.addEventListener("scrollend", () => {
+  onScrollEnd(wrapper, () => {
     const wasLeading = attribution.endLeading();
     notifyMotion();
     applyIfReady();
