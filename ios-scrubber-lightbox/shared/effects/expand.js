@@ -151,7 +151,13 @@ export function expandEffect({ progressDriver = "auto" } = {}) {
     const scrollAnchor = currentScrollAnchor();
     const currentProgress = isDriven ? getDrivenProgress() : computeCurrentProgress(anchors, scrollAnchor);
 
-    const writingProgress = progressDriver === "js" || (progressDriver === "auto" && isDriven);
+    // Overscrolled - rubber-banding past either end - the progress runs
+    // outside 0..n-1, which the animation can't follow: keyframes hold at
+    // their end values rather than carry on. computeCurrentProgress keeps
+    // going at the end segment's pitch, which is uniform here, so writing it
+    // lets the end item wind down as if one more item lay beyond it.
+    const overscrolled = currentProgress < 0 || currentProgress > items.length - 1;
+    const writingProgress = progressDriver === "js" || (progressDriver === "auto" && (isDriven || overscrolled));
     if (writingProgress !== state.writingProgress) {
       state.writingProgress = writingProgress;
       // An animation outranks an inline custom property, so the two can't

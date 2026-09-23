@@ -5,7 +5,7 @@
 // Only the scale-fade look needs this - a fade moves nothing - which is
 // why it lives beside that look instead of in carousel-math.js with the
 // progress/anchor math every carousel uses.
-import { transition, computeCurrentProgress } from "../../carousel-math.js";
+import { transition, computeCurrentProgress, computeEdgeAnchors } from "../../carousel-math.js";
 
 // How current item i is, 0 to 1: 1 exactly when currentProgress lands on
 // i, down to 0 by the time currentProgress reaches either adjacent index.
@@ -81,45 +81,40 @@ function computeTranslations(anchors, sizes, scales, currentProgress) {
 
 // Precomputes the exact breakpoints needed to reconstruct
 // computeTranslations' output as a native CSS @keyframes curve - one per
-// item, driven by a scroll-timeline spanning the wrapper's whole
-// scrollable range (see scale-fade.js).
+// item, driven by a scroll-timeline (see scale-fade.js).
 //
 // As a function of raw scroll offset, every item's translation is
 // piecewise-linear: computeItemProgress's how-current-is-it curve reaches
 // exactly 0 right as scrollAnchor crosses a neighbouring anchor, so each
 // item's scaleDiff only bends at its neighbours' anchors - meaning the
 // anchors are the only interior points where any item's translation can
-// change slope. The two ends of the *reachable* scroll range -
-// minScrollAnchor/maxScrollAnchor, i.e. the scrollAnchor at raw scroll
-// offset 0 and at maxScroll, where the leading/trailing spacer
-// bottoms/tops out - close off the curve.
+// change slope.
 //
-// These aren't the same as the off-screen fallback range
-// computeAnimationRanges uses for the first/last item, which covers space
-// the carousel can never actually scroll to. Reusing that fallback here
-// would place a breakpoint the scroll-timeline can never reach, past
-// minScrollAnchor/maxScrollAnchor, colliding with the real boundary once
-// both clamp to the same 0%/100% keyframe stop.
+// The curve runs out to the imaginary item past each end (see
+// computeEdgeAnchors), not just to the ends of the scroll range, because
+// overscrolling carries the scroll past them: the end item keeps winding
+// down there, and its neighbours have to keep closing the gap it opens.
+// Progress past the ends is measured against those same imaginary anchors,
+// so the translate falls off at the same pitch as the scale-fade's own
+// per-item range for the end item (computeAnimationRanges).
 //
 // That's `n + 2` breakpoints total, shared by every item - exact, not a
-// sampled approximation.
-export function computeTranslationBreakpoints(
-  anchors,
-  sizes,
-  noncurrentScale,
-  minScrollAnchor,
-  maxScrollAnchor
-) {
+// sampled approximation. Their span is returned alongside them, as the
+// scroll-anchor range the keyframes have to be laid across.
+export function computeTranslationBreakpoints(anchors, sizes, noncurrentScale) {
   const n = anchors.length;
-  if (n === 0) return [];
+  if (n === 0) return { breakpoints: [], start: 0, end: 0 };
 
-  const breakpointAnchors = [minScrollAnchor, ...anchors, maxScrollAnchor].sort((a, b) => a - b);
+  const { before, after } = computeEdgeAnchors(anchors, sizes);
+  const extendedAnchors = [before, ...anchors, after];
 
-  return breakpointAnchors.map((scrollAnchor) => {
-    const currentProgress = computeCurrentProgress(anchors, scrollAnchor);
+  const breakpoints = extendedAnchors.map((scrollAnchor) => {
+    const currentProgress = computeCurrentProgress(extendedAnchors, scrollAnchor) - 1;
     const scales = anchors.map((_, i) => transition(computeItemProgress(currentProgress, i), noncurrentScale, 1));
     const translations = computeTranslations(anchors, sizes, scales, currentProgress);
 
     return { scrollAnchor, translations };
   });
+
+  return { breakpoints, start: before, end: after };
 }

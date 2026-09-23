@@ -103,7 +103,7 @@ function getWrapperState(wrapper) {
 // be composed on top as a second animation either: transforms do compose
 // multiplicatively, but what contrast scales is each value's *distance
 // from neutral* (1 + c * (s - 1)), not a plain factor of c.
-function setItemCurrentKeyframes(state, item, peakX, range, translateStops) {
+function setItemCurrentKeyframes(state, item, peakX, range, translateStops, translateRange) {
   const currentName = `item-current-${item.dataset.itemId}`;
   state.currentKeyframeSheet.set(
     currentName,
@@ -122,7 +122,7 @@ function setItemCurrentKeyframes(state, item, peakX, range, translateStops) {
 
   const animationName = `${currentName}, ${translateName}`;
   const animationTimeline = "--item-reveal, --carousel-scroll";
-  const animationRange = `cover ${range.start * 100}% cover ${range.end * 100}%, 0% 100%`;
+  const animationRange = `cover ${range.start * 100}% cover ${range.end * 100}%, ${translateRange}`;
 
   item.style.animationName = animationName;
   item.style.animationTimeline = animationTimeline;
@@ -172,31 +172,21 @@ function setup(ctx) {
   const { items, anchors, sizes, wrapperAnchorPoint } = ctx.getGeometry();
   const ranges = computeAnimationRanges(anchors, sizes, wrapper.offsetWidth);
 
-  // Native scroll-timeline progress is 0%/100% at raw scroll offset
-  // 0/maxScroll, not at wrapperAnchorPoint - scrollAnchor = scrollOffset +
-  // wrapperAnchorPoint (see getItemMetrics), so the reachable scrollAnchor
-  // range is [wrapperAnchorPoint, wrapperAnchorPoint + maxScroll]. These
-  // are the true breakpoint boundaries (see computeTranslationBreakpoints).
-  const maxScroll = wrapper.scrollWidth - wrapper.offsetWidth;
-  const percentFor = (scrollAnchor) =>
-    maxScroll <= 0
-      ? 0
-      : Math.min(Math.max(((scrollAnchor - wrapperAnchorPoint) / maxScroll) * 100, 0), 100);
-
-  const breakpoints = computeTranslationBreakpoints(
-    anchors,
-    sizes,
-    getNoncurrentScale(wrapper),
-    wrapperAnchorPoint,
-    wrapperAnchorPoint + Math.max(maxScroll, 0)
-  );
+  // The breakpoints run past both ends of the scroll range, out to where
+  // an overscroll can carry the end item (see computeTranslationBreakpoints),
+  // so the translate's range is set in raw scroll offsets that go past 0
+  // and maxScroll too, rather than as the timeline's own 0%-100%.
+  // scrollAnchor = scrollOffset + wrapperAnchorPoint (see getItemMetrics).
+  const { breakpoints, start, end } = computeTranslationBreakpoints(anchors, sizes, getNoncurrentScale(wrapper));
+  const translateRange = `${start - wrapperAnchorPoint}px ${end - wrapperAnchorPoint}px`;
+  const percentFor = (scrollAnchor) => (end > start ? ((scrollAnchor - start) / (end - start)) * 100 : 0);
 
   items.forEach((item, i) => {
     const translateStops = breakpoints.map((bp) => ({
       percent: percentFor(bp.scrollAnchor),
       value: bp.translations[i]
     }));
-    setItemCurrentKeyframes(state, item, ranges[i].peakX, ranges[i], translateStops);
+    setItemCurrentKeyframes(state, item, ranges[i].peakX, ranges[i], translateStops, translateRange);
   });
   flushKeyframeStyles(state);
 }

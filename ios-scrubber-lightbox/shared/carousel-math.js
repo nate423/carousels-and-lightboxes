@@ -113,8 +113,23 @@ export function computeScrollAnchorForProgress(anchors, progress) {
   return transition(progress - i, anchors[i], anchors[i + 1]);
 }
 
+// Anchors for an imaginary item past each end, the same size as the end
+// item beside it and at the same gap. Only reachable while overscrolling,
+// where they give the end item a neighbour to wind down towards instead of
+// holding at full. The gap is uniform, so any adjacent pair gives it: the
+// distance between their anchors, less half of each one's size.
+export function computeEdgeAnchors(anchors, sizes) {
+  const n = anchors.length;
+  const gap = n > 1 ? anchors[1] - anchors[0] - (sizes[0] + sizes[1]) / 2 : 0;
+  return {
+    before: anchors[0] - (sizes[0] + gap),
+    after: anchors[n - 1] + (sizes[n - 1] + gap)
+  };
+}
+
 export function computeAnimationRanges(anchors, sizes, wrapperSize) {
   const n = anchors.length;
+  const edges = computeEdgeAnchors(anchors, sizes);
 
   return anchors.map((anchor, i) => {
     const itemSize = sizes[i];
@@ -133,8 +148,8 @@ export function computeAnimationRanges(anchors, sizes, wrapperSize) {
     // sizes, is essentially always.
     const peak = 0.5;
 
-    const deltaPrev = i > 0 ? anchor - anchors[i - 1] : itemSize;
-    const deltaNext = i < n - 1 ? anchors[i + 1] - anchor : itemSize;
+    const deltaPrev = anchor - (i > 0 ? anchors[i - 1] : edges.before);
+    const deltaNext = (i < n - 1 ? anchors[i + 1] : edges.after) - anchor;
 
     const start = clamp(peak - deltaPrev / span, 0, 1);
     const end = clamp(peak + deltaNext / span, 0, 1);
