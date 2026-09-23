@@ -132,6 +132,7 @@ export function createCarousel(wrapper, options = {}) {
   // Always a real scroll position: a carousel following on a timeline comes
   // off it, in the same task, so the frame shows the written position.
   function setProgressDirect(progress) {
+    restingAt = progress;
     attribution.noteDirectWrite(progress);
     notifyMotion();
     snap.suspend();
@@ -234,13 +235,25 @@ export function createCarousel(wrapper, options = {}) {
   // and passed over.
   let rebasedTo = null;
 
+  // The progress this carousel last came to rest on, or was last written to
+  // - what a resize puts it back on (see refreshGeometry). Kept as it
+  // happens rather than worked out when the resize arrives, because by then
+  // the browser may already have moved the scroll position to suit the new
+  // width, while the geometry to read it against is still the old one.
+  let restingAt = 0;
+
+  function rebase(progress) {
+    restingAt = progress;
+    writeScroll(progress);
+    rebasedTo = wrapper.scrollLeft;
+    applyThisFrame();
+  }
+
   function reclaim() {
     const leader = timelineFollow.leader();
     if (leader) {
-      writeScroll(leader.getCurrentProgress());
-      rebasedTo = wrapper.scrollLeft;
+      rebase(leader.getCurrentProgress());
       timelineFollow.stop();
-      applyThisFrame();
     }
     snap.restore();
   }
@@ -351,6 +364,11 @@ export function createCarousel(wrapper, options = {}) {
   // it were the authoritative "the gesture is over" signal.
   onScrollEnd(wrapper, () => {
     const wasLeading = attribution.endLeading();
+    // Only where its own motion ended. A scroll that ends without it having
+    // led is the browser's doing - shifting it to suit a new width before
+    // its items have been measured again, say - and measured against the
+    // old geometry it says nothing true about where it rests.
+    if (wasLeading) restingAt = geometry.getCurrentProgress();
     // Came to rest somewhere a drive didn't put it: motion of its own that
     // the drive's writes didn't cancel - a smooth scroll still running when
     // the other carousel took over, say - whose scroll events all read as
@@ -377,11 +395,18 @@ export function createCarousel(wrapper, options = {}) {
     // they were, so it comes off before they move and goes back on once
     // they have been measured where they are now.
     const leader = timelineFollow.leader();
+    // A carousel at rest stays on the progress it was showing. Its items
+    // move as the spacers are sized again, and the browser otherwise keeps
+    // whichever scroll offset it last had, or the one it thinks it was
+    // snapped to - neither of which is the item that was centred. One being
+    // moved by a finger or a gesture of its own is left to it.
+    const resting = !leader && !press.isPressed() && !attribution.isMovingItself() ? restingAt : null;
     timelineFollow.stop();
     updateSpacers();
     effect.setup(ctx);
     effect.apply(ctx);
     if (leader) refollow(leader);
+    else if (resting !== null && Math.abs(geometry.getCurrentProgress() - resting) > 1e-3) rebase(resting);
     // A copy: a follower rebuilding here unsubscribes and subscribes again.
     [...geometryListeners].forEach((listener) => listener());
   });

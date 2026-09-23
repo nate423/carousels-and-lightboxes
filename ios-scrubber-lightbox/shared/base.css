@@ -111,6 +111,12 @@ h1 {
   /* Keep edge gestures here while preserving the carousel's native bounce. */
   overscroll-behavior-x: contain;
   scroll-snap-type: x mandatory;
+  /* Scroll anchoring holds whatever is on screen still when something laid
+     out before it changes size, by moving the scroll position - here, the
+     spacers being sized again, which it would answer by carrying the
+     carousel off the item it was centred on. Where a carousel sits is the
+     engine's to say (see refreshGeometry in carousel-engine.js). */
+  overflow-anchor: none;
 }
 
 .carousel-wrapper.debug {
