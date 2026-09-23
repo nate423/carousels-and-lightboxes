@@ -32,6 +32,19 @@ export function createSnapSuspension(wrapper) {
     snapRestoreTimer = setTimeout(restore, SNAP_RESTORE_DELAY);
   }
 
+  // Suspends snap with no timer to hand it back. For as long as a carousel is
+  // following on its leader's timeline (see timeline-follow.js), its real
+  // scroll position sits wherever the drive last left it, usually between
+  // two snap points, and a resnap there would move the items out from under
+  // the translate that is standing in for their scroll. Held until the
+  // next suspend() or restore().
+  function hold() {
+    if (wrapper.style.scrollSnapType !== "none") {
+      wrapper.style.scrollSnapType = "none";
+    }
+    clearTimeout(snapRestoreTimer);
+  }
+
   function restore() {
     clearTimeout(snapRestoreTimer);
     if (wrapper.style.scrollSnapType !== "") {
@@ -39,5 +52,5 @@ export function createSnapSuspension(wrapper) {
     }
   }
 
-  return { suspend, restore };
+  return { suspend, hold, restore };
 }

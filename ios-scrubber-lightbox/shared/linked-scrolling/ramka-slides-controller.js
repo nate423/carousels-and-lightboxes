@@ -20,7 +20,7 @@
 // geometry-cache.js - see createGeometryCache below for why that turned out
 // to matter here after all.
 import { createScrollAttribution } from "./scroll-attribution.js";
-import { computeCurrentProgress, computeScrollAnchorForProgress } from "../carousel-math.js";
+import { computeCurrentProgress, computeScrollAnchorForProgress, computeProgressKnots } from "../carousel-math.js";
 import { onScrollEnd } from "../engine/scroll-end.js";
 
 const SLIDE_SELECTOR = "[data-ramka-slide]";
@@ -68,7 +68,11 @@ function measureSlideAnchors(slidesEl, items) {
     const rect = item.getBoundingClientRect();
     return rect.left - wrapperRect.left + slidesEl.scrollLeft + rect.width / 2;
   });
-  return { anchors, wrapperAnchorPoint: wrapperRect.width / 2 };
+  return {
+    anchors,
+    wrapperAnchorPoint: wrapperRect.width / 2,
+    maxScroll: slidesEl.scrollWidth - slidesEl.clientWidth
+  };
 }
 
 // Cached, unlike geometry-cache.js's own comment said this file wouldn't
@@ -102,8 +106,9 @@ function createGeometryCache(slidesEl, getItems) {
  * Wraps a ramka `Slides` viewport DOM node (find it with
  * `slidesEl.querySelector('[data-ramka-slides]')`, or give the node itself)
  * so it satisfies the same contract as a shared/carousel-engine.js instance:
- * getItems, goToIndex, getCurrentProgress, setProgressDirect, isMovingItself,
- * selfScrollStartedAt, onScroll, onScrollEnd, endFollowing.
+ * getItems, goToIndex, getCurrentProgress, getProgressKnots, setProgressDirect,
+ * follow, isMovingItself, selfScrollStartedAt, onScroll, onScrollEnd,
+ * endFollowing.
  *
  * Untested against ramka's real scroll-snap/zoom/view-transition behavior -
  * see the ramka-scrubber page notes before relying on this beyond a spike.
@@ -128,6 +133,20 @@ export function createRamkaSlidesController(slidesEl) {
   function getCurrentProgress() {
     const { anchors, wrapperAnchorPoint } = geometry.get();
     return computeCurrentProgress(anchors, slidesEl.scrollLeft + wrapperAnchorPoint);
+  }
+
+  // As a leader: where its scroll offset maps to progress, for a carousel
+  // following on its scroll timeline - see carousel-math.js.
+  function getProgressKnots() {
+    const { anchors, wrapperAnchorPoint, maxScroll } = geometry.get();
+    return computeProgressKnots(anchors, wrapperAnchorPoint, maxScroll);
+  }
+
+  // As a continuous follower, it can only be written: ramka draws its own
+  // slides, so there is no look here to lay across another carousel's
+  // timeline. No page links it this way today.
+  function follow(leader) {
+    setProgressDirect(leader.getCurrentProgress());
   }
 
   function setProgressDirect(progress) {
@@ -172,7 +191,9 @@ export function createRamkaSlidesController(slidesEl) {
     getItems,
     goToIndex,
     getCurrentProgress,
+    getProgressKnots,
     setProgressDirect,
+    follow,
     isMovingItself: attribution.isMovingItself,
     selfScrollStartedAt: attribution.selfScrollStartedAt,
     onScroll(listener) {

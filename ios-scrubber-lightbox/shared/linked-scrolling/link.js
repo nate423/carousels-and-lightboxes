@@ -8,8 +8,10 @@
 // one following, not of the direction an update happens to travel. Each side
 // of the link carries its own:
 //   - "continuous": the following side is a 1:1 read of the leader's live,
-//     fractional progress, written on every scroll of the leader, so it
-//     tracks the leader's scroll in lock-step the whole time it moves.
+//     fractional progress, so it tracks the leader's scroll in lock-step the
+//     whole time it moves. How it gets there - on the leader's own scroll
+//     timeline where it can, by writing its scroll position where it can't -
+//     is the following carousel's own business (its follow()).
 //   - "instant": the following side stays put until the leader's discrete
 //     current item changes (crossing the 50% threshold to a neighbour), then
 //     jumps straight to it with no motion in between.
@@ -27,8 +29,12 @@
 // see the scroll-attribution block there. Everything below works off the two
 // controllers' public surface: onScroll's `source`, getScrollSource,
 // isMovingItself, selfScrollStartedAt, getCurrentProgress, setProgressDirect,
-// onScrollEnd and endFollowing.
+// follow, onScrollEnd and endFollowing.
 import { computeCurrentIndex } from "../carousel-math.js";
+
+// How long both carousels have to have been still before a follower goes
+// back onto its leader's timeline - see restOnTimeline.
+const REST_DELAY = 200;
 
 function currentIndexOf(carousel) {
   return computeCurrentIndex(carousel.getCurrentProgress(), carousel.getItems().length);
@@ -51,13 +57,6 @@ export function linkCarousels(a, b, { aWhileFollowing, bWhileFollowing }) {
       return dest.isMovingItself() && dest.selfScrollStartedAt() > source.selfScrollStartedAt();
     }
 
-    function writeToDest(progress) {
-      // setProgressDirect handles its own scroll-snap suspension and marks
-      // dest as driven, so the echo it's about to emit is already correctly
-      // attributed by the time dest's own subscription sees it.
-      dest.setProgressDirect(progress);
-    }
-
     // The sync, shared by onScroll (below) and the scrollend
     // catch-up. Takes source's progress fresh each call rather than once
     // up front, since the catch-up call wants source's truly-final,
@@ -73,14 +72,17 @@ export function linkCarousels(a, b, { aWhileFollowing, bWhileFollowing }) {
     function sync() {
       if (destMovingMoreRecently()) return;
 
-      const progress = source.getCurrentProgress();
-
-      // `dest` is the one being written, so it is the one following, so its
-      // setting is the one that applies.
+      // `dest` is the one being moved, so it is the one following, so its
+      // setting is the one that applies. Either way dest handles its own
+      // scroll-snap suspension and marks itself as driven, so the echo of
+      // any write is already correctly attributed by the time dest's own
+      // subscription sees it.
       if (whileFollowing.get(dest) === "continuous") {
-        writeToDest(progress);
+        dest.follow(source);
         return;
       }
+
+      const progress = source.getCurrentProgress();
 
       // "instant": only react once the source's discrete current item
       // differs from the one dest is already showing - an integer progress
@@ -98,7 +100,7 @@ export function linkCarousels(a, b, { aWhileFollowing, bWhileFollowing }) {
       const index = computeCurrentIndex(progress, source.getItems().length);
       const destIndex = currentIndexOf(dest);
       if (index === destIndex) return;
-      writeToDest(index);
+      dest.setProgressDirect(index);
     }
 
     // dest's own "following" motion ends here, off source's real scrollend,
@@ -111,6 +113,7 @@ export function linkCarousels(a, b, { aWhileFollowing, bWhileFollowing }) {
     source.onScrollEnd(() => {
       sync();
       dest.endFollowing();
+      scheduleRestOnTimeline(source, dest);
     });
 
     source.onScroll(({ source: scrollSource }) => {
@@ -134,6 +137,35 @@ export function linkCarousels(a, b, { aWhileFollowing, bWhileFollowing }) {
     });
   }
 
+  // A continuous follower waits on its leader's own scroll timeline whenever
+  // the two are at rest together - at the start, and each time the follower
+  // finishes a gesture of its own - so that the leader's next gesture moves
+  // it from the first frame, with nothing to set up while anything is moving
+  // (see timeline-follow.js). Only where they already agree: the follower
+  // is where the user just left it, and it must not jump to meet a leader
+  // that hasn't caught up with it yet.
+  function restOnTimeline(follower, leader) {
+    if (whileFollowing.get(follower) !== "continuous") return;
+    if (follower.isMovingItself() || leader.isMovingItself()) return;
+    if (Math.abs(follower.getCurrentProgress() - leader.getCurrentProgress()) > 0.05) return;
+    follower.follow(leader);
+    follower.endFollowing();
+  }
+
+  // After a gesture, once things have been still for a moment rather than
+  // straight away, because a gesture can arrive as a run of separate scrolls
+  // - a mouse wheel's notches - that each end on their own, and each would
+  // otherwise build the animations again. Nothing waits on this: a follower
+  // that isn't on the timeline yet when its leader moves goes onto it then.
+  const restTimers = new Map();
+
+  function scheduleRestOnTimeline(follower, leader) {
+    clearTimeout(restTimers.get(follower));
+    restTimers.set(follower, setTimeout(() => restOnTimeline(follower, leader), REST_DELAY));
+  }
+
   wire(a, b);
   wire(b, a);
+  restOnTimeline(a, b);
+  restOnTimeline(b, a);
 }

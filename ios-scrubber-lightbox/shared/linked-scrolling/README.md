@@ -4,8 +4,8 @@ Two carousels driving each other: whichever one is being scrolled leads, and
 the other follows in real time. The filmstrip and iOS scrubber pages are both
 built on it; the scale-fade page is not, and imports none of this.
 
-It is three files because it is three separable questions, but it is one unit -
-taking `link.js` without the other two leaves it calling methods nothing
+It is four files because it is four separable questions, but it is one unit -
+taking `link.js` without the others leaves it calling methods nothing
 implements.
 
 - **`scroll-attribution.js`** - is this carousel moving for its own reasons, or
@@ -17,15 +17,25 @@ implements.
   exactly what a direct write looks like to it, so snap is suspended for the
   duration of a drive and handed back the instant real input reclaims the
   carousel, not on a timer.
+- **`timeline-follow.js`** - a carousel following another continuously is
+  drawn by animations on the leader's own scroll timeline, not by writing its
+  scroll position on every scroll of the leader, so it moves with the leader
+  from the same frame and with no script in between. Its real scroll position
+  is written back the instant anything could need it - real input on it, a
+  command to it - so anything that handles it starts from where it really
+  is.
 - **`link.js`** - the wiring itself. Touches no DOM; works entirely through the
   carousel controller's public surface.
 
 ## What a carousel has to provide
 
-`link.js` calls `getCurrentProgress`, `setProgressDirect`, `isMovingItself`,
-`selfScrollStartedAt`, `getItems`, `onScroll`, `onScrollEnd` and
-`endFollowing`. `carousel-engine.js` implements all of them, and builds the
-attribution and snap suspension above as part of doing so.
+`link.js` calls `getCurrentProgress`, `getProgressKnots`, `setProgressDirect`,
+`follow`, `isMovingItself`, `selfScrollStartedAt`, `getItems`, `onScroll`,
+`onScrollEnd` and `endFollowing`, and a leader's `wrapper` is the source of
+the scroll timeline a continuous follower is drawn on. `carousel-engine.js`
+implements all of them, and builds the attribution, snap suspension and
+timeline following above as part of doing so; an effect opts into being
+drawn on a timeline by providing `followFrames`.
 
 `ramka-slides-controller.js` is a second implementer, adapting a scrollport
 this codebase doesn't own the internals of (ramka's Lightbox `Slides`

@@ -14,13 +14,15 @@
 // have to agree, which is also where the comments explaining *why* now live.
 // The pure math they all build on was already factored out to
 // carousel-math.js.
-import { computeScrollTarget, computeScrollAnchorForProgress } from "./carousel-math.js";
+import { computeScrollTarget, computeScrollAnchorForProgress, computeCurrentIndex } from "./carousel-math.js";
 import { rafThrottle } from "./engine/raf-throttle.js";
 import { createScrollAttribution } from "./linked-scrolling/scroll-attribution.js";
 import { createSnapSuspension } from "./linked-scrolling/snap-suspension.js";
+import { createTimelineFollow } from "./linked-scrolling/timeline-follow.js";
 import { createGeometryCache } from "./engine/geometry-cache.js";
 import { createSpacers } from "./engine/spacers.js";
 import { onScrollEnd } from "./engine/scroll-end.js";
+import { trackPress } from "./engine/press.js";
 import { populateItems as populateItemsInto } from "./engine/populate-items.js";
 
 export { rafThrottle };
@@ -51,9 +53,10 @@ export function createCarousel(wrapper, options = {}) {
   // why that instant, rather than the suspension's own timer, is what has to
   // hand snap back.
   const snap = createSnapSuspension(wrapper);
-  const attribution = createScrollAttribution(wrapper, { onSelfReclaim: snap.restore });
+  const attribution = createScrollAttribution(wrapper, { onSelfReclaim: reclaim });
   const geometry = createGeometryCache({ wrapper, getItems });
   const spacers = createSpacers(wrapper, { getItems });
+  const press = trackPress(wrapper);
 
   // Whoever is watching this carousel move - today, the iOS strip, which
   // flattens its thumbnails while you are dragging it and lets them grow
@@ -110,7 +113,10 @@ export function createCarousel(wrapper, options = {}) {
 
     // An explicit command to this carousel, not an echo of something driving
     // it, so the scrolling it is about to do counts as this carousel moving
-    // for its own reasons and propagates through a link.
+    // for its own reasons and propagates through a link. It scrolls from
+    // wherever it is showing, so a carousel following on a timeline is put
+    // back on its own scroll first.
+    reclaim();
     attribution.noteSelfCommand();
 
     const scrollTarget = computeScrollTarget(wrapper, item);
@@ -127,17 +133,7 @@ export function createCarousel(wrapper, options = {}) {
     attribution.noteDirectWrite(progress);
     notifyMotion();
     snap.suspend();
-
-    const { anchors, wrapperAnchorPoint } = geometry.get();
-    wrapper.scrollLeft = computeScrollAnchorForProgress(anchors, progress) - wrapperAnchorPoint;
-
-    // The polyfill advances this wrapper's timelines only from a scroll event
-    // on it, and the one this write causes is not dispatched until the next
-    // frame - a frame in which the new position would be painted with the old
-    // look. Dispatching one now has it catch up in the same frame the write
-    // lands in, as a native timeline does. Every listener of this engine's
-    // own skips events that aren't trusted, so only the polyfill hears it.
-    if (usingScrollTimelinePolyfill) wrapper.dispatchEvent(new Event("scroll"));
+    writeScroll(progress);
 
     // Render this frame rather than waiting for the scroll event this write
     // usually causes, because it does not always cause one: a scroll position
@@ -148,6 +144,78 @@ export function createCarousel(wrapper, options = {}) {
     // glides. Effects are free to re-run - they compute from current state
     // rather than accumulating - so the echo, when it does arrive, is harmless.
     applyThisFrame();
+  }
+
+  function writeScroll(progress) {
+    const { anchors, wrapperAnchorPoint } = geometry.get();
+    wrapper.scrollLeft = computeScrollAnchorForProgress(anchors, progress) - wrapperAnchorPoint;
+
+    // The polyfill advances this wrapper's timelines only from a scroll event
+    // on it, and the one this write causes is not dispatched until the next
+    // frame - a frame in which the new position would be painted with the old
+    // look. Dispatching one now has it catch up in the same frame the write
+    // lands in, as a native timeline does. Every listener of this engine's
+    // own skips events that aren't trusted, so only the polyfill hears it.
+    if (usingScrollTimelinePolyfill) wrapper.dispatchEvent(new Event("scroll"));
+  }
+
+  // Follows `leader` continuously: this carousel shows the leader's live
+  // progress, called on every scroll of the leader (see
+  // linked-scrolling/link.js).
+  //
+  // Shown on the leader's own scroll timeline wherever it can be (see
+  // linked-scrolling/timeline-follow.js), and by writing this carousel's
+  // scroll position wherever it can't: while a finger or pointer is down on
+  // it, while it is still moving for its own reasons, and while the leader
+  // is past either end of its range. The first two are the ones that matter.
+  // The browser pans a scroller from its real scroll position, often
+  // without the page hearing about it first, so a carousel anyone could be
+  // about to drag must really be where it looks - which a written scroll
+  // position is, every frame, and a timeline standing in for one is not.
+  //
+  // Whichever way it is showing, the switch to the other writes the real
+  // scroll position to the progress being shown first, so the frame the
+  // switch lands in looks the same as the one before it.
+  function follow(leader) {
+    const progress = leader.getCurrentProgress();
+    const onTimeline = timelineFollow.leader();
+
+    if (press.isPressed() || attribution.isMovingItself() || !timelineFollow.canShow(leader)) {
+      setProgressDirect(progress);
+      timelineFollow.stop();
+      return;
+    }
+
+    if (onTimeline !== leader) {
+      // Written first, so the frame that shows the timeline's first frame
+      // already looks the same underneath it, and so the error it folds in
+      // is measured from where this carousel really is.
+      setProgressDirect(progress);
+      timelineFollow.stop();
+      snap.hold();
+      timelineFollow.show(leader);
+    } else {
+      // Nothing to write, but still the progress this carousel is being
+      // driven to, for anything that asks.
+      attribution.noteDirectWrite(progress);
+      notifyMotion();
+    }
+
+    ctx.onProgress?.(computeCurrentIndex(progress, geometry.get().items.length), progress);
+  }
+
+  // Off the leader's timeline and back onto a real scroll position that
+  // shows what the timeline was showing, handing snap back with it. Called
+  // the instant real input lands on this carousel, or a command is given to
+  // it - whatever happens next has to start from where it really is.
+  function reclaim() {
+    const leader = timelineFollow.leader();
+    if (leader) {
+      writeScroll(leader.getCurrentProgress());
+      timelineFollow.stop();
+      applyThisFrame();
+    }
+    snap.restore();
   }
 
   function populateItems() {
@@ -178,6 +246,8 @@ export function createCarousel(wrapper, options = {}) {
     currentScrollAnchor: geometry.currentScrollAnchor,
     onProgress: undefined
   };
+
+  const timelineFollow = createTimelineFollow({ effect, ctx });
 
   // Snap stays off until the spacers have their real size. Sizing them means
   // measuring the items, and that measurement forces a layout in which the
@@ -218,6 +288,16 @@ export function createCarousel(wrapper, options = {}) {
   wrapper.addEventListener("scroll", (event) => {
     if (!event.isTrusted) return;
     attribution.noteScrollEvent();
+    // A timeline draws this carousel relative to where its real scroll
+    // position sat when it took over, so anything else moving that position
+    // leaves it drawing from the wrong place. Whatever this engine is asked
+    // to do reclaims it first; this is for what it isn't asked - the browser
+    // bringing a focused item into view, say - where the real scroll
+    // position is the truer of the two.
+    if (timelineFollow.leader() && wrapper.scrollLeft !== timelineFollow.scrollLeftShownFrom()) {
+      timelineFollow.stop();
+      snap.restore();
+    }
     notifyMotion();
     const source = attribution.getScrollSource();
     scrollListeners.forEach((listener) => listener({ source }));
@@ -252,6 +332,12 @@ export function createCarousel(wrapper, options = {}) {
   // own size (e.g. dragging the window while an image is still loading)
   // coalesces into one refresh per frame instead of two.
   const refreshGeometry = rafThrottle(() => {
+    // The timeline's keyframes were laid out against the old geometry.
+    const leader = timelineFollow.leader();
+    if (leader) {
+      setProgressDirect(leader.getCurrentProgress());
+      timelineFollow.stop();
+    }
     updateSpacers();
     effect.setup(ctx);
     effect.apply(ctx);
@@ -278,6 +364,11 @@ export function createCarousel(wrapper, options = {}) {
   // Ends "following", called by the link once the carousel actually driving
   // this one reports that *its* gesture is over - see onScrollEnd below and
   // linked-scrolling/link.js.
+  //
+  // A carousel following on the leader's timeline stays on it: at rest it
+  // shows exactly what its own scroll position would, and it is ready for
+  // the leader's next gesture. Anything that needs its real scroll position
+  // reclaims it for itself (see reclaim above).
   function endFollowing() {
     if (!attribution.endFollowing()) return;
     notifyMotion();
@@ -288,8 +379,12 @@ export function createCarousel(wrapper, options = {}) {
     wrapper,
     getItems,
     goToIndex,
-    getCurrentProgress: geometry.getCurrentProgress,
+    // While following on a timeline, the progress being shown is the
+    // leader's, not what this carousel's own scroll position says.
+    getCurrentProgress: () => timelineFollow.leader()?.getCurrentProgress() ?? geometry.getCurrentProgress(),
+    getProgressKnots: geometry.getProgressKnots,
     setProgressDirect,
+    follow,
     getScrollSource: attribution.getScrollSource,
     getMotionState: attribution.getMotionState,
     // Notified whenever this carousel changes between leading, following and

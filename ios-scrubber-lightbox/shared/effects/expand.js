@@ -186,10 +186,30 @@ export function expandEffect({ progressDriver = "auto" } = {}) {
     onProgress?.(computeCurrentIndex(currentProgress, items.length), currentProgress);
   }
 
+  // Following on another carousel's timeline (see
+  // linked-scrolling/timeline-follow.js), the whole strip is still that one
+  // shared progress: animated on the wrapper, it outranks both the
+  // stylesheet's own timeline and any --expand-driven-progress left written,
+  // so nothing needs clearing first. The distance between where the strip's
+  // scroll sits and where it is being shown goes in --scroll-error, which
+  // every item's translate already adds, and which is registered, so it
+  // interpolates between keyframes rather than jumping at each.
+  function followFrames(ctx, samples) {
+    return [
+      {
+        target: ctx.wrapper,
+        keyframes: samples.map(({ progress, scrollError }) => ({
+          "--expand-progress": String(progress),
+          "--scroll-error": `${scrollError}px`
+        }))
+      }
+    ];
+  }
+
   // This effect owns every item's rendering, and nothing it writes
   // changes an item's own border box - it draws with transforms and with
   // properties confined inside the box (see engine/geometry-cache.js) -
   // so the engine's item-level ResizeObserver has nothing real to recover
   // here.
-  return { onItemCreated, setup, apply, skipItemResizeObserver: true };
+  return { onItemCreated, setup, apply, followFrames, skipItemResizeObserver: true };
 }

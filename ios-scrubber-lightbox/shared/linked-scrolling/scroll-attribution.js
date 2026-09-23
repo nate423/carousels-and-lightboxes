@@ -132,7 +132,9 @@ export function createScrollAttribution(wrapper, { onSelfReclaim } = {}) {
     },
 
     // Called by setProgressDirect: an outside driver is about to write this
-    // wrapper's scroll position directly.
+    // wrapper's scroll position directly. Also called on every step of a
+    // drive shown on the driver's timeline instead (follow in
+    // carousel-engine.js), which writes nothing but is the same drive.
     noteDirectWrite(progress) {
       scrollSource = "driven";
       movingDriven = true;

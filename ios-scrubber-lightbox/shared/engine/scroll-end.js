@@ -12,10 +12,8 @@
 // that stops and lifts with no momentum still ends. Only a scroll ever arms
 // the timer, so a tap or click with no movement behind it fires nothing,
 // just as native 'scrollend' wouldn't.
-//
-// Touches are counted separately from pointers because the browser sends
-// 'pointercancel' the moment it takes over a touch for native panning, while
-// the finger is still down; touch events keep reporting it until it lifts.
+import { trackPress } from "./press.js";
+
 const SETTLE_DELAY = 120;
 
 export function onScrollEnd(el, listener) {
@@ -24,12 +22,11 @@ export function onScrollEnd(el, listener) {
     return;
   }
 
-  const pointersDown = new Set();
-  let touchesDown = 0;
   let timer = null;
   let pending = false;
   let lastLeft = el.scrollLeft;
   let lastTop = el.scrollTop;
+  const press = trackPress(el, { onRelease: () => pending && arm() });
 
   function arm() {
     clearTimeout(timer);
@@ -38,7 +35,7 @@ export function onScrollEnd(el, listener) {
 
   function settle() {
     timer = null;
-    if (!pending || pointersDown.size > 0 || touchesDown > 0) return;
+    if (!pending || press.isPressed()) return;
     if (el.scrollLeft !== lastLeft || el.scrollTop !== lastTop) {
       lastLeft = el.scrollLeft;
       lastTop = el.scrollTop;
@@ -47,10 +44,6 @@ export function onScrollEnd(el, listener) {
     }
     pending = false;
     listener();
-  }
-
-  function release() {
-    if (pending && pointersDown.size === 0 && touchesDown === 0) arm();
   }
 
   el.addEventListener(
@@ -65,30 +58,5 @@ export function onScrollEnd(el, listener) {
       arm();
     },
     { passive: true }
-  );
-
-  el.addEventListener("pointerdown", (e) => pointersDown.add(e.pointerId), { passive: true });
-  el.addEventListener("touchstart", (e) => (touchesDown = e.touches.length), { passive: true });
-  // Releases are watched on window: a drag can end with the pointer or
-  // finger well outside `el`.
-  ["pointerup", "pointercancel"].forEach((type) =>
-    window.addEventListener(
-      type,
-      (e) => {
-        if (pointersDown.delete(e.pointerId)) release();
-      },
-      { passive: true }
-    )
-  );
-  ["touchend", "touchcancel"].forEach((type) =>
-    window.addEventListener(
-      type,
-      (e) => {
-        if (touchesDown === 0) return;
-        touchesDown = e.touches.length;
-        release();
-      },
-      { passive: true }
-    )
   );
 }

@@ -211,19 +211,44 @@ function setup(ctx) {
 // difference in range, but out here, where the error is the whole
 // overscroll, it visibly opens the gaps back up.
 function paintOverscroll(state, items, anchors, sizes, currentProgress, scrollError) {
+  const styles = frameStyles(state, anchors, sizes, currentProgress, scrollError);
+  items.forEach((item, i) => {
+    Object.entries(styles[i]).forEach(([property, value]) => item.style.setProperty(property, value, "important"));
+  });
+  state.paintingOverscroll = true;
+}
+
+// The whole look at one progress, as what each item draws. Painted directly
+// past the ends (above), and keyframed across a leader's timeline while
+// following one (followFrames, below).
+function frameStyles(state, anchors, sizes, currentProgress, scrollError) {
   const { scales, itemProgress, translations } = computeGapCompensatedFrame(
     anchors,
     sizes,
     state.noncurrentScale,
     currentProgress
   );
-  items.forEach((item, i) => {
-    const opacity = state.noncurrentOpacity + itemProgress[i] * (1 - state.noncurrentOpacity);
-    item.style.setProperty("scale", String(scales[i]), "important");
-    item.style.setProperty("opacity", String(opacity), "important");
-    item.style.setProperty("translate", `${translations[i] + scrollError}px 0`, "important");
-  });
-  state.paintingOverscroll = true;
+  return scales.map((scale, i) => ({
+    scale: String(scale),
+    opacity: String(state.noncurrentOpacity + itemProgress[i] * (1 - state.noncurrentOpacity)),
+    translate: `${translations[i] + scrollError}px 0`
+  }));
+}
+
+// One animation per item, keyframed at each sample the engine asks for - see
+// linked-scrolling/timeline-follow.js. The error is the whole distance
+// between where this carousel's scroll sits and where it is being shown, so
+// it rides in the translate for the same reason it does past the ends, and
+// transform is held at none to keep the stylesheet's own correction out of
+// it. All four are properties the compositor can animate by itself.
+function followFrames(ctx, samples) {
+  const { items, anchors, sizes } = ctx.getGeometry();
+  const state = getWrapperState(ctx.wrapper);
+  const frames = samples.map(({ progress, scrollError }) => frameStyles(state, anchors, sizes, progress, scrollError));
+  return Array.from(items, (item, i) => ({
+    target: item,
+    keyframes: frames.map((styles) => ({ ...styles[i], transform: "none" }))
+  }));
 }
 
 function clearOverscroll(state, items) {
@@ -287,4 +312,4 @@ function apply(ctx) {
   onProgress?.(computeCurrentIndex(currentProgress, items.length), currentProgress);
 }
 
-export const scaleFadeEffect = { onItemCreated, setup, apply };
+export const scaleFadeEffect = { onItemCreated, setup, apply, followFrames };

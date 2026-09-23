@@ -113,6 +113,24 @@ export function computeScrollAnchorForProgress(anchors, progress) {
   return transition(progress - i, anchors[i], anchors[i + 1]);
 }
 
+// The whole map from a carousel's scroll offset to its currentProgress, as
+// the points where it bends: both ends of the scroll range, and every item
+// anchor in between. Progress is linear between neighbouring anchors, so
+// these points are all of it. Each `offset` is a fraction of the scroll
+// range, 0 to 1 - the terms a scroll timeline measures in, so another
+// carousel can lay keyframes across this one's scroll (see
+// linked-scrolling/timeline-follow.js). Empty when there is no range to
+// scroll.
+export function computeProgressKnots(anchors, wrapperAnchorPoint, maxScroll) {
+  if (!(maxScroll > 0) || anchors.length < 2) return [];
+  const at = (scroll) => ({
+    offset: scroll / maxScroll,
+    progress: computeCurrentProgress(anchors, scroll + wrapperAnchorPoint)
+  });
+  const inner = anchors.map((anchor) => anchor - wrapperAnchorPoint).filter((s) => s > 0 && s < maxScroll);
+  return [at(0), ...inner.map(at), at(maxScroll)];
+}
+
 // Anchors for an imaginary item past each end, the same size as the end
 // item beside it and at the same gap. Only reachable while overscrolling,
 // where they give the end item a neighbour to wind down towards instead of

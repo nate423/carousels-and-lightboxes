@@ -1,4 +1,4 @@
-import { getItemMetrics, computeCurrentProgress, wrapperAnchor } from "../carousel-math.js";
+import { getItemMetrics, computeCurrentProgress, computeProgressKnots, wrapperAnchor } from "../carousel-math.js";
 
 // Where every item's anchor point sits, and where the wrapper's own is. Both
 // are pure layout, and layout only moves on the events that already rebuild
@@ -38,7 +38,8 @@ export function createGeometryCache({ wrapper, getItems }) {
       items,
       anchors,
       sizes,
-      wrapperAnchorPoint: wrapperAnchor(wrapper.offsetWidth)
+      wrapperAnchorPoint: wrapperAnchor(wrapper.offsetWidth),
+      maxScroll: wrapper.scrollWidth - wrapper.clientWidth
     };
     return geometry;
   }
@@ -57,5 +58,11 @@ export function createGeometryCache({ wrapper, getItems }) {
     return computeCurrentProgress(get().anchors, currentScrollAnchor());
   }
 
-  return { get, invalidate, currentScrollAnchor, getCurrentProgress };
+  // See computeProgressKnots in carousel-math.js.
+  function getProgressKnots() {
+    const { anchors, wrapperAnchorPoint, maxScroll } = get();
+    return computeProgressKnots(anchors, wrapperAnchorPoint, maxScroll);
+  }
+
+  return { get, invalidate, currentScrollAnchor, getCurrentProgress, getProgressKnots };
 }
