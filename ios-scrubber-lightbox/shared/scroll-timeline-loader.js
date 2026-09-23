@@ -40,6 +40,10 @@ if (!CSS.supports("animation-timeline: --works")) {
     link.replaceWith(style);
   }
 
+  // Read by carousel-engine.js, which has to nudge the polyfill where a
+  // native timeline would need nothing.
+  document.documentElement.setAttribute("data-scroll-timeline-polyfill", "");
+
   const polyfillSrc = new URL("vendor/scroll-timeline.js", document.currentScript.src);
   document.write(`<script src="${polyfillSrc}"><\/script>`);
 }

@@ -8,8 +8,8 @@
 // one following, not of the direction an update happens to travel. Each side
 // of the link carries its own:
 //   - "continuous": the following side is a 1:1 read of the leader's live,
-//     fractional progress, written every frame, so it tracks the leader's
-//     scroll in lock-step the whole time it moves.
+//     fractional progress, written on every scroll of the leader, so it
+//     tracks the leader's scroll in lock-step the whole time it moves.
 //   - "instant": the following side stays put until the leader's discrete
 //     current item changes (crossing the 50% threshold to a neighbour), then
 //     jumps straight to it with no motion in between.
@@ -44,7 +44,7 @@ export function linkCarousels(a, b, { aWhileFollowing, bWhileFollowing }) {
   ]);
 
   function wire(source, dest) {
-    // Guards shared between the per-frame sync below and the scrollend
+    // Guards shared between the sync below and the scrollend
     // catch-up: never step on a dest that's genuinely mid-gesture itself
     // (see the comment at its one call site in sync()).
     function destMovingMoreRecently() {
@@ -58,7 +58,7 @@ export function linkCarousels(a, b, { aWhileFollowing, bWhileFollowing }) {
       dest.setProgressDirect(progress);
     }
 
-    // The per-frame sync, shared by onScroll (below) and the scrollend
+    // The sync, shared by onScroll (below) and the scrollend
     // catch-up. Takes source's progress fresh each call rather than once
     // up front, since the catch-up call wants source's truly-final,
     // fully-settled position - not whatever it was on the last onScroll

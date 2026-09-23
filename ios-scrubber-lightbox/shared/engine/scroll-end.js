@@ -55,7 +55,10 @@ export function onScrollEnd(el, listener) {
 
   el.addEventListener(
     "scroll",
-    () => {
+    (event) => {
+      // An untrusted scroll is carousel-engine.js's nudge to the
+      // scroll-timeline polyfill, not a scroll.
+      if (!event.isTrusted) return;
       pending = true;
       lastLeft = el.scrollLeft;
       lastTop = el.scrollTop;

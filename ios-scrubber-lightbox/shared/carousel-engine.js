@@ -25,6 +25,10 @@ import { populateItems as populateItemsInto } from "./engine/populate-items.js";
 
 export { rafThrottle };
 
+// Marked on the document by scroll-timeline-loader.js, which runs before any
+// module does, when it loads the polyfill.
+const usingScrollTimelinePolyfill = document.documentElement.hasAttribute("data-scroll-timeline-polyfill");
+
 export function createCarousel(wrapper, options = {}) {
   const {
     itemCount = 30,
@@ -82,6 +86,11 @@ export function createCarousel(wrapper, options = {}) {
     if (ready) effect.apply(ctx);
   }
 
+  // At most one render per frame, however many scroll events and direct
+  // writes land in it. The render only writes styles, which the frame reads
+  // after its animation callbacks, so deferring it to one costs nothing.
+  const applyThisFrame = rafThrottle(() => effect.apply(ctx));
+
   // Every path that can move an item - init, resize, an item resizing
   // itself, an alignment change - goes through here, so invalidating the
   // geometry cache on its way through covers all of them at once and cannot
@@ -122,15 +131,23 @@ export function createCarousel(wrapper, options = {}) {
     const { anchors, wrapperAnchorPoint } = geometry.get();
     wrapper.scrollLeft = computeScrollAnchorForProgress(anchors, progress) - wrapperAnchorPoint;
 
-    // Render here rather than waiting for the scroll event this write usually
-    // causes, because it does not always cause one: a scroll position is
-    // quantised to whole pixels, so when a short scroller is driven by a much
-    // longer one most frames resolve to the pixel it is already on, emit
+    // The polyfill advances this wrapper's timelines only from a scroll event
+    // on it, and the one this write causes is not dispatched until the next
+    // frame - a frame in which the new position would be painted with the old
+    // look. Dispatching one now has it catch up in the same frame the write
+    // lands in, as a native timeline does. Every listener of this engine's
+    // own skips events that aren't trusted, so only the polyfill hears it.
+    if (usingScrollTimelinePolyfill) wrapper.dispatchEvent(new Event("scroll"));
+
+    // Render this frame rather than waiting for the scroll event this write
+    // usually causes, because it does not always cause one: a scroll position
+    // is quantised to whole pixels, so when a short scroller is driven by a
+    // much longer one most frames resolve to the pixel it is already on, emit
     // nothing, and would otherwise hold the previous frame's render. That is
     // what makes a slow drag on the driver look like it steps rather than
     // glides. Effects are free to re-run - they compute from current state
     // rather than accumulating - so the echo, when it does arrive, is harmless.
-    effect.apply(ctx);
+    applyThisFrame();
   }
 
   function populateItems() {
@@ -181,25 +198,40 @@ export function createCarousel(wrapper, options = {}) {
   const scrollListeners = new Set();
   const scrollEndListeners = new Set();
 
-  // A single rAF-throttled pass per scroll frame, shared by the effect and
-  // every onScroll subscriber, so a link and an effect watching the same
-  // wrapper can never disagree about which frame they're in, and so the
-  // effect has always re-rendered for this position before anything
-  // downstream reads it. `source` is sampled once rather than per listener:
-  // it can only change on a real input event, which can't interleave with
-  // this synchronous loop.
+  // Subscribers hear a scroll in the event itself rather than a frame later,
+  // because a link writes another carousel's position from here, and that
+  // write has to land before the frame samples the other carousel's
+  // scroll-driven animations. The browser samples them after dispatching
+  // scroll events but before running animation frame callbacks; a write from
+  // a callback is painted at its new position with the look its old position
+  // gave it, and only catches up a frame later - which reads as a follower
+  // lagging a frame behind, and as an item jumped to arriving collapsed and
+  // then popping to full size.
+  //
+  // The effect's own render stays at one per frame (applyThisFrame), since
+  // it only writes styles, which nothing reads until after those callbacks.
+  //
+  // `source` is sampled once rather than per listener: it can only change on
+  // a real input event, which can't interleave with this synchronous loop.
+  // Untrusted scroll events are setProgressDirect's nudge to the polyfill,
+  // not scrolling.
+  wrapper.addEventListener("scroll", (event) => {
+    if (!event.isTrusted) return;
+    attribution.noteScrollEvent();
+    notifyMotion();
+    const source = attribution.getScrollSource();
+    scrollListeners.forEach((listener) => listener({ source }));
+    applyThisFrame();
+  });
+
   // 'scrollend' fires once a scroll operation - gesture, momentum and any snap
   // correction together - is over, which is what bounds a stretch of movement.
   // onScrollEnd stands in for it where the browser doesn't have it.
-  wrapper.addEventListener("scroll", () => {
-    attribution.noteScrollEvent();
-    notifyMotion();
-  });
+  //
   // This is where a gesture's final position becomes final, and the apply
-  // below is
-  // rAF-throttled, so the last scroll event's render is still pending when
-  // this fires. Rendering once more here is what guarantees the look ends
-  // up drawing the position the carousel actually came to rest at.
+  // above is rAF-throttled, so the last scroll event's render is still
+  // pending when this fires. Rendering once more here is what guarantees the
+  // look ends up drawing the position the carousel actually came to rest at.
   //
   // Only ends *this* carousel's own leading motion, not driven motion - see
   // endFollowing below for why the driven side can't trust its own
@@ -215,15 +247,6 @@ export function createCarousel(wrapper, options = {}) {
       scrollEndListeners.forEach((listener) => listener());
     }
   });
-
-  wrapper.addEventListener(
-    "scroll",
-    rafThrottle(() => {
-      effect.apply(ctx);
-      const source = attribution.getScrollSource();
-      scrollListeners.forEach((listener) => listener({ source }));
-    })
-  );
 
   // Shared by both triggers below so a resize that also changes an item's
   // own size (e.g. dragging the window while an image is still loading)
@@ -277,8 +300,8 @@ export function createCarousel(wrapper, options = {}) {
     },
     isMovingItself: attribution.isMovingItself,
     selfScrollStartedAt: attribution.selfScrollStartedAt,
-    // Notified once per scroll frame, after effect.apply, with the
-    // attribution of that scroll - see linked-scrolling/scroll-attribution.js.
+    // Notified on every scroll event, synchronously, with the attribution of
+    // that scroll - see linked-scrolling/scroll-attribution.js.
     // Returns an unsubscribe function.
     onScroll(listener) {
       scrollListeners.add(listener);

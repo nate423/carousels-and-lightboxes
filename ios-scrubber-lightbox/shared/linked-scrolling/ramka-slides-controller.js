@@ -21,7 +21,6 @@
 // to matter here after all.
 import { createScrollAttribution } from "./scroll-attribution.js";
 import { computeCurrentProgress, computeScrollAnchorForProgress } from "../carousel-math.js";
-import { rafThrottle } from "../engine/raf-throttle.js";
 import { onScrollEnd } from "../engine/scroll-end.js";
 
 const SLIDE_SELECTOR = "[data-ramka-slide]";
@@ -149,19 +148,22 @@ export function createRamkaSlidesController(slidesEl) {
   const scrollListeners = new Set();
   const scrollEndListeners = new Set();
 
-  slidesEl.addEventListener("scroll", () => attribution.noteScrollEvent(), { passive: true });
-
   onScrollEnd(slidesEl, () => {
     const wasLeading = attribution.endLeading();
     if (wasLeading) scrollEndListeners.forEach((listener) => listener());
   });
 
+  // Subscribers hear a scroll in the event itself, not a frame later, so a
+  // link's write to the carousel this one drives lands before the frame
+  // samples that carousel's scroll-driven animations - see the same listener
+  // in carousel-engine.js.
   slidesEl.addEventListener(
     "scroll",
-    rafThrottle(() => {
+    () => {
+      attribution.noteScrollEvent();
       const source = attribution.getScrollSource();
       scrollListeners.forEach((listener) => listener({ source }));
-    }),
+    },
     { passive: true }
   );
 
