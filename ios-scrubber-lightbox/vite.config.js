@@ -41,6 +41,7 @@ export default defineConfig(({ command }) => ({
         scaleFade: resolve(__dirname, "scale-fade/index.html"),
         filmstrip: resolve(__dirname, "filmstrip/index.html"),
         iosScrubber: resolve(__dirname, "ios-scrubber/index.html"),
+        compare: resolve(__dirname, "compare/index.html"),
         archiveProtoV1: resolve(__dirname, "archive/proto-v1/index.html"),
         ramka: resolve(__dirname, "ramka/index.html"),
         ramkaScrubber: resolve(__dirname, "ramka-scrubber/index.html")

@@ -11,14 +11,19 @@ import { attachFilmstrip } from "./strip.js";
 import { createPlaceholderItem } from "./placeholder-items.js";
 import { showBuildStamp } from "../dev/build-stamp.js";
 
+// ?follow=direct follows by writing scroll positions rather than on the
+// leader's timeline - the "before" side of compare/.
+const followOnTimeline = new URLSearchParams(location.search).get("follow") !== "direct";
+
 document.addEventListener("DOMContentLoaded", () => {
   showBuildStamp();
 
   const mainCarousel = createCarousel(document.getElementById("main-carousel"), {
     itemCount: 30,
     effect: scaleFadeEffect,
-    createItem: createPlaceholderItem
+    createItem: createPlaceholderItem,
+    followOnTimeline
   });
 
-  attachFilmstrip(mainCarousel, document.getElementById("strip"));
+  attachFilmstrip(mainCarousel, document.getElementById("strip"), { followOnTimeline });
 });

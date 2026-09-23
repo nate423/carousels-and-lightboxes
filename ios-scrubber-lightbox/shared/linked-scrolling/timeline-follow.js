@@ -55,7 +55,7 @@ function timelineFor(source) {
   return timeline;
 }
 
-export function createTimelineFollow({ effect, ctx }) {
+export function createTimelineFollow({ effect, ctx, enabled = true }) {
   let showing = null;
 
   // Whether the leader's timeline can show this progress at all. It covers
@@ -67,7 +67,7 @@ export function createTimelineFollow({ effect, ctx }) {
   }
 
   function canShow(leader) {
-    if (!timelineFollowSupported || !effect.followFrames) return false;
+    if (!enabled || !timelineFollowSupported || !effect.followFrames) return false;
     return covers(leader.getProgressKnots(), leader.getCurrentProgress());
   }
 

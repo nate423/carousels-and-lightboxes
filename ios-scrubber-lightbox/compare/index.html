@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <title>Following, before and after</title>
+  <link rel="stylesheet" href="../shared/base.css" />
+  <style>
+    /* The same demo twice, differing only in how the carousel that follows
+       is drawn: by writing its scroll position on every scroll of the
+       leader, or on the leader's scroll timeline. Each is its own page in
+       an iframe, so nothing one does can reach into the other - though
+       they do share a CPU, which loads both equally.
+
+       Side by side where there's room, one above the other on a phone. */
+    html, body { height: 100%; }
+    body {
+      display: flex;
+      flex-direction: column;
+      box-sizing: border-box;
+    }
+    .panes {
+      flex: 1;
+      display: grid;
+      grid-template-rows: 1fr 1fr;
+      gap: 8px;
+      min-height: 0;
+      padding: 0 8px 8px;
+    }
+    @media (min-aspect-ratio: 1/1) {
+      .panes {
+        grid-template-rows: none;
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+    .pane {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      border: 1px solid var(--bg-offset-10);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .pane-label {
+      padding: 6px 10px;
+      font: 12px monospace;
+      color: var(--bg-offset-60);
+      background: var(--bg-offset-2);
+    }
+    iframe {
+      flex: 1;
+      width: 100%;
+      border: 0;
+    }
+  </style>
+</head>
+
+<body>
+  <nav>
+    <a href="../">index</a>
+    <a href="../scale-fade/">scale-fade</a>
+    <a href="../filmstrip/">filmstrip</a>
+    <a href="../ios-scrubber/">ios scrubber</a>
+    <a href="../compare/" class="current">compare</a>
+    <span>·</span>
+    <a href="?demo=filmstrip" data-demo="filmstrip">compare filmstrip</a>
+    <a href="?demo=ios-scrubber" data-demo="ios-scrubber">compare ios scrubber</a>
+  </nav>
+
+  <div class="panes">
+    <div class="pane">
+      <div class="pane-label">before: writes the follower's scroll position</div>
+      <iframe id="before" title="Following by writing scroll positions"></iframe>
+    </div>
+    <div class="pane">
+      <div class="pane-label">after: follower drawn on the leader's scroll timeline</div>
+      <iframe id="after" title="Following on the leader's scroll timeline"></iframe>
+    </div>
+  </div>
+
+  <script>
+    const demo = new URLSearchParams(location.search).get("demo") === "ios-scrubber" ? "ios-scrubber" : "filmstrip";
+    // Both panes lay out the same placeholder sizes - new ones each visit.
+    const seed = Math.floor(Math.random() * 2 ** 31);
+    document.getElementById("before").src = `../${demo}/?follow=direct&seed=${seed}`;
+    document.getElementById("after").src = `../${demo}/?seed=${seed}`;
+    document.querySelector(`[data-demo="${demo}"]`).classList.add("current");
+
+    // Each demo's own page nav is this page's to show, once, above both;
+    // inside a pane it only takes room from the carousels. Same origin, so
+    // this can reach in without the demos knowing they're embedded.
+    for (const frame of document.querySelectorAll("iframe")) {
+      frame.addEventListener("load", () => {
+        const style = frame.contentDocument.createElement("style");
+        style.textContent = "nav { display: none; } body { padding-top: 8px; }";
+        frame.contentDocument.head.append(style);
+      });
+    }
+  </script>
+</body>
+</html>

@@ -25,7 +25,7 @@ import { createCarousel } from "../shared/carousel-engine.js";
 import { expandEffect } from "../shared/effects/expand.js";
 import { linkCarousels } from "../shared/linked-scrolling/link.js";
 
-export function attachIosScrubber(mainCarousel, scrubberWrapper) {
+export function attachIosScrubber(mainCarousel, scrubberWrapper, { followOnTimeline } = {}) {
   const itemCount = mainCarousel.getItems().length;
 
   const scrubber = createCarousel(scrubberWrapper, {
@@ -34,7 +34,8 @@ export function attachIosScrubber(mainCarousel, scrubberWrapper) {
     // The thumb the look paints is added in onItemCreated; there is no
     // per-item content beyond it, and the engine's default would fill each
     // item with its own index as text.
-    createItem: () => {}
+    createItem: () => {},
+    followOnTimeline
   });
 
   // This style's defining behavior: the thumbnails flatten out while

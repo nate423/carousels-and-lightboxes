@@ -36,7 +36,12 @@ export function createCarousel(wrapper, options = {}) {
     itemCount = 30,
     effect,
     createItem,
-    itemSizing
+    itemSizing,
+    // Whether following continuously may be drawn on the leader's scroll
+    // timeline (see linked-scrolling/timeline-follow.js). Off, it always
+    // writes this carousel's scroll position instead - kept switchable so
+    // the two can be compared side by side (see compare/).
+    followOnTimeline = true
   } = options;
 
   function getNoncurrentScale() {
@@ -260,7 +265,7 @@ export function createCarousel(wrapper, options = {}) {
     onProgress: undefined
   };
 
-  const timelineFollow = createTimelineFollow({ effect, ctx });
+  const timelineFollow = createTimelineFollow({ effect, ctx, enabled: followOnTimeline });
 
   // Snap stays off until the spacers have their real size. Sizing them means
   // measuring the items, and that measurement forces a layout in which the

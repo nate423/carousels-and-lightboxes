@@ -17,16 +17,21 @@ import { showBuildStamp } from "../dev/build-stamp.js";
 import { attachScrollEventProbe } from "../dev/scroll-event-probe.js";
 import { watchScrubberJitter } from "../dev/debug-console.js";
 
+// ?follow=direct follows by writing scroll positions rather than on the
+// leader's timeline - the "before" side of compare/.
+const followOnTimeline = new URLSearchParams(location.search).get("follow") !== "direct";
+
 document.addEventListener("DOMContentLoaded", () => {
   showBuildStamp();
 
   const mainCarousel = createCarousel(document.getElementById("main-carousel"), {
     itemCount: 30,
     effect: fadeEffect,
-    createItem: createPlaceholderItem
+    createItem: createPlaceholderItem,
+    followOnTimeline
   });
 
-  const scrubber = attachIosScrubber(mainCarousel, document.getElementById("strip"));
+  const scrubber = attachIosScrubber(mainCarousel, document.getElementById("strip"), { followOnTimeline });
 
   // Both off by default; see their own files.
   attachScrollEventProbe(scrubber, "iOS thumbnail strip (not the main carousel)");
