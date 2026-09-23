@@ -40,6 +40,8 @@
 
 body,
 html {
+  /* Prevent horizontal overscroll from triggering browser history gestures. */
+  overscroll-behavior-x: none;
   margin: 0;
   padding: 0;
   /*   width: 100%; */
@@ -106,6 +108,8 @@ h1 {
   margin: var(--wrapper-margin);
   overflow-x: auto;
   overflow-y: hidden;
+  /* Keep edge gestures here while preserving the carousel's native bounce. */
+  overscroll-behavior-x: contain;
   scroll-snap-type: x mandatory;
 }
 
