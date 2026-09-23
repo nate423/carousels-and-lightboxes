@@ -10,8 +10,11 @@
       margin: 0;
       padding: 80px 24px;
       font: 14px/1.6 ui-monospace, monospace;
-      background: light-dark(#fff, hsl(220, 14%, 8%));
-      color: light-dark(hsl(220, 14%, 20%), hsl(220, 14%, 80%));
+      background: #fff;
+      color: hsl(220, 14%, 20%);
+    }
+    @media (prefers-color-scheme: dark) {
+      body { background: hsl(220, 14%, 8%); color: hsl(220, 14%, 80%); }
     }
     main { max-width: 46rem; margin: 0 auto; }
     h1 { font-size: 14px; font-weight: normal; opacity: 0.6; margin: 0 0 32px; }

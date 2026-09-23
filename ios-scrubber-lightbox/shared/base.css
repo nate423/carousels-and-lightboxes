@@ -18,11 +18,24 @@
 
   --body-padding: 28px 0 0 0;
 
-  --color-background: light-dark(hsl(220, 14%, 100%), hsl(220, 14%, 8%));
+  /* Light values here, dark ones in the media query below, rather than
+     light-dark() - which Safari only has from 17.5, and without which every
+     token here is invalid and paints nothing. */
+  --color-background: hsl(220, 14%, 100%);
 
-  --bg-offset-2: light-dark(hsl(220, 14%, 98%), hsl(220, 14%, 10%));
-  --bg-offset-10: light-dark(hsl(220, 14%, 90%), hsl(220, 14%, 20%));
-  --bg-offset-60: light-dark(hsl(220, 14%, 40%), hsl(220, 14%, 60%));
+  --bg-offset-2: hsl(220, 14%, 98%);
+  --bg-offset-10: hsl(220, 14%, 90%);
+  --bg-offset-60: hsl(220, 14%, 40%);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-background: hsl(220, 14%, 8%);
+
+    --bg-offset-2: hsl(220, 14%, 10%);
+    --bg-offset-10: hsl(220, 14%, 20%);
+    --bg-offset-60: hsl(220, 14%, 60%);
+  }
 }
 
 body,
