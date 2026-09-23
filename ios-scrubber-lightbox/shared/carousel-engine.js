@@ -59,7 +59,8 @@ export function createCarousel(wrapper, options = {}) {
   const attribution = createScrollAttribution(wrapper, { onSelfReclaim: reclaim });
   const geometry = createGeometryCache({ wrapper, getItems });
   const spacers = createSpacers(wrapper, { getItems });
-  const press = trackPress(wrapper);
+  const pressListeners = new Set();
+  const press = trackPress(wrapper, { onChange: (pressed) => pressListeners.forEach((listener) => listener(pressed)) });
 
   // Whoever is watching this carousel move - today, the iOS strip, which
   // flattens its thumbnails while you are dragging it and lets them grow
@@ -482,6 +483,18 @@ export function createCarousel(wrapper, options = {}) {
       return () => scrollEndListeners.delete(listener);
     },
     endFollowing,
+    // Notified whenever a finger or pointer comes down on this carousel, or
+    // the last one lifts. Returns an unsubscribe function.
+    onPressChange(listener) {
+      pressListeners.add(listener);
+      return () => pressListeners.delete(listener);
+    },
+    // Stops a horizontal drag from starting on this carousel, while leaving
+    // one already under way, and vertical page scrolling, alone - see
+    // linked-scrolling/link.js for why.
+    lockPanning(locked) {
+      wrapper.style.touchAction = locked ? "pan-y" : "";
+    },
     // Notified once this carousel's items have been measured again - after
     // a resize, or an item changing size. Returns an unsubscribe function.
     onGeometryChange(listener) {

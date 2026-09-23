@@ -129,6 +129,13 @@ export function linkCarousels(a, b, { aWhileFollowing, bWhileFollowing }) {
       dest.endFollowing();
     });
 
+    // One carousel at a time. With a finger on one, a second finger can't
+    // start dragging the other: two carousels that each drive the other,
+    // both moved by hand at once, can only disagree about where they are.
+    // Whichever is touched first is the one being driven by hand, until it
+    // is let go.
+    source.onPressChange?.((pressed) => dest.lockPanning?.(pressed));
+
     source.onScroll(({ source: scrollSource }) => {
       if (scrollSource === "driven") {
         // This carousel is being written to by us; everything it emits until

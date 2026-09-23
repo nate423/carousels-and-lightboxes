@@ -22,6 +22,7 @@
 import { createScrollAttribution } from "./scroll-attribution.js";
 import { computeCurrentProgress, computeScrollAnchorForProgress, computeProgressKnots } from "../carousel-math.js";
 import { onScrollEnd } from "../engine/scroll-end.js";
+import { trackPress } from "../engine/press.js";
 
 const SLIDE_SELECTOR = "[data-ramka-slide]";
 const SNAP_RESTORE_DELAY = 150;
@@ -163,6 +164,13 @@ export function createRamkaSlidesController(slidesEl) {
   // toggling). Slide count is fixed for this gallery's lifetime and slide
   // boxes don't otherwise change size on their own, so this is the only
   // invalidation source that's actually needed.
+  // Reported, so a finger on the slides can keep the strip from being
+  // dragged at the same time (see link.js). The slides themselves are never
+  // locked in return: ramka handles its own touches - pinch to zoom among
+  // them - and setting touch-action on its scrollport would take them over.
+  const pressListeners = new Set();
+  trackPress(slidesEl, { onChange: (pressed) => pressListeners.forEach((listener) => listener(pressed)) });
+
   const geometryListeners = new Set();
   const resizeObserver = new ResizeObserver(() => {
     geometry.invalidate();
@@ -204,6 +212,10 @@ export function createRamkaSlidesController(slidesEl) {
     onGeometryChange(listener) {
       geometryListeners.add(listener);
       return () => geometryListeners.delete(listener);
+    },
+    onPressChange(listener) {
+      pressListeners.add(listener);
+      return () => pressListeners.delete(listener);
     },
     isMovingItself: attribution.isMovingItself,
     selfScrollStartedAt: attribution.selfScrollStartedAt,
