@@ -1,10 +1,35 @@
+import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
+// The scroll-timeline polyfill and what loads it: classic scripts, which
+// Vite leaves alone rather than bundling, and whose paths it never sees
+// anyway where one is written into the document from a JS string. So none
+// of them reach the build unless they're copied there.
+const scrollTimelineScripts = [
+  "shared/scroll-timeline-loader.js",
+  "shared/vendor/scroll-timeline.js",
+  "archive/proto-v1/js/vendor/scroll-timeline.js"
+];
+
+// Copied into the build at the same paths, which is where the pages'
+// relative paths to them point.
+function copyScrollTimelineScripts() {
+  return {
+    name: "copy-scroll-timeline-scripts",
+    apply: "build",
+    generateBundle() {
+      for (const fileName of scrollTimelineScripts) {
+        this.emitFile({ type: "asset", fileName, source: readFileSync(resolve(__dirname, fileName)) });
+      }
+    }
+  };
+}
+
 export default defineConfig(({ command }) => ({
   base: command === "build" ? "/carousels-and-lightboxes/" : "/",
-  plugins: [react()],
+  plugins: [react(), copyScrollTimelineScripts()],
   server: {
     port: 56576,
     strictPort: true
