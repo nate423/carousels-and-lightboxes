@@ -99,7 +99,13 @@ export function ScrubberGallery({ items, ariaLabel }) {
           key={slidesLayout}
           aria-label="Full-size images"
           aria-roledescription="carousel"
-          preload={2}
+          // Every slide's content stays mounted. The strip jumps these slides
+          // an item at a time as it's scrubbed, and with a preload window
+          // each jump mounted one slide's photo and unmounted another's - a
+          // re-layout and a full-size decode per item crossed, which is what
+          // made scrubbing here run at a lower frame rate than the iOS
+          // scrubber page. A gallery this size can afford to hold them all.
+          preload={items.length}
           className={snug ? 'lb-slides-snug' : undefined}
           style={
             snugEdgeRatios
