@@ -120,11 +120,16 @@ h1 {
   font-size: 12px;
 }
 
+/* A spacer only works if its width counts toward the wrapper's scroll range.
+   WebKit leaves zero-height boxes out of scrollable overflow, so a spacer
+   whose height resolves to 0 would drop out of it there; the min-height
+   keeps it a real box in every engine. */
 .spacer {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: center left;
+  min-height: 1px;
 }
 
 .carousel-item {
