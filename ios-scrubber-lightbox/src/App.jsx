@@ -1,6 +1,17 @@
 import { Lightbox } from './lightbox/lightbox.jsx';
 
 /**
+ * Keep the page scrolled to the trigger the close morph will land on: once the
+ * open transition finishes, and again whenever the active photo changes. The
+ * lightbox covers the page, so the instant scroll is never seen - it only makes
+ * sure the shared-element morph back has an on-screen target.
+ */
+const scrollTriggerIntoView = [
+  { type: 'onChange', behavior: 'instant' },
+  { type: 'onOpenComplete', behavior: 'instant' },
+];
+
+/**
  * Demo seed data from ramka's default preset
  * (https://ramka.dev/presets/default) — same photos, same captions.
  */
@@ -109,7 +120,7 @@ function AlbumPlusN() {
   const extra = trip.length - shown.length;
 
   return (
-    <Lightbox.Root license="gpl" morphTo="closest" awaitImageDecode={false}>
+    <Lightbox.Root license="gpl" scrollTriggerIntoView={scrollTriggerIntoView} morphTo="closest" awaitImageDecode={false}>
       <div className="album-grid">
         {shown.map((item, i) => {
           const showOverlay = i === shown.length - 1 && extra > 0;
@@ -148,7 +159,7 @@ export default function App() {
       <AlbumPlusN />
 
       <h2>Full grid</h2>
-      <Lightbox.Root license="gpl" awaitImageDecode={false}>
+      <Lightbox.Root license="gpl" scrollTriggerIntoView={scrollTriggerIntoView} awaitImageDecode={false}>
         <div className="grid-tiles">
           {trip.map((item, i) => (
             <Lightbox.Trigger key={item.src} index={i} className="grid-tile">
