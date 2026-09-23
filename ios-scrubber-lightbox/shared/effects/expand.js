@@ -27,10 +27,10 @@
 //
 // --- Drawn with what the compositor can animate ---------------------------
 //
-// Only translate, scale and opacity animate off the main thread, so the
-// thumbnail's width can't be what grows. The thumbnail is laid out at its
-// grown width, always, clipped, and scaled on x down to the width it should
-// show; whatever it holds is scaled back the other way, so an image in it
+// Transform and opacity can animate off the main thread. The thumbnail is
+// laid out at its grown width and centered inside its fixed-size item. One
+// transform on that item combines translation and horizontal scaling (#1);
+// whatever the thumbnail holds is scaled back the other way, so an image in it
 // is cropped narrower rather than squeezed. Nothing about the look ever
 // changes a box's size, so nothing it does can move the layout, the snap
 // points, or the scroll position underneath it.
@@ -103,18 +103,16 @@ export function expandEffect({ flattenWhileLeading = false } = {}) {
       const shift = dims.footprintGrowth * ((lo + hi) / 2 - 0.5) * strength;
       const scale = (dims.width + (lo - hi) * strength * (dims.grownWidth - dims.width)) / dims.grownWidth;
       return {
-        item: { translate: `${shift + scrollError}px 0` },
-        thumb: { scale: `${scale} 1` },
-        content: { scale: `${1 / scale} 1` }
+        item: { transform: `translateX(${shift + scrollError}px) scaleX(${scale})` },
+        content: { transform: `scaleX(${1 / scale})` }
       };
     });
   }
 
-  // Each element the look draws on, per item: the item, its thumbnail, and
-  // whatever the thumbnail holds.
+  // Animate the item and counter-scale the content inside its clipped thumb.
   function targetsOf(item) {
     const thumb = item.querySelector(".expand-effect-thumb");
-    return { item, thumb, content: thumb ? [...thumb.children] : [] };
+    return { item, content: thumb ? [...thumb.children] : [] };
   }
 
   // Before the items are built: their sizes, and the look's default
@@ -156,7 +154,7 @@ export function expandEffect({ flattenWhileLeading = false } = {}) {
 
     // One curve for every item, across the two items either side of it:
     // 0% is the previous item current, 50% this one, 100% the next.
-    const names = { item: `expand-item-${stripId}`, thumb: `expand-thumb-${stripId}`, content: `expand-content-${stripId}` };
+    const names = { item: `expand-item-${stripId}`, content: `expand-content-${stripId}` };
     // Sampled as item 0 at progress 2t - 1, which is any item i at i - 1 + 2t.
     const steps = COUNTER_STEPS * 2;
     const curve = Array.from({ length: steps + 1 }, (_, k) => {
@@ -167,9 +165,8 @@ export function expandEffect({ flattenWhileLeading = false } = {}) {
     const keyframes = (name, pick, stops) =>
       `@keyframes ${name} {\n${stops.map((stop) => `  ${stop.percent}% { ${pick(stop.frame)} }`).join("\n")}\n}`;
     const linearStops = [0, steps / 2, steps].map((k) => curve[k]);
-    sheet.set("keyframes-item", keyframes(names.item, (f) => `translate: ${f.item.translate};`, linearStops));
-    sheet.set("keyframes-thumb", keyframes(names.thumb, (f) => `scale: ${f.thumb.scale};`, linearStops));
-    sheet.set("keyframes-content", keyframes(names.content, (f) => `scale: ${f.content.scale};`, curve));
+    sheet.set("keyframes-item", keyframes(names.item, (f) => `transform: ${f.item.transform};`, linearStops));
+    sheet.set("keyframes-content", keyframes(names.content, (f) => `transform: ${f.content.transform};`, curve));
 
     // Each item's range: from the scroll offset where the item before it is
     // current to where the item after it is. The pitch is uniform, so the
@@ -178,17 +175,15 @@ export function expandEffect({ flattenWhileLeading = false } = {}) {
     items.forEach((item, i) => {
       const start = anchors[i] - pitch - wrapperAnchorPoint;
       const range = `${start}px ${start + 2 * pitch}px`;
-      const { thumb } = state.targets[i];
       const id = item.dataset.itemId;
       const rules = [
         [item, `.expand-effect-item[data-item-id="${id}"]`, names.item],
-        [thumb, `.expand-effect-item[data-item-id="${id}"] > .expand-effect-thumb`, names.thumb],
         [null, `.expand-effect-item[data-item-id="${id}"] > .expand-effect-thumb > *`, names.content]
       ];
       rules.forEach(([el, selector, name]) => {
         // Inline for native engines, and as a real rule for the polyfill,
         // which only finds animations by parsing stylesheets (see
-        // scale-fade.js's positionSheet); the content has no single
+        // scale-fade.js's generated rules); the content has no single
         // element to set inline on, so it only has the rule.
         if (el) {
           el.style.animationName = name;
@@ -215,20 +210,18 @@ export function expandEffect({ flattenWhileLeading = false } = {}) {
   // outranks a running animation.
   function paint(state, progress, scrollError) {
     const frame = frameAt(state, progress, state.strength, scrollError);
-    state.targets.forEach(({ item, thumb, content }, i) => {
-      item.style.setProperty("translate", frame[i].item.translate, "important");
-      thumb?.style.setProperty("scale", frame[i].thumb.scale, "important");
-      content.forEach((el) => el.style.setProperty("scale", frame[i].content.scale, "important"));
+    state.targets.forEach(({ item, content }, i) => {
+      item.style.setProperty("transform", frame[i].item.transform, "important");
+      content.forEach((el) => el.style.setProperty("transform", frame[i].content.transform, "important"));
     });
     state.painting = true;
   }
 
   function clearPaint(state) {
     if (!state.painting) return;
-    state.targets.forEach(({ item, thumb, content }) => {
-      item.style.removeProperty("translate");
-      thumb?.style.removeProperty("scale");
-      content.forEach((el) => el.style.removeProperty("scale"));
+    state.targets.forEach(({ item, content }) => {
+      item.style.removeProperty("transform");
+      content.forEach((el) => el.style.removeProperty("transform"));
     });
     state.painting = false;
   }
@@ -281,17 +274,16 @@ export function expandEffect({ flattenWhileLeading = false } = {}) {
     // compositor to hand anything to.
     const own = usingScrollTimelinePolyfill
       ? []
-      : state.targets.flatMap(({ item, thumb, content }) =>
-          [item, thumb, ...content].filter(Boolean).flatMap((el) => el.getAnimations().filter((a) => a instanceof CSSAnimation))
+      : state.targets.flatMap(({ item, content }) =>
+          [item, ...content].filter(Boolean).flatMap((el) => el.getAnimations().filter((a) => a instanceof CSSAnimation))
         );
     own.forEach((animation) => animation.pause());
 
     const previous = state.flattening;
     const timing = { duration: FLATTEN_DURATION, fill: "forwards", easing: "linear" };
-    const animations = state.targets.flatMap(({ item, thumb, content }, i) => {
+    const animations = state.targets.flatMap(({ item, content }, i) => {
       return [
         item.animate(frames.map((f) => f[i].item), timing),
-        ...(thumb ? [thumb.animate(frames.map((f) => f[i].thumb), timing)] : []),
         ...content.map((el) => el.animate(frames.map((f) => f[i].content), timing))
       ];
     });
@@ -323,16 +315,15 @@ export function expandEffect({ flattenWhileLeading = false } = {}) {
   }
 
   // Following another carousel on its timeline (see
-  // linked-scrolling/timeline-follow.js): the same three things drawn at
+  // linked-scrolling/timeline-follow.js): the same transforms drawn at
   // each sample, at full strength, with the distance between this
   // carousel's scroll and where it is being shown in the item's translate.
   function followFrames(ctx, samples) {
     const state = stateByWrapper.get(ctx.wrapper);
     const frames = samples.map(({ progress, scrollError }) => frameAt(state, progress, 1, scrollError));
-    return state.targets.flatMap(({ item, thumb, content }, i) => {
+    return state.targets.flatMap(({ item, content }, i) => {
       return [
         { target: item, keyframes: frames.map((f) => f[i].item) },
-        ...(thumb ? [{ target: thumb, keyframes: frames.map((f) => f[i].thumb) }] : []),
         ...content.map((el) => ({ target: el, keyframes: frames.map((f) => f[i].content) }))
       ];
     });

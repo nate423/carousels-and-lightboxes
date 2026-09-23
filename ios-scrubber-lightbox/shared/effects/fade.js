@@ -7,8 +7,8 @@
 // range is clamped to its neighbouring anchors, so it reaches full fade
 // exactly as that neighbour becomes current, whatever their sizes. That's
 // also why each item needs its own generated @keyframes rule instead of a
-// shared one - see scale-fade.js's header for the mechanics, which this
-// look shares.
+// shared one. The old view-timeline ranges are converted to scroll pixels
+// so the visual falloff is unchanged, without an item-local timeline.
 //
 // No gap-compensation needed: nothing here changes an item's size, so no
 // gap ever opens between neighbours.
@@ -36,7 +36,7 @@ function onItemCreated(item) {
 function setup(ctx) {
   const { wrapper } = ctx;
   const state = getWrapperState(wrapper);
-  const { items, anchors, sizes } = ctx.getGeometry();
+  const { items, anchors, sizes, wrapperAnchorPoint } = ctx.getGeometry();
   const ranges = computeAnimationRanges(anchors, sizes, wrapper.offsetWidth);
 
   items.forEach((item, i) => {
@@ -45,15 +45,17 @@ function setup(ctx) {
     state.keyframeSheet.set(
       name,
       `@keyframes ${name} {
-      0% { opacity: var(--noncurrent-opacity); }
-      ${peakX * 100}% { opacity: 1; }
-      100% { opacity: var(--noncurrent-opacity); }
+      0% { transform: translateX(0px); opacity: var(--noncurrent-opacity); }
+      ${peakX * 100}% { transform: translateX(0px); opacity: 1; }
+      100% { transform: translateX(0px); opacity: var(--noncurrent-opacity); }
     }`
     );
 
-    const range = `cover ${start * 100}% cover ${end * 100}%`;
+    const span = wrapper.offsetWidth + sizes[i];
+    const origin = anchors[i] - wrapperAnchorPoint;
+    const range = `${origin + (start - 0.5) * span}px ${origin + (end - 0.5) * span}px`;
     item.style.animationName = name;
-    item.style.animationTimeline = "--item-reveal";
+    item.style.animationTimeline = "--carousel-scroll";
     item.style.animationRange = range;
 
     // Also as a real selector rule: the scroll-timeline polyfill can't see
@@ -62,7 +64,7 @@ function setup(ctx) {
       item.dataset.itemId,
       `.carousel-item[data-item-id="${item.dataset.itemId}"] {
       animation-name: ${name};
-      animation-timeline: --item-reveal;
+      animation-timeline: --carousel-scroll;
       animation-range: ${range};
     }`
     );
@@ -86,8 +88,7 @@ function apply(ctx) {
 // Following on another carousel's timeline (see
 // linked-scrolling/timeline-follow.js): each item's opacity at each sample,
 // and the distance between this carousel's scroll and where it is being
-// shown, as a translate - transform held at none so the stylesheet's own
-// correction stays out of it.
+// shown, as a transform. The static translate correction is neutralised.
 function followFrames(ctx, samples) {
   const { items } = ctx.getGeometry();
   const { noncurrentOpacity } = getWrapperState(ctx.wrapper);
@@ -95,8 +96,8 @@ function followFrames(ctx, samples) {
     target: item,
     keyframes: samples.map(({ progress, scrollError }) => ({
       opacity: String(transition(Math.max(1 - Math.abs(progress - i), 0), noncurrentOpacity, 1)),
-      translate: `${scrollError}px 0`,
-      transform: "none"
+      translate: "none",
+      transform: `translateX(${scrollError}px)`
     }))
   }));
 }

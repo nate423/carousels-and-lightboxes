@@ -2,7 +2,7 @@
 
 One entry per problem, referenced by number (#4). Numbers are permanent: a new
 issue takes the next one, and nothing is renumbered when an entry moves
-section. Next number: **#14**.
+section. Next number: **#15**.
 
 Status is one of: **open**, **fix attempted** (a change went in, not yet
 confirmed on a device), **parked** (known, deliberately not being worked on),
@@ -16,13 +16,15 @@ properties.
 ## Open
 
 ### #1 Items vanish near the screen edge while scrolling (iOS 27)
-- **Status:** open
+- **Status:** fix attempted - standalone scale-fade confirmed on device; shared rollout needs confirmation.
 - **Where:** any carousel whose items scale down (filmstrip, scale-fade, both strips), only while it scrolls natively. A follower drawn on its leader's timeline keeps its edge items until it's touched.
 - **Seen:** an item disappears about where it would have left the screen at full size, though scaled down and moved inward it's still in view.
 - **Tried:**
   - `isolation: isolate` on items (3522712) - no effect.
   - The `?edge=` candidates from 09c5735 - `willchange`, `outline`, `backface`, `slotlayer`, `noisolate` - none had any effect.
-- **Next:** stop adding CSS hints and change the layout: e.g. keep each item's box at the size and place it's drawn at, so nothing on screen is outside its own box.
+  - Single-transform experiment on standalone scale-fade: user reports edge items remain visible on iOS 27.
+- **Current attempt:** promoted to the default shared effects. Scale-fade combines translation and scale into one explicit `transform` animation on the wrapper's scroll timeline. The expand effect combines movement and horizontal scale on the item, retaining counter-scaling for image content. Follower, overscroll, and flattening frames use the same transform representation. This reaches filmstrip, iOS scrubber thumbnails, and ramka's shared scrubber without a query parameter.
+- **Validation:** build and motion-curve checks pass; desktop filmstrip and iOS scrubber scroll in both directions and the thumbnail expansion returns at rest. Confirm edge visibility on iOS 27 across these demos before closing.
 
 ### #3 iOS scrubber strip flickers while it's dragged, as thumbnails expand
 - **Status:** open - introduced by the expand rewrite
@@ -47,6 +49,13 @@ properties.
 ### #9 Scroll input issues on iOS
 - **Status:** open
 - **Seen:** mentioned but not yet described - separate from the motion's performance, and gets in the way of judging it.
+
+### #14 iOS scrubber carousel items appear late, then flash into view (iOS 27)
+- **Status:** fix attempted - recently introduced; introducing change not yet identified.
+- **Where:** both the main carousel and thumbnail carousel in the iOS scrubber demo on iOS 27. Observed while scrolling the main carousel; also affects the thumbnail carousel, but is harder to reproduce there. Not observed in the filmstrip demo.
+- **Seen:** after scrolling to an item, it remains invisible for roughly a second, then abruptly flashes into view.
+- **Related:** possibly the entering-screen counterpart or a more severe form of #1, but a shared cause is unverified. Track separately because this delayed appearance does not occur in the filmstrip demo.
+- **Current attempt:** the main carousel's fade-only effect now uses the wrapper's scroll timeline with explicit identity transforms, and follower frames use `transform` for movement. The thumbnail carousel receives #1's combined-transform change. Delayed appearance still needs a separate iOS 27 check; the successful standalone scale-fade experiment does not establish that #14 is fixed.
 
 ## Parked
 
