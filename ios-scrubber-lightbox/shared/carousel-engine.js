@@ -14,7 +14,7 @@
 // have to agree, which is also where the comments explaining *why* now live.
 // The pure math they all build on was already factored out to
 // carousel-math.js.
-import { computeScrollTarget, computeScrollAnchorForProgress, computeCurrentIndex } from "./carousel-math.js";
+import { computeScrollAnchorForProgress, computeCurrentIndex } from "./carousel-math.js";
 import { rafThrottle } from "./engine/raf-throttle.js";
 import { createScrollAttribution } from "./linked-scrolling/scroll-attribution.js";
 import { createSnapSuspension } from "./linked-scrolling/snap-suspension.js";
@@ -23,13 +23,11 @@ import { createGeometryCache } from "./engine/geometry-cache.js";
 import { createSpacers } from "./engine/spacers.js";
 import { onScrollEnd } from "./engine/scroll-end.js";
 import { trackPress } from "./engine/press.js";
+import { usingScrollTimelinePolyfill } from "./engine/polyfill.js";
 import { populateItems as populateItemsInto } from "./engine/populate-items.js";
 
 export { rafThrottle };
 
-// Marked on the document by scroll-timeline-loader.js, which runs before any
-// module does, when it loads the polyfill.
-const usingScrollTimelinePolyfill = document.documentElement.hasAttribute("data-scroll-timeline-polyfill");
 
 export function createCarousel(wrapper, options = {}) {
   const {
@@ -112,9 +110,8 @@ export function createCarousel(wrapper, options = {}) {
   // anchor point. Shared by click-to-scroll and any external seek (e.g. a
   // page-dot click).
   function goToIndex(index, { behavior = "smooth" } = {}) {
-    const items = getItems();
-    const item = items[index];
-    if (!item) return;
+    const { anchors, wrapperAnchorPoint } = geometry.get();
+    if (anchors[index] === undefined) return;
 
     // An explicit command to this carousel, not an echo of something driving
     // it, so the scrolling it is about to do counts as this carousel moving
@@ -124,9 +121,7 @@ export function createCarousel(wrapper, options = {}) {
     reclaim();
     attribution.noteSelfCommand();
 
-    const scrollTarget = computeScrollTarget(wrapper, item);
-
-    wrapper.scrollTo({ left: scrollTarget, behavior });
+    wrapper.scrollTo({ left: anchors[index] - wrapperAnchorPoint, behavior });
   }
 
   // Manually takes over the scroll position to match an externally-driven
@@ -191,18 +186,24 @@ export function createCarousel(wrapper, options = {}) {
       return;
     }
 
+    // What this carousel's own look is told, kept within its items. The
+    // timeline covers the leader's whole scroll range, which can reach a
+    // hair past either end item, and draws that itself; the look, told a
+    // progress past an end, would paint an overscroll over the top of it
+    // that nothing on the timeline could outrank.
+    const withinItems = Math.min(Math.max(progress, 0), geometry.get().items.length - 1);
+
     if (onTimeline !== leader) {
       // Written first, so the frame that shows the timeline's first frame
       // already looks the same underneath it, and so the error it folds in
       // is measured from where this carousel really is.
-      setProgressDirect(progress);
+      setProgressDirect(withinItems);
       timelineFollow.stop();
-      snap.hold();
-      timelineFollow.show(leader);
+      timelineFollow.show(leader, { onLeaderGeometryChange: () => refollow(leader) });
     } else {
       // Nothing to write, but still the progress this carousel is being
       // driven to, for anything that asks.
-      attribution.noteDirectWrite(progress);
+      attribution.noteDirectWrite(withinItems);
       notifyMotion();
     }
 
@@ -220,6 +221,15 @@ export function createCarousel(wrapper, options = {}) {
     if (press.isPressed() || attribution.isMovingItself() || !timelineFollow.canShow(leader)) return;
     follow(leader);
     endFollowing();
+  }
+
+  // The leader's items moved - a resize, or its spacers settling after load -
+  // so the keyframes laid out against where they were no longer describe
+  // it. Built again against where they are now.
+  function refollow(leader) {
+    timelineFollow.stop();
+    follow(leader);
+    if (!leader.isMovingItself()) endFollowing();
   }
 
   // Off the leader's timeline and back onto a real scroll position that
@@ -339,6 +349,15 @@ export function createCarousel(wrapper, options = {}) {
   // it were the authoritative "the gesture is over" signal.
   onScrollEnd(wrapper, () => {
     const wasLeading = attribution.endLeading();
+    // Came to rest somewhere a drive didn't put it: motion of its own that
+    // the drive's writes didn't cancel - a smooth scroll still running when
+    // the other carousel took over, say - whose scroll events all read as
+    // echoes of those writes. The drive's word stands, or the two carousels
+    // rest on different items.
+    if (!wasLeading && attribution.getScrollSource() === "driven" && !timelineFollow.leader()) {
+      const target = attribution.getDrivenProgress();
+      if (Math.abs(geometry.getCurrentProgress() - target) > 0.05) writeScroll(target);
+    }
     notifyMotion();
     applyIfReady();
     if (wasLeading) {
@@ -349,16 +368,20 @@ export function createCarousel(wrapper, options = {}) {
   // Shared by both triggers below so a resize that also changes an item's
   // own size (e.g. dragging the window while an image is still loading)
   // coalesces into one refresh per frame instead of two.
+  const geometryListeners = new Set();
+
   const refreshGeometry = rafThrottle(() => {
-    // The timeline's keyframes were laid out against the old geometry.
+    // A timeline's keyframes are laid out against this carousel's items as
+    // they were, so it comes off before they move and goes back on once
+    // they have been measured where they are now.
     const leader = timelineFollow.leader();
-    if (leader) {
-      setProgressDirect(leader.getCurrentProgress());
-      timelineFollow.stop();
-    }
+    timelineFollow.stop();
     updateSpacers();
     effect.setup(ctx);
     effect.apply(ctx);
+    if (leader) refollow(leader);
+    // A copy: a follower rebuilding here unsubscribes and subscribes again.
+    [...geometryListeners].forEach((listener) => listener());
   });
 
   window.addEventListener("resize", refreshGeometry);
@@ -388,6 +411,11 @@ export function createCarousel(wrapper, options = {}) {
   // the leader's next gesture. Anything that needs its real scroll position
   // reclaims it for itself (see reclaim above).
   function endFollowing() {
+    // The drive is over, and this carousel sits on the item its leader came
+    // to rest on - unless it is resting on the leader's timeline, whose
+    // translate stands in for its scroll and which a resnap would move the
+    // items out from under.
+    if (!timelineFollow.leader()) snap.restore();
     if (!attribution.endFollowing()) return;
     notifyMotion();
     applyIfReady();
@@ -433,6 +461,12 @@ export function createCarousel(wrapper, options = {}) {
       return () => scrollEndListeners.delete(listener);
     },
     endFollowing,
+    // Notified once this carousel's items have been measured again - after
+    // a resize, or an item changing size. Returns an unsubscribe function.
+    onGeometryChange(listener) {
+      geometryListeners.add(listener);
+      return () => geometryListeners.delete(listener);
+    },
     setOnProgress(onProgress) {
       ctx.onProgress = onProgress;
     },

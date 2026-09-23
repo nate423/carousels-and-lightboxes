@@ -161,7 +161,12 @@ export function createRamkaSlidesController(slidesEl) {
   // toggling). Slide count is fixed for this gallery's lifetime and slide
   // boxes don't otherwise change size on their own, so this is the only
   // invalidation source that's actually needed.
-  const resizeObserver = new ResizeObserver(() => geometry.invalidate());
+  const geometryListeners = new Set();
+  const resizeObserver = new ResizeObserver(() => {
+    geometry.invalidate();
+    // A copy: a follower rebuilding here unsubscribes and subscribes again.
+    [...geometryListeners].forEach((listener) => listener());
+  });
   resizeObserver.observe(slidesEl);
 
   const scrollListeners = new Set();
@@ -194,6 +199,10 @@ export function createRamkaSlidesController(slidesEl) {
     getProgressKnots,
     setProgressDirect,
     follow,
+    onGeometryChange(listener) {
+      geometryListeners.add(listener);
+      return () => geometryListeners.delete(listener);
+    },
     isMovingItself: attribution.isMovingItself,
     selfScrollStartedAt: attribution.selfScrollStartedAt,
     onScroll(listener) {

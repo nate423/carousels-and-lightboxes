@@ -38,6 +38,7 @@
 // building the animations is paid while nothing is moving, and the
 // leader's first frame of motion is already the follower's too.
 import { computeScrollAnchorForProgress } from "../carousel-math.js";
+import { usingScrollTimelinePolyfill } from "../engine/polyfill.js";
 
 // Evaluated after the polyfill has installed its own where the browser has
 // none, since the polyfill loads before any module does.
@@ -71,7 +72,9 @@ export function createTimelineFollow({ effect, ctx, enabled = true }) {
     return covers(leader.getProgressKnots(), leader.getCurrentProgress());
   }
 
-  function show(leader) {
+  // `onLeaderGeometryChange` is called if the leader's items move while this
+  // is showing, since these keyframes are laid out against where they are.
+  function show(leader, { onLeaderGeometryChange } = {}) {
     const knots = leader.getProgressKnots();
     const { anchors } = ctx.getGeometry();
     const scrollAnchor = ctx.currentScrollAnchor();
@@ -79,6 +82,21 @@ export function createTimelineFollow({ effect, ctx, enabled = true }) {
       progress,
       scrollError: scrollAnchor - computeScrollAnchorForProgress(anchors, progress)
     }));
+
+    // This carousel's own scroll-driven animations stand aside while the
+    // timeline draws it. Outranked, they would draw nothing, but still
+    // running on the same items they keep the browser from handing any of
+    // those items' animations to the compositor: Chrome reports every one
+    // as sharing its target with an incompatible animation, and runs them
+    // all on the main thread, where the follower drops frames the leader
+    // doesn't. Paused rather than removed, they stay tied to the keyframes
+    // the look regenerates, and pick up from this carousel's own scroll the
+    // frame they resume. Under the polyfill there is no compositor to hand
+    // anything to, and its animations are its own to run.
+    const ownAnimations = usingScrollTimelinePolyfill
+      ? []
+      : ctx.wrapper.getAnimations({ subtree: true }).filter((animation) => animation instanceof CSSAnimation);
+    ownAnimations.forEach((animation) => animation.pause());
 
     const timeline = timelineFor(leader.wrapper);
     const animations = effect.followFrames(ctx, samples).map(({ target, keyframes }) =>
@@ -88,12 +106,15 @@ export function createTimelineFollow({ effect, ctx, enabled = true }) {
       )
     );
 
-    showing = { leader, animations, scrollLeft: ctx.wrapper.scrollLeft };
+    const unsubscribe = leader.onGeometryChange?.(() => onLeaderGeometryChange?.());
+    showing = { leader, animations, ownAnimations, scrollLeft: ctx.wrapper.scrollLeft, unsubscribe };
   }
 
   function stop() {
     if (!showing) return;
     showing.animations.forEach((animation) => animation.cancel());
+    showing.ownAnimations.forEach((animation) => animation.play());
+    showing.unsubscribe?.();
     showing = null;
   }
 

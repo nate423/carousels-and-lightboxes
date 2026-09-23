@@ -42,31 +42,40 @@ export function wrapperAnchor(wrapperSize) {
   return wrapperSize / 2;
 }
 
-// The only two functions here that touch the DOM, and they touch it only to
-// read two numbers per item. Everything else below takes numbers and returns
+// The only function here that touches the DOM, and it touches it only to
+// read a number per item. Everything else below takes numbers and returns
 // numbers, which is why the axis never had to reach any further than this.
+//
+// Where each item sits is added up rather than read off each item, because
+// offsetLeft rounds to whole pixels and the browser snaps to where items
+// really are. They differ by the leading spacer: it centres the first item,
+// so it comes out half a pixel short of whole whenever the wrapper and that
+// item differ in width by an odd number of pixels. Rounded, every item reads
+// half a pixel from where it snaps - a fraction of an item's progress on a
+// strip of narrow thumbnails, and several pixels on a carousel following
+// it. Each item sits at the start of its own slot, one of the wrapper's
+// children (see populate-items.js), laid out one gap after the last; the
+// slots and items are whole pixels wide, so offsetWidth is exact for both.
 export function getItemMetrics(wrapper, items) {
   const scrollAnchor = wrapper.scrollLeft + wrapperAnchor(wrapper.offsetWidth);
   const anchors = [];
   const sizes = [];
+  if (items.length === 0) return { anchors, sizes, scrollAnchor };
+
+  const slotOf = (item) => (item.parentElement === wrapper ? item : item.parentElement);
+  const gap = parseFloat(getComputedStyle(wrapper).columnGap) || 0;
+  const leading = slotOf(items[0]).previousElementSibling;
+  let left = leading
+    ? parseFloat(getComputedStyle(leading).width) + gap
+    : slotOf(items[0]).offsetLeft - wrapper.offsetLeft;
 
   items.forEach((item) => {
-    const itemOffsetFromWrapperStart = item.offsetLeft - wrapper.offsetLeft;
     sizes.push(item.offsetWidth);
-    anchors.push(itemOffsetFromWrapperStart + item.offsetWidth / 2);
+    anchors.push(left + item.offsetWidth / 2);
+    left += slotOf(item).offsetWidth + gap;
   });
 
   return { anchors, sizes, scrollAnchor };
-}
-
-// Scroll offset (relative to the wrapper) that puts this item's anchor point
-// at the wrapper's anchor point - i.e. where to scroll to bring it "current"
-// i.e. where to scroll to bring it "current". Shared by click-to-scroll and
-// page-dot clicks.
-export function computeScrollTarget(wrapper, item) {
-  return (
-    item.offsetLeft - wrapper.offsetLeft - (wrapperAnchor(wrapper.offsetWidth) - item.offsetWidth / 2)
-  );
 }
 
 // Size of the spacer needed at each edge of the wrapper so that the first and
