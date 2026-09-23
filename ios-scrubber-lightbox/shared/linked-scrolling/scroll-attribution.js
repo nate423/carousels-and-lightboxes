@@ -60,6 +60,17 @@ export function createScrollAttribution(wrapper, { onSelfReclaim } = {}) {
   let movingItself = false;
   let selfScrollStartedAt = 0;
 
+  // Whether anything has asked this carousel to move since its last leading
+  // motion ended: real input on it, or a goToIndex command. A scroll only
+  // starts "leading" when something has. Input can't say which scroller is
+  // moving (above), but it can say whether anyone asked for a move at all.
+  // The browser also scrolls a carousel by itself, with no gesture behind
+  // it: re-snapping after a layout change, for one. Counting that as leading
+  // lets a look that changes layout on leading feed itself, as the iOS
+  // strip's contrast change did in iOS Safari: every change of contrast
+  // provoked a scroll, which restarted leading, which changed it back.
+  let selfMoveRequested = false;
+
   // The same question asked about the other source: whether a drive is
   // currently moving this carousel. Unlike movingItself it cannot be read
   // off scroll events alone, because a drive does not reliably produce one -
@@ -87,6 +98,7 @@ export function createScrollAttribution(wrapper, { onSelfReclaim } = {}) {
 
   function markSelfDriven() {
     scrollSource = "self";
+    selfMoveRequested = true;
     // Whatever a driver was doing to this carousel, it is not what is moving
     // it any more.
     movingDriven = false;
@@ -116,6 +128,7 @@ export function createScrollAttribution(wrapper, { onSelfReclaim } = {}) {
     // doesn't touch movingDriven or trigger onSelfReclaim.
     noteSelfCommand() {
       scrollSource = "self";
+      selfMoveRequested = true;
     },
 
     // Called by setProgressDirect: an outside driver is about to write this
@@ -129,7 +142,7 @@ export function createScrollAttribution(wrapper, { onSelfReclaim } = {}) {
     // Called from the wrapper's own 'scroll' listener to update movingItself
     // and selfScrollStartedAt from the current attribution.
     noteScrollEvent() {
-      const nowMovingItself = scrollSource === "self";
+      const nowMovingItself = scrollSource === "self" && (movingItself || selfMoveRequested);
       if (nowMovingItself && !movingItself) selfScrollStartedAt = performance.now();
       movingItself = nowMovingItself;
     },
@@ -141,6 +154,7 @@ export function createScrollAttribution(wrapper, { onSelfReclaim } = {}) {
     endLeading() {
       const wasLeading = movingItself;
       movingItself = false;
+      selfMoveRequested = false;
       return wasLeading;
     },
 
