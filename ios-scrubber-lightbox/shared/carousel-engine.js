@@ -204,6 +204,19 @@ export function createCarousel(wrapper, options = {}) {
     ctx.onProgress?.(computeCurrentIndex(progress, geometry.get().items.length), progress);
   }
 
+  // Onto `leader`'s timeline while the two are at rest together, so the
+  // leader's next gesture moves this carousel from its first frame (see
+  // restOnTimeline in linked-scrolling/link.js). Only ever that: where it
+  // can't go onto the timeline, it leaves this carousel exactly as it is,
+  // rather than writing a position into whatever it might be in the middle
+  // of - a snap settling between two notches of a wheel, say.
+  function restOn(leader) {
+    if (timelineFollow.leader() === leader) return;
+    if (press.isPressed() || attribution.isMovingItself() || !timelineFollow.canShow(leader)) return;
+    follow(leader);
+    endFollowing();
+  }
+
   // Off the leader's timeline and back onto a real scroll position that
   // shows what the timeline was showing, handing snap back with it. Called
   // the instant real input lands on this carousel, or a command is given to
@@ -382,9 +395,13 @@ export function createCarousel(wrapper, options = {}) {
     // While following on a timeline, the progress being shown is the
     // leader's, not what this carousel's own scroll position says.
     getCurrentProgress: () => timelineFollow.leader()?.getCurrentProgress() ?? geometry.getCurrentProgress(),
-    getProgressKnots: geometry.getProgressKnots,
+    // None while following on a timeline: its scroll offset is frozen there
+    // and doesn't map to the progress it shows, so nothing can follow it on
+    // its own timeline until it's back on its own scroll.
+    getProgressKnots: () => (timelineFollow.leader() ? [] : geometry.getProgressKnots()),
     setProgressDirect,
     follow,
+    restOn,
     getScrollSource: attribution.getScrollSource,
     getMotionState: attribution.getMotionState,
     // Notified whenever this carousel changes between leading, following and

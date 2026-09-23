@@ -12,7 +12,7 @@
 //
 // No gap-compensation needed: nothing here changes an item's size, so no
 // gap ever opens between neighbours.
-import { computeCurrentProgress, computeCurrentIndex, computeAnimationRanges } from "../carousel-math.js";
+import { computeCurrentProgress, computeCurrentIndex, computeAnimationRanges, transition } from "../carousel-math.js";
 import { RuleSheet } from "./helpers/style-swap.js";
 
 let nextItemId = 0;
@@ -70,6 +70,7 @@ function setup(ctx) {
 
   state.keyframeSheet.flush();
   state.positionSheet.flush();
+  state.noncurrentOpacity = parseFloat(getComputedStyle(wrapper).getPropertyValue("--noncurrent-opacity"));
 }
 
 // The timelines draw everything; this only reports which item is current,
@@ -82,4 +83,22 @@ function apply(ctx) {
   onProgress(computeCurrentIndex(currentProgress, items.length), currentProgress);
 }
 
-export const fadeEffect = { onItemCreated, setup, apply };
+// Following on another carousel's timeline (see
+// linked-scrolling/timeline-follow.js): each item's opacity at each sample,
+// and the distance between this carousel's scroll and where it is being
+// shown, as a translate - transform held at none so the stylesheet's own
+// correction stays out of it.
+function followFrames(ctx, samples) {
+  const { items } = ctx.getGeometry();
+  const { noncurrentOpacity } = getWrapperState(ctx.wrapper);
+  return Array.from(items, (item, i) => ({
+    target: item,
+    keyframes: samples.map(({ progress, scrollError }) => ({
+      opacity: String(transition(Math.max(1 - Math.abs(progress - i), 0), noncurrentOpacity, 1)),
+      translate: `${scrollError}px 0`,
+      transform: "none"
+    }))
+  }));
+}
+
+export const fadeEffect = { onItemCreated, setup, apply, followFrames };

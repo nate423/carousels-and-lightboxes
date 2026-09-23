@@ -30,7 +30,7 @@ implements.
 ## What a carousel has to provide
 
 `link.js` calls `getCurrentProgress`, `getProgressKnots`, `setProgressDirect`,
-`follow`, `isMovingItself`, `selfScrollStartedAt`, `getItems`, `onScroll`,
+`follow`, `restOn` (optional), `isMovingItself`, `selfScrollStartedAt`, `getItems`, `onScroll`,
 `onScrollEnd` and `endFollowing`, and a leader's `wrapper` is the source of
 the scroll timeline a continuous follower is drawn on. `carousel-engine.js`
 implements all of them, and builds the attribution, snap suspension and

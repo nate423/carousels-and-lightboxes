@@ -37,12 +37,11 @@ export function attachFilmstrip(mainCarousel, scrubberWrapper) {
     createItem: () => {}
   });
 
-  // The strip, while following, comes along continuously; the main carousel,
-  // while following, jumps the instant the strip's current item changes.
-  // Spelled out rather than left to linked-scrolling/link.js's defaults, because it
-  // is a decision this page made rather than one it inherited.
+  // Each comes along continuously while following the other. Spelled out
+  // rather than left to linked-scrolling/link.js's defaults, because it is a
+  // decision this page made rather than one it inherited.
   linkCarousels(mainCarousel, scrubber, {
-    aWhileFollowing: "instant",
+    aWhileFollowing: "continuous",
     bWhileFollowing: "continuous"
   });
 

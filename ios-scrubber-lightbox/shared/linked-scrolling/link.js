@@ -145,11 +145,10 @@ export function linkCarousels(a, b, { aWhileFollowing, bWhileFollowing }) {
   // is where the user just left it, and it must not jump to meet a leader
   // that hasn't caught up with it yet.
   function restOnTimeline(follower, leader) {
-    if (whileFollowing.get(follower) !== "continuous") return;
+    if (whileFollowing.get(follower) !== "continuous" || !follower.restOn) return;
     if (follower.isMovingItself() || leader.isMovingItself()) return;
     if (Math.abs(follower.getCurrentProgress() - leader.getCurrentProgress()) > 0.05) return;
-    follower.follow(leader);
-    follower.endFollowing();
+    follower.restOn(leader);
   }
 
   // After a gesture, once things have been still for a moment rather than

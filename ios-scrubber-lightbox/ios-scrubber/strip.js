@@ -50,8 +50,9 @@ export function attachIosScrubber(mainCarousel, scrubberWrapper) {
     scrubberWrapper.dataset.contrast = state === "leading" ? "off" : "on";
   });
 
+  // Each comes along continuously while following the other.
   linkCarousels(mainCarousel, scrubber, {
-    aWhileFollowing: "instant",
+    aWhileFollowing: "continuous",
     bWhileFollowing: "continuous"
   });
 
