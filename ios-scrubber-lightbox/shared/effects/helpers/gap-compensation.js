@@ -79,6 +79,17 @@ function computeTranslations(anchors, sizes, scales, currentProgress) {
   return translations;
 }
 
+// The whole look at one currentProgress: how current each item is, the
+// scale that gives it, and the translate that closes the gaps those scales
+// open. What the breakpoints below sample, and what scale-fade.js paints
+// directly when the timelines can't reach a progress at all.
+export function computeGapCompensatedFrame(anchors, sizes, noncurrentScale, currentProgress) {
+  const itemProgress = anchors.map((_, i) => computeItemProgress(currentProgress, i));
+  const scales = itemProgress.map((p) => transition(p, noncurrentScale, 1));
+  const translations = computeTranslations(anchors, sizes, scales, currentProgress);
+  return { itemProgress, scales, translations };
+}
+
 // Precomputes the exact breakpoints needed to reconstruct
 // computeTranslations' output as a native CSS @keyframes curve - one per
 // item, driven by a scroll-timeline (see scale-fade.js).
@@ -110,8 +121,7 @@ export function computeTranslationBreakpoints(anchors, sizes, noncurrentScale) {
 
   const breakpoints = extendedAnchors.map((scrollAnchor) => {
     const currentProgress = computeCurrentProgress(extendedAnchors, scrollAnchor) - 1;
-    const scales = anchors.map((_, i) => transition(computeItemProgress(currentProgress, i), noncurrentScale, 1));
-    const translations = computeTranslations(anchors, sizes, scales, currentProgress);
+    const { translations } = computeGapCompensatedFrame(anchors, sizes, noncurrentScale, currentProgress);
 
     return { scrollAnchor, translations };
   });

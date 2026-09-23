@@ -132,7 +132,7 @@ body {
    length (see expand.js's header) - the strip's own pitch badly undersamples
    writes coming that sparsely, so the transition is what turns visible
    discrete jumps into motion. This page's strip is driven by ramka's Slides,
-   whose scroll listener writes --expand-progress every rAF-throttled scroll
+   whose scroll listener writes the strip's progress every rAF-throttled scroll
    frame already (shared/carousel-engine.js) - already-smooth input, so
    adding a 200ms ease on top only trails it by half that (confirmed: ~100ms
    visible lag while the main image drove the strip). It also compounded

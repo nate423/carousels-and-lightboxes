@@ -87,12 +87,13 @@ function onItemCreated(item) {
 // getDrivenProgress exists to avoid, and reading position back through
 // the timeline walks straight into it.
 //
-// So on that path the animation is switched off and the exact fractional
-// progress is written instead: one property write per frame (against
-// sixty for a look that paints each item from JS), only while something
-// else is driving. The switch is per handoff, not per frame - re-enabling
-// the animation is free, since its progress is the scroll position rather
-// than an elapsed time, so it resumes exactly where the scroll already is.
+// So on that path the exact fractional progress is written instead: one
+// property write per frame (against sixty for a look that paints each item
+// from JS), only while something else is driving. The animation keeps
+// running underneath; the written value simply takes precedence over it
+// (see --expand-progress in expand.css), and removing it hands back to the
+// animation exactly where the scroll already is, since its progress is the
+// scroll position rather than an elapsed time.
 //
 // `progressDriver` pins this choice for comparison: "css" always reads
 // the scroll position, "js" always writes progress. The default picks
@@ -127,25 +128,25 @@ export function expandEffect({ progressDriver = "auto" } = {}) {
     const animationName = `expand-progress-${stripId}`;
     const styleEl = replaceStyleEl(
       previous?.styleEl,
-      `@keyframes ${animationName} {\n  from { --expand-progress: 0; }\n  to { --expand-progress: ${items.length - 1}; }\n}`
+      `@keyframes ${animationName} {\n  from { --expand-timeline-progress: 0; }\n  to { --expand-timeline-progress: ${items.length - 1}; }\n}`
     );
+    wrapper.style.animationName = animationName;
 
     stateByWrapper.set(wrapper, {
       stripId,
       styleEl,
-      animationName,
       items,
       anchors,
-      // Unset rather than false, so the first apply() always writes which
-      // source is in use instead of assuming the wrapper already agrees.
-      writingProgress: undefined
+      // Carried over rather than reset, since setup() leaves whatever
+      // apply() last wrote on the wrapper in place.
+      writingProgress: previous?.writingProgress ?? false
     });
   }
 
   function apply(ctx) {
     const { wrapper, getScrollSource, getDrivenProgress, onProgress, currentScrollAnchor } = ctx;
     const state = stateByWrapper.get(wrapper);
-    const { anchors, items, animationName } = state;
+    const { anchors, items } = state;
 
     const isDriven = getScrollSource() === "driven";
     const scrollAnchor = currentScrollAnchor();
@@ -158,19 +159,14 @@ export function expandEffect({ progressDriver = "auto" } = {}) {
     // lets the end item wind down as if one more item lay beyond it.
     const overscrolled = currentProgress < 0 || currentProgress > items.length - 1;
     const writingProgress = progressDriver === "js" || (progressDriver === "auto" && (isDriven || overscrolled));
-    if (writingProgress !== state.writingProgress) {
-      state.writingProgress = writingProgress;
-      // An animation outranks an inline custom property, so the two can't
-      // both be live - handing over means turning the other one off.
-      wrapper.style.animationName = writingProgress ? "none" : animationName;
-      if (!writingProgress) {
-        wrapper.style.removeProperty("--expand-progress");
-        wrapper.style.removeProperty("--scroll-error");
-      }
+    if (!writingProgress && state.writingProgress) {
+      wrapper.style.removeProperty("--expand-driven-progress");
+      wrapper.style.removeProperty("--scroll-error");
     }
+    state.writingProgress = writingProgress;
 
     if (writingProgress) {
-      wrapper.style.setProperty("--expand-progress", currentProgress);
+      wrapper.style.setProperty("--expand-driven-progress", currentProgress);
       // Where the items' boxes actually are, versus where the progress
       // being painted says they should be. This look's formula reduces to
       // a function of progress alone only by assuming those agree - true

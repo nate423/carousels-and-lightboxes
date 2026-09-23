@@ -32,10 +32,16 @@
 /* Registered so they interpolate - an unregistered custom property is an
    untyped token string, which keyframes and transitions can only swap at
    the halfway mark, not animate through. --expand-progress and
-   --item-progress inherit: the wrapper animates the first, the item
-   computes the second from it, and a nested thumb needs to read that
-   same value. --item-shift doesn't inherit - only the item that computes
-   it ever reads it. */
+   --item-progress inherit: the wrapper sets the first, the item computes
+   the second from it, and a nested thumb needs to read that same value.
+   --expand-timeline-progress and --item-shift don't inherit - only the
+   element that sets each one ever reads it. */
+@property --expand-timeline-progress {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 0;
+}
+
 @property --expand-progress {
   syntax: "<number>";
   inherits: true;
@@ -87,6 +93,16 @@
   animation-timeline: --carousel-scroll;
   animation-fill-mode: both;
   animation-timing-function: linear;
+
+  /* The animation advances --expand-timeline-progress, and this is where
+     it becomes the progress the items read - unless expand.js has written
+     --expand-driven-progress, which it does whenever the scroll position
+     can't say where the strip should be (while another carousel drives it,
+     or while it's overscrolled). The written value wins by sitting in front
+     of the fallback here, not by switching the animation off, so the
+     animation never has to stop and restart - and never has to be trusted
+     to stay stopped. */
+  --expand-progress: var(--expand-driven-progress, var(--expand-timeline-progress));
 
   /* The look's own default size for the items nested inside, listed after
      this wrapper's own properties above: a collapsed thumbnail is 2:3, the

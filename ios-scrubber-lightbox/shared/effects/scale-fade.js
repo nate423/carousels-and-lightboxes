@@ -19,9 +19,10 @@ import {
   computeCurrentProgress,
   computeCurrentIndex,
   computeScrollAnchorForProgress,
-  computeAnimationRanges
+  computeAnimationRanges,
+  computeEdgeAnchors
 } from "../carousel-math.js";
-import { computeTranslationBreakpoints } from "./helpers/gap-compensation.js";
+import { computeTranslationBreakpoints, computeGapCompensatedFrame } from "./helpers/gap-compensation.js";
 import { RuleSheet } from "./helpers/style-swap.js";
 
 // `animation-timing-function` only reshapes the curve *within* one
@@ -189,17 +190,63 @@ function setup(ctx) {
     setItemCurrentKeyframes(state, item, ranges[i].peakX, ranges[i], translateStops, translateRange);
   });
   flushKeyframeStyles(state);
+
+  const { before, after } = computeEdgeAnchors(anchors, sizes);
+  state.extendedAnchors = [before, ...anchors, after];
+  state.noncurrentScale = getNoncurrentScale(wrapper);
+  state.noncurrentOpacity = parseFloat(getComputedStyle(wrapper).getPropertyValue("--noncurrent-opacity"));
 }
 
-// Scale/opacity/translate are all driven entirely by the CSS scroll-driven
-// animations on .carousel-item; this only computes the discrete current
-// index for the page dots, since no timeline hands that back to JS.
+// Past either end while driven, the progress asked for is somewhere this
+// carousel's own scroll can't go - it stops at 0 or maxScroll - so the
+// timelines, which only ever see that scroll, hold the end item at full.
+// The look is painted from JS instead, for just those frames: !important,
+// because that is what outranks a running animation, and taken off again
+// the moment the progress is back in range, where the timelines already
+// agree with it.
+//
+// The scroll error rides along in the same translate, rather than on
+// transform as usual: transform applies inside scale, so each item would
+// carry the error scaled by its own size - a fraction of a pixel's
+// difference in range, but out here, where the error is the whole
+// overscroll, it visibly opens the gaps back up.
+function paintOverscroll(state, items, anchors, sizes, currentProgress, scrollError) {
+  const { scales, itemProgress, translations } = computeGapCompensatedFrame(
+    anchors,
+    sizes,
+    state.noncurrentScale,
+    currentProgress
+  );
+  items.forEach((item, i) => {
+    const opacity = state.noncurrentOpacity + itemProgress[i] * (1 - state.noncurrentOpacity);
+    item.style.setProperty("scale", String(scales[i]), "important");
+    item.style.setProperty("opacity", String(opacity), "important");
+    item.style.setProperty("translate", `${translations[i] + scrollError}px 0`, "important");
+  });
+  state.paintingOverscroll = true;
+}
+
+function clearOverscroll(state, items) {
+  if (!state.paintingOverscroll) return;
+  items.forEach((item) => {
+    item.style.removeProperty("scale");
+    item.style.removeProperty("opacity");
+    item.style.removeProperty("translate");
+  });
+  state.paintingOverscroll = false;
+}
+
+// Scale/opacity/translate are driven by the CSS scroll-driven animations on
+// .carousel-item, except while driven past either end (see
+// paintOverscroll); otherwise this only computes the discrete current index
+// for the page dots, since no timeline hands that back to JS.
 function apply(ctx) {
   const { wrapper, getScrollSource, getDrivenProgress, getGeometry, currentScrollAnchor, onProgress } = ctx;
   // Shared with the engine and with anything else watching this wrapper,
   // rather than re-measured here: this runs on every scroll frame, and a
   // pass over every item is the one thing it must not do per frame.
-  const { items, anchors } = getGeometry();
+  const { items, anchors, sizes } = getGeometry();
+  const state = getWrapperState(wrapper);
   const scrollAnchor = currentScrollAnchor();
 
   // While something else drives this carousel, its progress is exact but
@@ -216,13 +263,25 @@ function apply(ctx) {
   const isDriven = getScrollSource() === "driven";
   const currentProgress = isDriven ? getDrivenProgress() : computeCurrentProgress(anchors, scrollAnchor);
 
-  if (isDriven) {
-    wrapper.style.setProperty(
-      "--scroll-error",
-      (scrollAnchor - computeScrollAnchorForProgress(anchors, currentProgress)).toFixed(3) + "px"
-    );
-  } else if (wrapper.style.getPropertyValue("--scroll-error")) {
-    wrapper.style.removeProperty("--scroll-error");
+  //
+  // Measured against the imaginary items past each end (see
+  // computeEdgeAnchors), so a progress driven past the end carries this
+  // carousel at the same pitch its own overscroll would.
+  const overscrolled = isDriven && (currentProgress < 0 || currentProgress > items.length - 1);
+  if (overscrolled) {
+    const scrollError = scrollAnchor - computeScrollAnchorForProgress(state.extendedAnchors, currentProgress + 1);
+    wrapper.style.setProperty("--scroll-error", "0px");
+    paintOverscroll(state, items, anchors, sizes, currentProgress, scrollError);
+  } else {
+    clearOverscroll(state, items);
+    if (isDriven) {
+      wrapper.style.setProperty(
+        "--scroll-error",
+        (scrollAnchor - computeScrollAnchorForProgress(state.extendedAnchors, currentProgress + 1)).toFixed(3) + "px"
+      );
+    } else if (wrapper.style.getPropertyValue("--scroll-error")) {
+      wrapper.style.removeProperty("--scroll-error");
+    }
   }
 
   onProgress?.(computeCurrentIndex(currentProgress, items.length), currentProgress);
