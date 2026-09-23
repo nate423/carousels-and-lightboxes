@@ -67,80 +67,12 @@ body {
   pointer-events: auto;
 }
 
-/* Registered so it interpolates at all - see ios-scrubber.css's own copy of
-   this rule for why an unregistered custom property can't transition. */
-@property --contrast-amount {
-  syntax: '<number>';
-  inherits: true;
-  initial-value: 1;
-}
-
-@property --item-progress-effective {
-  syntax: '<number>';
-  inherits: true;
-  initial-value: 1;
-}
-
-.ios-thumbnail-scrubber-strip {
-  transition: --contrast-amount 200ms ease;
-}
-
-.ios-thumbnail-scrubber-strip[data-contrast='off'] {
-  --contrast-amount: 0;
-}
-
-/* Same split as ios-scrubber.css: --item-progress-effective is where the
-   look's raw --item-progress and this page's --contrast-amount dimmer
-   combine, read by expand.css's thumb-width formula (its --item-shift
-   transform reads --contrast-amount directly and needs no such indirection). */
-.ios-thumbnail-scrubber-strip .carousel-item {
-  --item-progress-effective: calc(var(--contrast-amount) * var(--item-progress));
-}
-
-/* Fixed height/flex always, but NOT width - see ios-scrubber.css's own copy
-   of this rule for the item box, which is right to stay fixed (the item's
-   growth is drawn as overflow and a transform, never a bigger box, so this
-   scroller's snap points/offset reads can't move as a side effect of the
-   look). The thumb is different: expand.css's own .expand-effect-thumb rule
-   (shared/effects/expand.css) already owns its width with the growth
-   formula - var(--expand-item-width) + --item-progress-effective *
-   --expand-thumb-growth. Restating a static width here matches that rule's
-   specificity and loads after it, so it silently won every time regardless
-   of --item-progress-effective - the current thumb never grew, and
-   flattening contrast during a drag had nothing visible to flatten. */
-.ios-thumbnail-scrubber-strip .expand-effect-item {
-  flex: 0 0 auto;
-  width: var(--expand-item-width);
-  height: var(--expand-item-height);
-  overflow: visible;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
+/* The thumbnails' own finish. Their size, and everything about how they
+   grow, is the expand look's (see shared/effects/expand.css). */
 .ios-thumbnail-scrubber-strip .expand-effect-thumb {
-  flex: 0 0 auto;
-  height: var(--expand-item-height);
   border-radius: 4px;
-  overflow: hidden;
   background-color: hsl(220, 14%, 70%);
 }
-
-/* expand.css ships transition: none on both, and this page keeps that,
-   unlike ios-scrubber.css. That page re-enables a 200ms transform/width
-   transition because its strip is driven by a carousel roughly 8x its own
-   length (see expand.js's header) - the strip's own pitch badly undersamples
-   writes coming that sparsely, so the transition is what turns visible
-   discrete jumps into motion. This page's strip is driven by ramka's Slides,
-   whose scroll listener writes the strip's progress every rAF-throttled scroll
-   frame already (shared/carousel-engine.js) - already-smooth input, so
-   adding a 200ms ease on top only trails it by half that (confirmed: ~100ms
-   visible lag while the main image drove the strip). It also compounded
-   with --contrast-amount's own transition on scrollend, since
-   --item-progress-effective already carries that transition through its own
-   calc() chain without a separate declaration here - together they made the
-   strip's re-expansion read as slower and more drawn out than the reference
-   page instead of matching it. */
 
 .ios-thumbnail-scrubber-strip .expand-effect-thumb img {
   width: 100%;

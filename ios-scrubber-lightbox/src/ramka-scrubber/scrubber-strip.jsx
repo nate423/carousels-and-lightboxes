@@ -20,12 +20,6 @@
  * (scroll/scrollend, on `wrapper` itself) and linkCarousels' wiring have no
  * teardown either, so they stay live through StrictMode's simulated
  * unmount regardless - only the guard above stops a second real init.
- * Unsubscribing just the onMotionChange listener on that fake unmount
- * (this file used to) left it permanently empty afterward, since the
- * guard then skips resubscribing it on the second, real mount - everything
- * else kept working (no teardown to lose), only the contrast-flattening
- * callback silently went dead. Matching the "nothing here ever tears down"
- * reality throughout avoids that asymmetry.
  */
 import { useEffect, useRef } from 'react';
 import { createCarousel } from '../../shared/carousel-engine.js';
@@ -43,7 +37,10 @@ export function ScrubberStrip({ items }) {
 
     const scrubber = createCarousel(wrapper, {
       itemCount: items.length,
-      effect: expandEffect(),
+      // Same as the iOS scrubber page: the thumbnails flatten out while the
+      // strip itself is being dragged, and grow again once something else
+      // is driving it or it's at rest.
+      effect: expandEffect({ flattenWhileLeading: true }),
       createItem: (item, i) => {
         const thumb = item.querySelector('.expand-effect-thumb');
         const img = document.createElement('img');
@@ -52,13 +49,6 @@ export function ScrubberStrip({ items }) {
         img.draggable = false;
         thumb.appendChild(img);
       }
-    });
-
-    // Same trick as the iOS scrubber page: flatten the thumbnails while the
-    // strip itself is being dragged, grow again once something else is
-    // driving it or it's at rest.
-    scrubber.onMotionChange((state) => {
-      wrapper.dataset.contrast = state === 'leading' ? 'off' : 'on';
     });
 
     // Public contract only (see @ramka/react's lightbox-data-attributes.js) -

@@ -14,8 +14,8 @@
 // gap ever opens between neighbours.
 import { computeCurrentProgress, computeCurrentIndex, computeAnimationRanges, transition } from "../carousel-math.js";
 import { RuleSheet } from "./helpers/style-swap.js";
+import { nextItemId } from "./helpers/item-id.js";
 
-let nextItemId = 0;
 const stateByWrapper = new WeakMap();
 
 // One set of generated rules per wrapper, not per page - see scale-fade.js
@@ -30,7 +30,7 @@ function getWrapperState(wrapper) {
 }
 
 function onItemCreated(item) {
-  item.dataset.itemId = String(nextItemId++);
+  item.dataset.itemId = nextItemId();
 }
 
 function setup(ctx) {

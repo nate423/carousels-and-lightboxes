@@ -13,7 +13,7 @@
 // bigger" visual logic lives in shared/effects/expand.js; this file just
 // wires up fixed-size, non-aspect-ratio-preserving items (unlike the
 // original, whose thumbnails mirror each source item's real aspect
-// ratio) and the contrast policy that flattens the thumbnails while the
+// ratio), with the look's own option to flatten the thumbnails while the
 // strip itself is being dragged.
 //
 // The strip's dimensions (--expand-item-width/-height/-width-grown,
@@ -30,25 +30,15 @@ export function attachIosScrubber(mainCarousel, scrubberWrapper, { followOnTimel
 
   const scrubber = createCarousel(scrubberWrapper, {
     itemCount,
-    effect: expandEffect(),
+    // The thumbnails flatten out while you're dragging the strip itself,
+    // and whichever one you come to rest on grows, as in iOS Photos. While
+    // it's merely following the main carousel, it tracks along grown.
+    effect: expandEffect({ flattenWhileLeading: true }),
     // The thumb the look paints is added in onItemCreated; there is no
     // per-item content beyond it, and the engine's default would fill each
     // item with its own index as text.
     createItem: () => {},
     followOnTimeline
-  });
-
-  // This style's defining behavior: the thumbnails flatten out while
-  // you're dragging the strip itself, and whichever one you come to rest
-  // on grows. While it's merely following the main carousel, it keeps
-  // its contrast and tracks along grown - so only "leading" flattens it,
-  // no other motion state.
-  //
-  // The look reads data-contrast from CSS (see --contrast-amount and its
-  // transition in this page's stylesheet), so nothing here has to
-  // re-render anything.
-  scrubber.onMotionChange((state) => {
-    scrubberWrapper.dataset.contrast = state === "leading" ? "off" : "on";
   });
 
   // Each comes along continuously while following the other.

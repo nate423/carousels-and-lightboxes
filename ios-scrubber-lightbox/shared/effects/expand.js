@@ -1,215 +1,356 @@
 // A carousel look for fixed-size items at a constant gap, where only the
-// one nearest the center grows - both its own box and the room its
-// neighbours leave around it - drawn as overflow and a transform rather
-// than a bigger layout box. Used by the iOS-Photos-style scrubber strip,
-// but nothing here is specific to that page.
+// one nearest the center grows - both its own thumbnail and the room its
+// neighbours leave around it - drawn entirely with translate and scale,
+// never with a bigger layout box. Used by the iOS-Photos-style scrubber
+// strip, but nothing here is specific to that page.
 //
 // The same look computed by hand is archived at
 // archive/proto-v1/js/effects/ios-scrubber-effect.js (settle-effect.js
-// wrapped around looks/ios-box-look.js) - the reference this one's
-// derivation below was checked against.
+// wrapped around looks/ios-box-look.js) - the reference the derivation
+// below was checked against.
 //
-// --- Why this needs no keyframes per item -------------------------------
+// --- The look, as a function of progress ---------------------------------
 //
-// The archived ios-box-look.js lays every item out a second time in visual
-// terms - each at its real grown footprint - and translates it by the
-// difference between that layout and its own fixed box. With F =
-// footprintGrowth, P = currentProgress and u = i - P (how many items away
-// item i is from current, signed), that reduces to:
+// With P = currentProgress and u = i - P (how many items away item i is
+// from current, signed):
 //
 //   lo(u)   = clamp(0, 1 + u, 1)
 //   hi(u)   = clamp(0, u, 1)
-//   grow_i  = lo - hi                                (the 0-1 itemProgress)
-//   shift_i = F * ((lo + hi)/2 - 1/2)
+//   grow_i  = lo - hi                            (0 to 1: how current it is)
+//   shift_i = F * ((lo + hi)/2 - 1/2)            (F: footprint growth)
 //
-// The general form, for an anchor fraction a anywhere across the item, was
+// Each item's shift makes room for its grown neighbour; each item's
+// thumbnail is (collapsed + grow * growth) wide. Both are linear in P
+// between whole items, and every item runs the same curve offset by its
+// own index, so one set of keyframes serves the whole strip - each item
+// only gets its own animation-range, the two items either side of it.
 //
-//   shift_i = F * (a*lo + (1-a)*hi - a - bend)
-//   bend    = (1 - 2a) * frac(P) * (1 - frac(P))
+// --- Drawn with what the compositor can animate ---------------------------
 //
-// bend is worth keeping in view because it's where the cost was: the one
-// term that isn't a function of an item's own index, so it had to be
-// written from JS every frame. At a = 1/2 it's identically zero, and
-// what's left is static enough to live entirely in the stylesheet.
+// Only translate, scale and opacity animate off the main thread, so the
+// thumbnail's width can't be what grows. The thumbnail is laid out at its
+// grown width, always, clipped, and scaled on x down to the width it should
+// show; whatever it holds is scaled back the other way, so an image in it
+// is cropped narrower rather than squeezed. Nothing about the look ever
+// changes a box's size, so nothing it does can move the layout, the snap
+// points, or the scroll position underneath it.
 //
-// Every item runs that same formula against its own index, so unlike
-// scale-fade.js - whose per-item peak sits at a different, geometry-
-// dependent place for every item, forcing a generated @keyframes rule
-// each - the whole strip needs exactly one animation, advancing one
-// number from 0 to n-1 across the scroll range. Each item's own index is
-// a static custom property, and expand.css does the rest.
+// The counter-scale is 1/s, which isn't linear in P, so its keyframes are
+// sampled more finely than the others (COUNTER_STEPS per item).
 //
-// Item *sizes* drop out of this entirely: the translate is the difference
-// between two layouts, and each item's size appears identically in both.
-// What the formula does assume is that every item grows by the same
-// amount - an item growing to some width of its own (its source media's
-// aspect, say) makes F per-item, and the two global terms stop being
-// reconstructable from an item's own index. That case would want
-// generated per-item keyframes, like scale-fade.js, but could still keep
-// this one wrapper-level timeline rather than one per item.
+// --- Flattening while it leads --------------------------------------------
 //
-// The mapping from scroll offset to progress is linear here because this
-// look pins every item's layout box to the same fixed size, so the item
-// pitch is uniform - which is what lets the driving animation be two
-// stops instead of one per item.
-import {
-  computeCurrentProgress,
-  computeCurrentIndex,
-  computeScrollAnchorForProgress
-} from "../carousel-math.js";
-import { replaceStyleEl } from "./helpers/style-swap.js";
+// With flattenWhileLeading, the look falls away while the strip is being
+// dragged - every thumbnail collapsed, no room made - and comes back once
+// it lets go, as iOS Photos does. That can't be a multiplier on the look,
+// which is what it used to be, because nothing on the compositor
+// multiplies one animation by another. It doesn't need to be one: it only
+// ever changes as the strip starts or stops leading. Starting, the look as
+// it stands then eases to flat and holds there, over whatever the scroll
+// does; stopping, flat eases back to the look where the strip came to rest,
+// and hands back to the scroll-driven animations, which draw exactly that.
+import { computeCurrentProgress, computeCurrentIndex, computeScrollAnchorForProgress } from "../carousel-math.js";
+import { RuleSheet } from "./helpers/style-swap.js";
+import { usingScrollTimelinePolyfill } from "../engine/polyfill.js";
+import { nextItemId } from "./helpers/item-id.js";
+
+const COUNTER_STEPS = 6;
+const FLATTEN_DURATION = 200;
+const FLATTEN_STEPS = 8;
 
 let nextStripId = 0;
 
 const stateByWrapper = new WeakMap();
 
-function onItemCreated(item) {
-  item.classList.add("expand-effect-item");
-  const thumb = document.createElement("div");
-  thumb.classList.add("expand-effect-thumb");
-  item.appendChild(thumb);
+function clamp01(x) {
+  return Math.min(Math.max(x, 0), 1);
 }
 
-// Where the shared progress comes from depends on who's moving this
-// strip - the two cases have very different resolution.
-//
-// While the strip is scrolling itself, its own scroll position *is* the
-// ground truth, so the animation reads it directly and costs no JS per
-// frame at all.
-//
-// While another carousel drives it, that position is a lossy retelling
-// of the driver's: scroll position is quantised, and this strip is far
-// shorter than the carousel driving it (30 thumbnails at a 23px pitch
-// give it a 667px range against roughly 5300px, so one strip pixel is
-// worth eight of the driver's). The strip can only move in steps eight
-// times larger than the motion being asked of it, so it holds still for
-// several frames and then jumps - what the archived settle-effect.js's
-// getDrivenProgress exists to avoid, and reading position back through
-// the timeline walks straight into it.
-//
-// So on that path the exact fractional progress is written instead: one
-// property write per frame (against sixty for a look that paints each item
-// from JS), only while something else is driving. The animation keeps
-// running underneath; the written value simply takes precedence over it
-// (see --expand-progress in expand.css), and removing it hands back to the
-// animation exactly where the scroll already is, since its progress is the
-// scroll position rather than an elapsed time.
-//
-// `progressDriver` pins this choice for comparison: "css" always reads
-// the scroll position, "js" always writes progress. The default picks
-// per frame.
-export function expandEffect({ progressDriver = "auto" } = {}) {
-  function setup(ctx) {
-    const { wrapper, getGeometry } = ctx;
-    const { items, anchors } = getGeometry();
+// CSS's `ease`, which the flattening used when it was a transition: the
+// time-based animations below sample it into keyframes, since the
+// counter-scale has to be sampled anyway and a timing function would bend
+// its samples out of step with the thumbnail's own.
+function ease(t) {
+  const [x1, y1, x2, y2] = [0.25, 0.1, 0.25, 1];
+  const bez = (a, b, s) => 3 * a * s * (1 - s) ** 2 + 3 * b * s * s * (1 - s) + s ** 3;
+  let s = t;
+  for (let i = 0; i < 8; i++) {
+    const dx = (bez(x1, x2, s + 1e-4) - bez(x1, x2, s - 1e-4)) / 2e-4;
+    if (!dx) break;
+    s = Math.min(Math.max(s - (bez(x1, x2, s) - t) / dx, 0), 1);
+  }
+  return bez(y1, y2, s);
+}
 
-    // Before reading computed style below: --expand-item-width and its
-    // siblings default from .expand-effect itself (see expand.css), so the
-    // class has to be on the wrapper before this reads them, not after.
-    wrapper.classList.add("expand-effect");
+export function expandEffect({ flattenWhileLeading = false } = {}) {
+  function onItemCreated(item) {
+    item.classList.add("expand-effect-item");
+    item.dataset.itemId = nextItemId();
+    const thumb = document.createElement("div");
+    thumb.classList.add("expand-effect-thumb");
+    item.appendChild(thumb);
+  }
 
-    const style = getComputedStyle(wrapper);
-    const itemWidth = parseFloat(style.getPropertyValue("--expand-item-width"));
-    const grownWidth = parseFloat(style.getPropertyValue("--expand-item-width-grown"));
-    const grownPadding = parseFloat(style.getPropertyValue("--expand-grown-padding"));
-
-    const previous = stateByWrapper.get(wrapper);
-    const stripId = previous ? previous.stripId : nextStripId++;
-
-    // How much wider the thumb itself draws when fully grown, versus how
-    // much room the grown item takes from its neighbours - which also
-    // includes the breathing space either side of it. Both are drawn as
-    // overflow around the item's own fixed box, so only the second
-    // decides how far the neighbours are pushed away.
-    wrapper.style.setProperty("--expand-thumb-growth", grownWidth - itemWidth + "px");
-    wrapper.style.setProperty("--expand-footprint-growth", grownWidth - itemWidth + 2 * grownPadding + "px");
-    items.forEach((item, i) => item.style.setProperty("--expand-index", i));
-
-    const animationName = `expand-progress-${stripId}`;
-    const styleEl = replaceStyleEl(
-      previous?.styleEl,
-      `@keyframes ${animationName} {\n  from { --expand-timeline-progress: 0; }\n  to { --expand-timeline-progress: ${items.length - 1}; }\n}`
-    );
-    wrapper.style.animationName = animationName;
-
-    stateByWrapper.set(wrapper, {
-      stripId,
-      styleEl,
-      items,
-      anchors,
-      // Carried over rather than reset, since setup() leaves whatever
-      // apply() last wrote on the wrapper in place.
-      writingProgress: previous?.writingProgress ?? false
+  // What each item draws at one progress and one strength of the look (1
+  // in full, 0 flat), with `scrollError` - how far the scroll position sits
+  // from where the progress belongs - carried in the translate.
+  function frameAt(state, progress, strength = 1, scrollError = 0) {
+    const { dims } = state;
+    return state.items.map((item, i) => {
+      const u = i - progress;
+      const lo = clamp01(1 + u);
+      const hi = clamp01(u);
+      const shift = dims.footprintGrowth * ((lo + hi) / 2 - 0.5) * strength;
+      const scale = (dims.width + (lo - hi) * strength * (dims.grownWidth - dims.width)) / dims.grownWidth;
+      return {
+        item: { translate: `${shift + scrollError}px 0` },
+        thumb: { scale: `${scale} 1` },
+        content: { scale: `${1 / scale} 1` }
+      };
     });
   }
 
+  // Each element the look draws on, per item: the item, its thumbnail, and
+  // whatever the thumbnail holds.
+  function targetsOf(item) {
+    const thumb = item.querySelector(".expand-effect-thumb");
+    return { item, thumb, content: thumb ? [...thumb.children] : [] };
+  }
+
+  // Before the items are built: their sizes, and the look's default
+  // dimensions, hang off .expand-effect (see expand.css), and the engine
+  // measures the items as soon as they exist.
+  function prepare(wrapper) {
+    wrapper.classList.add("expand-effect");
+  }
+
+  function setup(ctx) {
+    const { wrapper, getGeometry } = ctx;
+    const { items, anchors, wrapperAnchorPoint } = getGeometry();
+
+    const style = getComputedStyle(wrapper);
+    const width = parseFloat(style.getPropertyValue("--expand-item-width"));
+    const grownWidth = parseFloat(style.getPropertyValue("--expand-item-width-grown"));
+    const grownPadding = parseFloat(style.getPropertyValue("--expand-grown-padding"));
+    const dims = { width, grownWidth, footprintGrowth: grownWidth - width + 2 * grownPadding };
+    // The thumbnail's scale at rest, for the stylesheet to fall back on
+    // before any animation resolves.
+    wrapper.style.setProperty("--expand-collapsed-scale", String(width / grownWidth));
+
+    const previous = stateByWrapper.get(wrapper);
+    const stripId = previous ? previous.stripId : nextStripId++;
+    const sheet = previous?.sheet ?? new RuleSheet();
+    const state = {
+      ...previous,
+      stripId,
+      sheet,
+      dims,
+      items: [...items],
+      targets: [...items].map(targetsOf),
+      anchors,
+      painting: previous?.painting ?? false,
+      strength: previous?.strength ?? 1,
+      flattening: previous?.flattening ?? []
+    };
+    stateByWrapper.set(wrapper, state);
+
+    // One curve for every item, across the two items either side of it:
+    // 0% is the previous item current, 50% this one, 100% the next.
+    const names = { item: `expand-item-${stripId}`, thumb: `expand-thumb-${stripId}`, content: `expand-content-${stripId}` };
+    // Sampled as item 0 at progress 2t - 1, which is any item i at i - 1 + 2t.
+    const steps = COUNTER_STEPS * 2;
+    const curve = Array.from({ length: steps + 1 }, (_, k) => {
+      const t = k / steps;
+      const [frame] = frameAt({ dims, items: [null] }, 2 * t - 1);
+      return { percent: t * 100, frame };
+    });
+    const keyframes = (name, pick, stops) =>
+      `@keyframes ${name} {\n${stops.map((stop) => `  ${stop.percent}% { ${pick(stop.frame)} }`).join("\n")}\n}`;
+    const linearStops = [0, steps / 2, steps].map((k) => curve[k]);
+    sheet.set("keyframes-item", keyframes(names.item, (f) => `translate: ${f.item.translate};`, linearStops));
+    sheet.set("keyframes-thumb", keyframes(names.thumb, (f) => `scale: ${f.thumb.scale};`, linearStops));
+    sheet.set("keyframes-content", keyframes(names.content, (f) => `scale: ${f.content.scale};`, curve));
+
+    // Each item's range: from the scroll offset where the item before it is
+    // current to where the item after it is. The pitch is uniform, so the
+    // items either side of the ends are one pitch further out.
+    const pitch = anchors.length > 1 ? anchors[1] - anchors[0] : 0;
+    items.forEach((item, i) => {
+      const start = anchors[i] - pitch - wrapperAnchorPoint;
+      const range = `${start}px ${start + 2 * pitch}px`;
+      const { thumb } = state.targets[i];
+      const id = item.dataset.itemId;
+      const rules = [
+        [item, `.expand-effect-item[data-item-id="${id}"]`, names.item],
+        [thumb, `.expand-effect-item[data-item-id="${id}"] > .expand-effect-thumb`, names.thumb],
+        [null, `.expand-effect-item[data-item-id="${id}"] > .expand-effect-thumb > *`, names.content]
+      ];
+      rules.forEach(([el, selector, name]) => {
+        // Inline for native engines, and as a real rule for the polyfill,
+        // which only finds animations by parsing stylesheets (see
+        // scale-fade.js's positionSheet); the content has no single
+        // element to set inline on, so it only has the rule.
+        if (el) {
+          el.style.animationName = name;
+          el.style.animationRange = range;
+        }
+        // The polyfill reads a rule's animation-timeline alongside its
+        // animation-name, so it's restated here rather than left to
+        // expand.css's shared rule.
+        sheet.set(
+          `${selector}`,
+          `${selector} { animation-name: ${name}; animation-timeline: --carousel-scroll; animation-range: ${range}; }`
+        );
+      });
+    });
+    sheet.flush();
+  }
+
+  // Painting from script, where the scroll-driven animations can't show
+  // what this carousel should: past either end, where they hold the end
+  // item at full, and while another carousel writes its scroll position
+  // directly, where they would draw the quantised position rather than the
+  // exact progress the driver asked for - which on a strip this short moves
+  // the thumbnails in visible steps. !important, since that is what
+  // outranks a running animation.
+  function paint(state, progress, scrollError) {
+    const frame = frameAt(state, progress, state.strength, scrollError);
+    state.targets.forEach(({ item, thumb, content }, i) => {
+      item.style.setProperty("translate", frame[i].item.translate, "important");
+      thumb?.style.setProperty("scale", frame[i].thumb.scale, "important");
+      content.forEach((el) => el.style.setProperty("scale", frame[i].content.scale, "important"));
+    });
+    state.painting = true;
+  }
+
+  function clearPaint(state) {
+    if (!state.painting) return;
+    state.targets.forEach(({ item, thumb, content }) => {
+      item.style.removeProperty("translate");
+      thumb?.style.removeProperty("scale");
+      content.forEach((el) => el.style.removeProperty("scale"));
+    });
+    state.painting = false;
+  }
+
+  function currentProgressOf(ctx, state) {
+    return ctx.getScrollSource() === "driven"
+      ? ctx.getDrivenProgress()
+      : computeCurrentProgress(state.anchors, ctx.currentScrollAnchor());
+  }
+
   function apply(ctx) {
-    const { wrapper, getScrollSource, getDrivenProgress, onProgress, currentScrollAnchor } = ctx;
-    const state = stateByWrapper.get(wrapper);
-    const { anchors, items } = state;
-
+    const { getScrollSource, onProgress, currentScrollAnchor } = ctx;
+    const state = stateByWrapper.get(ctx.wrapper);
     const isDriven = getScrollSource() === "driven";
-    const scrollAnchor = currentScrollAnchor();
-    const currentProgress = isDriven ? getDrivenProgress() : computeCurrentProgress(anchors, scrollAnchor);
+    const currentProgress = currentProgressOf(ctx, state);
+    const overscrolled = currentProgress < 0 || currentProgress > state.items.length - 1;
 
-    // Overscrolled - rubber-banding past either end - the progress runs
-    // outside 0..n-1, which the animation can't follow: keyframes hold at
-    // their end values rather than carry on. computeCurrentProgress keeps
-    // going at the end segment's pitch, which is uniform here, so writing it
-    // lets the end item wind down as if one more item lay beyond it.
-    const overscrolled = currentProgress < 0 || currentProgress > items.length - 1;
-    const writingProgress = progressDriver === "js" || (progressDriver === "auto" && (isDriven || overscrolled));
-    if (!writingProgress && state.writingProgress) {
-      wrapper.style.removeProperty("--expand-driven-progress");
-      wrapper.style.removeProperty("--scroll-error");
+    // A timeline laid across another carousel draws this one while it
+    // follows on it; anything painted here would outrank it.
+    if (ctx.isOnTimeline()) {
+      clearPaint(state);
+    } else if (isDriven || overscrolled) {
+      const scrollError = currentScrollAnchor() - computeScrollAnchorForProgress(state.anchors, currentProgress);
+      paint(state, currentProgress, isDriven ? scrollError : 0);
+    } else {
+      clearPaint(state);
     }
-    state.writingProgress = writingProgress;
 
-    if (writingProgress) {
-      wrapper.style.setProperty("--expand-driven-progress", currentProgress);
-      // Where the items' boxes actually are, versus where the progress
-      // being painted says they should be. This look's formula reduces to
-      // a function of progress alone only by assuming those agree - true
-      // for a carousel scrolling itself, false for one being driven, where
-      // progress is exact but the scroll position written from it is
-      // quantised. Without this, the thumbnails' growth is smooth while
-      // the strip they sit on still steps a whole quantum at a time, which
-      // was most of the judder. The hand-computed look never needed it,
-      // since it keeps the real scroll position as a term instead of
-      // dividing it out.
-      wrapper.style.setProperty(
-        "--scroll-error",
-        (scrollAnchor - computeScrollAnchorForProgress(anchors, currentProgress)).toFixed(3) + "px"
+    onProgress?.(computeCurrentIndex(currentProgress, state.items.length), currentProgress);
+  }
+
+  // Eases the look between two strengths, at one progress, on top of the
+  // scroll-driven animations - see "Flattening while it leads" above.
+  function flattenTo(ctx, state, strength) {
+    if (state.strength === strength) return;
+    const from = state.strength;
+    state.strength = strength;
+    const progress = currentProgressOf(ctx, state);
+    const frames = Array.from({ length: FLATTEN_STEPS + 1 }, (_, k) =>
+      frameAt(state, progress, from + (strength - from) * ease(k / FLATTEN_STEPS))
+    );
+
+    // The scroll-driven animations stand aside for the whole of it - paused
+    // from the moment it starts, where they only hold the look it starts
+    // from, until the moment it has grown back and hands over to them.
+    // Running beneath it on the same elements, they would keep the browser
+    // from handing any of those elements' animations to the compositor (see
+    // timeline-follow.js, which does the same), and the collapsing and
+    // growing would run on the main thread. Under the polyfill there is no
+    // compositor to hand anything to.
+    const own = usingScrollTimelinePolyfill
+      ? []
+      : state.targets.flatMap(({ item, thumb, content }) =>
+          [item, thumb, ...content].filter(Boolean).flatMap((el) => el.getAnimations().filter((a) => a instanceof CSSAnimation))
+        );
+    own.forEach((animation) => animation.pause());
+
+    const previous = state.flattening;
+    const timing = { duration: FLATTEN_DURATION, fill: "forwards", easing: "linear" };
+    const animations = state.targets.flatMap(({ item, thumb, content }, i) => {
+      return [
+        item.animate(frames.map((f) => f[i].item), timing),
+        ...(thumb ? [thumb.animate(frames.map((f) => f[i].thumb), timing)] : []),
+        ...content.map((el) => el.animate(frames.map((f) => f[i].content), timing))
+      ];
+    });
+    // Started over the top of any still running the other way, which
+    // they now replace.
+    previous.forEach((animation) => animation.cancel());
+    state.flattening = animations;
+
+    // Back at full strength, the scroll-driven animations draw exactly
+    // where this ended, so it can go - in the same task they resume, unless
+    // another carousel's timeline has taken over drawing this one, which
+    // resumes them itself when it's done.
+    if (strength === 1) {
+      Promise.all(animations.map((animation) => animation.finished)).then(
+        () => {
+          if (state.flattening !== animations) return;
+          if (!ctx.isOnTimeline()) own.forEach((animation) => animation.play());
+          animations.forEach((animation) => animation.cancel());
+          state.flattening = [];
+        },
+        () => {}
       );
     }
-
-    onProgress?.(computeCurrentIndex(currentProgress, items.length), currentProgress);
   }
 
-  // Following on another carousel's timeline (see
-  // linked-scrolling/timeline-follow.js), the whole strip is still that one
-  // shared progress: animated on the wrapper, it outranks both the
-  // stylesheet's own timeline and any --expand-driven-progress left written,
-  // so nothing needs clearing first. The distance between where the strip's
-  // scroll sits and where it is being shown goes in --scroll-error, which
-  // every item's translate already adds, and which is registered, so it
-  // interpolates between keyframes rather than jumping at each.
+  function onMotionChange(ctx, motion) {
+    if (!flattenWhileLeading) return;
+    flattenTo(ctx, stateByWrapper.get(ctx.wrapper), motion === "leading" ? 0 : 1);
+  }
+
+  // Following another carousel on its timeline (see
+  // linked-scrolling/timeline-follow.js): the same three things drawn at
+  // each sample, at full strength, with the distance between this
+  // carousel's scroll and where it is being shown in the item's translate.
   function followFrames(ctx, samples) {
-    return [
-      {
-        target: ctx.wrapper,
-        keyframes: samples.map(({ progress, scrollError }) => ({
-          "--expand-progress": String(progress),
-          "--scroll-error": `${scrollError}px`
-        }))
-      }
-    ];
+    const state = stateByWrapper.get(ctx.wrapper);
+    const frames = samples.map(({ progress, scrollError }) => frameAt(state, progress, 1, scrollError));
+    return state.targets.flatMap(({ item, thumb, content }, i) => {
+      return [
+        { target: item, keyframes: frames.map((f) => f[i].item) },
+        ...(thumb ? [{ target: thumb, keyframes: frames.map((f) => f[i].thumb) }] : []),
+        ...content.map((el) => ({ target: el, keyframes: frames.map((f) => f[i].content) }))
+      ];
+    });
   }
 
-  // This effect owns every item's rendering, and nothing it writes
-  // changes an item's own border box - it draws with transforms and with
-  // properties confined inside the box (see engine/geometry-cache.js) -
-  // so the engine's item-level ResizeObserver has nothing real to recover
-  // here.
-  return { onItemCreated, setup, apply, followFrames, skipItemResizeObserver: true };
+  // This effect owns every item's rendering, and nothing it draws changes
+  // an item's own border box - so the engine's item-level ResizeObserver
+  // has nothing real to recover here.
+  return {
+    prepare,
+    onItemCreated,
+    setup,
+    apply,
+    onMotionChange,
+    followFrames,
+    // The counter-scale bends between whole items (see above), so a
+    // timeline laid across another carousel samples it more finely.
+    followSteps: COUNTER_STEPS,
+    skipItemResizeObserver: true
+  };
 }
