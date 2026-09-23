@@ -10,6 +10,7 @@ import { scaleFadeEffect } from "../shared/effects/scale-fade.js";
 import { attachFilmstrip } from "./strip.js";
 import { createPlaceholderItem } from "./placeholder-items.js";
 import { showBuildStamp } from "../dev/build-stamp.js";
+import { applyEdgeExperiment } from "../dev/edge-experiment.js";
 
 // ?follow=direct follows by writing scroll positions rather than on the
 // leader's timeline - the "before" side of compare/.
@@ -17,6 +18,7 @@ const followOnTimeline = new URLSearchParams(location.search).get("follow") !== 
 
 document.addEventListener("DOMContentLoaded", () => {
   showBuildStamp();
+  applyEdgeExperiment();
 
   const mainCarousel = createCarousel(document.getElementById("main-carousel"), {
     itemCount: 30,
