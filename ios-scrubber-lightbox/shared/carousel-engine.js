@@ -162,9 +162,20 @@ export function createCarousel(wrapper, options = {}) {
     onProgress: undefined
   };
 
+  // Snap stays off until the spacers have their real size. Sizing them means
+  // measuring the items, and that measurement forces a layout in which the
+  // spacers are still zero-width - where every item centred left of the
+  // wrapper's midpoint clamps to the same snap offset, 0. WebKit latches one
+  // of those as the item it is snapped to and, once the spacers grow, scrolls
+  // to keep that item centred, so the carousel loads a few items in rather
+  // than on the first one. With snap off through that layout there is nothing
+  // to latch, and snap comes back on a layout where 0 belongs to the first
+  // item alone.
+  snap.suspend();
   populateItems();
   effect.setup(ctx);
   effect.apply(ctx);
+  snap.restore();
   ready = true;
 
   const scrollListeners = new Set();
