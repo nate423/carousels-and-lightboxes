@@ -119,7 +119,9 @@ export function createRamkaSlidesController(slidesEl) {
   }
 
   const snap = createSlidesSnapSuspension(slidesEl);
-  const attribution = createScrollAttribution(slidesEl, { onSelfReclaim: snap.restore });
+  // ramka moves its slides itself - its buttons, its keys - through input
+  // this controller never sees, and every such move should carry the strip.
+  const attribution = createScrollAttribution(slidesEl, { onSelfReclaim: snap.restore, leadsUnasked: true });
   const geometry = createGeometryCache(slidesEl, getItems);
 
   function goToIndex(index, { behavior = "smooth" } = {}) {

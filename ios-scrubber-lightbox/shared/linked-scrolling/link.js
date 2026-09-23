@@ -32,9 +32,15 @@
 // follow, onScrollEnd and endFollowing.
 import { computeCurrentIndex } from "../carousel-math.js";
 
-// How long both carousels have to have been still before a follower goes
-// back onto its leader's timeline - see restOnTimeline.
-const REST_DELAY = 200;
+// Where a carousel that has come to rest is: on the item nearest its
+// progress, if its progress is close enough to one to be rounding in its
+// scroll position - mandatory snap leaves it on an item - and where it is,
+// if not.
+function restingProgress(carousel) {
+  const progress = carousel.getCurrentProgress();
+  const nearest = Math.round(progress);
+  return Math.abs(progress - nearest) < 0.05 ? nearest : progress;
+}
 
 function currentIndexOf(carousel) {
   return computeCurrentIndex(carousel.getCurrentProgress(), carousel.getItems().length);
@@ -69,7 +75,14 @@ export function linkCarousels(a, b, { aWhileFollowing, bWhileFollowing }) {
     // flick on the strip left the main carousel stuck a couple of items
     // short, having gotten no further update once the strip stopped
     // emitting scroll events).
-    function sync() {
+    //
+    // `atRest` is the catch-up: source's gesture is over and it has come to
+    // rest on an item. What's left of its progress past that item is
+    // rounding in its scroll position, which a continuous follower several
+    // times its size would show several times over, so the follower lands on
+    // the item itself, on a real scroll position rather than on source's
+    // timeline, and nothing source's scroll does from here reaches it.
+    function sync({ atRest = false } = {}) {
       if (destMovingMoreRecently()) return;
 
       // `dest` is the one being moved, so it is the one following, so its
@@ -78,7 +91,8 @@ export function linkCarousels(a, b, { aWhileFollowing, bWhileFollowing }) {
       // any write is already correctly attributed by the time dest's own
       // subscription sees it.
       if (whileFollowing.get(dest) === "continuous") {
-        dest.follow(source);
+        if (atRest) dest.setProgressDirect(restingProgress(source));
+        else dest.follow(source);
         return;
       }
 
@@ -111,15 +125,23 @@ export function linkCarousels(a, b, { aWhileFollowing, bWhileFollowing }) {
     // in carousel-engine.js), so unlike onScroll below, sync() here needs no
     // "was this a driven echo" check - by definition it wasn't.
     source.onScrollEnd(() => {
-      sync();
+      sync({ atRest: true });
       dest.endFollowing();
-      scheduleRestOnTimeline(source, dest);
     });
 
     source.onScroll(({ source: scrollSource }) => {
       if (scrollSource === "driven") {
         // This carousel is being written to by us; everything it emits until
         // something moves it for its own reasons is an echo of that write.
+        return;
+      }
+      if (!source.isMovingItself()) {
+        // Scrolled, but not because anything asked it to move: the browser
+        // re-snapping it after a layout change, or nudging it as its look
+        // changes size - which iOS does to the iOS scrubber's strip as its
+        // thumbnails grow back after a drag. Only a carousel moving for its
+        // own reasons leads, or that nudge, several times over, moves the
+        // carousel following it.
         return;
       }
       // `source` is moving for its own reasons, or we'd have returned above.
@@ -137,34 +159,6 @@ export function linkCarousels(a, b, { aWhileFollowing, bWhileFollowing }) {
     });
   }
 
-  // A continuous follower waits on its leader's own scroll timeline whenever
-  // the two are at rest together - at the start, and each time the follower
-  // finishes a gesture of its own - so that the leader's next gesture moves
-  // it from the first frame, with nothing to set up while anything is moving
-  // (see timeline-follow.js). Only where they already agree: the follower
-  // is where the user just left it, and it must not jump to meet a leader
-  // that hasn't caught up with it yet.
-  function restOnTimeline(follower, leader) {
-    if (whileFollowing.get(follower) !== "continuous" || !follower.restOn) return;
-    if (follower.isMovingItself() || leader.isMovingItself()) return;
-    if (Math.abs(follower.getCurrentProgress() - leader.getCurrentProgress()) > 0.05) return;
-    follower.restOn(leader);
-  }
-
-  // After a gesture, once things have been still for a moment rather than
-  // straight away, because a gesture can arrive as a run of separate scrolls
-  // - a mouse wheel's notches - that each end on their own, and each would
-  // otherwise build the animations again. Nothing waits on this: a follower
-  // that isn't on the timeline yet when its leader moves goes onto it then.
-  const restTimers = new Map();
-
-  function scheduleRestOnTimeline(follower, leader) {
-    clearTimeout(restTimers.get(follower));
-    restTimers.set(follower, setTimeout(() => restOnTimeline(follower, leader), REST_DELAY));
-  }
-
   wire(a, b);
   wire(b, a);
-  restOnTimeline(a, b);
-  restOnTimeline(b, a);
 }

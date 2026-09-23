@@ -45,7 +45,12 @@
 // trap: "self" is also what a carousel at rest reports, so anything that
 // treats it as "leading" fires at page load, before a gesture has happened
 // at all.
-export function createScrollAttribution(wrapper, { onSelfReclaim } = {}) {
+//
+// `leadsUnasked` counts every scroll that isn't a driven echo as moving for
+// its own reasons, asked for or not - for a scroller something else moves
+// through input this module never sees (ramka's slides: its own buttons and
+// keys), and whose look nothing here draws, so it has no look to nudge it.
+export function createScrollAttribution(wrapper, { onSelfReclaim, leadsUnasked = false } = {}) {
   let scrollSource = "self";
 
   // Whether this carousel is currently scrolling for its own reasons, and
@@ -144,7 +149,7 @@ export function createScrollAttribution(wrapper, { onSelfReclaim } = {}) {
     // Called from the wrapper's own 'scroll' listener to update movingItself
     // and selfScrollStartedAt from the current attribution.
     noteScrollEvent() {
-      const nowMovingItself = scrollSource === "self" && (movingItself || selfMoveRequested);
+      const nowMovingItself = scrollSource === "self" && (movingItself || selfMoveRequested || leadsUnasked);
       if (nowMovingItself && !movingItself) selfScrollStartedAt = performance.now();
       movingItself = nowMovingItself;
     },
@@ -153,10 +158,15 @@ export function createScrollAttribution(wrapper, { onSelfReclaim } = {}) {
     // actually a leading gesture ending, so a spurious/early scrollend with
     // no leading motion behind it (or one that fires while merely being
     // driven) can be told apart from the real thing.
+    //
+    // Only a leading gesture ending uses up the request that started it. A
+    // scroll operation that ended without this carousel leading - one the
+    // engine wrote to catch its scroll position up, say - leaves a request
+    // made in the meantime standing, for the motion it asked for.
     endLeading() {
       const wasLeading = movingItself;
       movingItself = false;
-      selfMoveRequested = false;
+      if (wasLeading) selfMoveRequested = false;
       return wasLeading;
     },
 

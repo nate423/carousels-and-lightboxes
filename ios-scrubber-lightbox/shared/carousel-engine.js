@@ -129,11 +129,14 @@ export function createCarousel(wrapper, options = {}) {
   // not wrapper.scrollTo(), since the source progress is itself
   // continuously changing during a live scroll/drag and native smooth-scroll
   // only makes sense against a fixed destination. See linked-scrolling/link.js.
+  // Always a real scroll position: a carousel following on a timeline comes
+  // off it, in the same task, so the frame shows the written position.
   function setProgressDirect(progress) {
     attribution.noteDirectWrite(progress);
     notifyMotion();
     snap.suspend();
     writeScroll(progress);
+    timelineFollow.stop();
 
     // Render this frame rather than waiting for the scroll event this write
     // usually causes, because it does not always cause one: a scroll position
@@ -182,7 +185,6 @@ export function createCarousel(wrapper, options = {}) {
 
     if (press.isPressed() || attribution.isMovingItself() || !timelineFollow.canShow(leader)) {
       setProgressDirect(progress);
-      timelineFollow.stop();
       return;
     }
 
@@ -198,7 +200,6 @@ export function createCarousel(wrapper, options = {}) {
       // already looks the same underneath it, and so the error it folds in
       // is measured from where this carousel really is.
       setProgressDirect(withinItems);
-      timelineFollow.stop();
       timelineFollow.show(leader, { onLeaderGeometryChange: () => refollow(leader) });
     } else {
       // Nothing to write, but still the progress this carousel is being
@@ -210,36 +211,34 @@ export function createCarousel(wrapper, options = {}) {
     ctx.onProgress?.(computeCurrentIndex(progress, geometry.get().items.length), progress);
   }
 
-  // Onto `leader`'s timeline while the two are at rest together, so the
-  // leader's next gesture moves this carousel from its first frame (see
-  // restOnTimeline in linked-scrolling/link.js). Only ever that: where it
-  // can't go onto the timeline, it leaves this carousel exactly as it is,
-  // rather than writing a position into whatever it might be in the middle
-  // of - a snap settling between two notches of a wheel, say.
-  function restOn(leader) {
-    if (timelineFollow.leader() === leader) return;
-    if (press.isPressed() || attribution.isMovingItself() || !timelineFollow.canShow(leader)) return;
-    follow(leader);
-    endFollowing();
-  }
-
   // The leader's items moved - a resize, or its spacers settling after load -
   // so the keyframes laid out against where they were no longer describe
   // it. Built again against where they are now.
   function refollow(leader) {
     timelineFollow.stop();
     follow(leader);
-    if (!leader.isMovingItself()) endFollowing();
   }
 
   // Off the leader's timeline and back onto a real scroll position that
   // shows what the timeline was showing, handing snap back with it. Called
   // the instant real input lands on this carousel, or a command is given to
   // it - whatever happens next has to start from where it really is.
+  //
+  // The write is only this carousel's scroll position catching up with what
+  // it already shows, not a move, but the browser reports it like any other
+  // scroll, and ends it with a scrollend of its own. Counted as this
+  // carousel moving, it would read as a gesture that ended on the spot, and
+  // take with it the request the input that reclaimed it had just made - a
+  // click's smooth scroll to a thumbnail would then read as unasked, and
+  // drive nothing. So its one scroll event is recognised by where it lands
+  // and passed over.
+  let rebasedTo = null;
+
   function reclaim() {
     const leader = timelineFollow.leader();
     if (leader) {
       writeScroll(leader.getCurrentProgress());
+      rebasedTo = wrapper.scrollLeft;
       timelineFollow.stop();
       applyThisFrame();
     }
@@ -315,6 +314,9 @@ export function createCarousel(wrapper, options = {}) {
   // not scrolling.
   wrapper.addEventListener("scroll", (event) => {
     if (!event.isTrusted) return;
+    const rebased = rebasedTo !== null && wrapper.scrollLeft === rebasedTo;
+    rebasedTo = null;
+    if (rebased) return;
     attribution.noteScrollEvent();
     // A timeline draws this carousel relative to where its real scroll
     // position sat when it took over, so anything else moving that position
@@ -406,16 +408,11 @@ export function createCarousel(wrapper, options = {}) {
   // this one reports that *its* gesture is over - see onScrollEnd below and
   // linked-scrolling/link.js.
   //
-  // A carousel following on the leader's timeline stays on it: at rest it
-  // shows exactly what its own scroll position would, and it is ready for
-  // the leader's next gesture. Anything that needs its real scroll position
-  // reclaims it for itself (see reclaim above).
+  // The drive is over, and the link's catch-up has just written this
+  // carousel onto the item its leader came to rest on, off any timeline, so
+  // snap can have it back.
   function endFollowing() {
-    // The drive is over, and this carousel sits on the item its leader came
-    // to rest on - unless it is resting on the leader's timeline, whose
-    // translate stands in for its scroll and which a resnap would move the
-    // items out from under.
-    if (!timelineFollow.leader()) snap.restore();
+    snap.restore();
     if (!attribution.endFollowing()) return;
     notifyMotion();
     applyIfReady();
@@ -434,7 +431,6 @@ export function createCarousel(wrapper, options = {}) {
     getProgressKnots: () => (timelineFollow.leader() ? [] : geometry.getProgressKnots()),
     setProgressDirect,
     follow,
-    restOn,
     getScrollSource: attribution.getScrollSource,
     getMotionState: attribution.getMotionState,
     // Notified whenever this carousel changes between leading, following and

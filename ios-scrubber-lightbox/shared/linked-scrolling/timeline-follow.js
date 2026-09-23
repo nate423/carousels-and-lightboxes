@@ -32,11 +32,12 @@
 // to stop - the moment real input lands on the follower, not when anything
 // settles - is the engine's to decide; see follow() in carousel-engine.js.
 //
-// Nor does it wait for the leader to move. A follower goes onto its
-// leader's timeline while the two are at rest together (see link.js), and
-// stays on it through any number of the leader's gestures, so the cost of
-// building the animations is paid while nothing is moving, and the
-// leader's first frame of motion is already the follower's too.
+// It lasts one of the leader's gestures. A follower goes onto the timeline
+// on the leader's first scroll, and comes off when the gesture ends, onto a
+// real scroll position on the item the leader came to rest on (see
+// link.js). Left on at rest, it would carry into the follower anything that
+// moves the leader's scroll without anyone asking - a resnap, or iOS
+// nudging a strip as its thumbnails grow back - several times over.
 import { computeScrollAnchorForProgress } from "../carousel-math.js";
 import { usingScrollTimelinePolyfill } from "../engine/polyfill.js";
 
