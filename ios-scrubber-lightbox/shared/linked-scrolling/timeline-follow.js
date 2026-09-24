@@ -76,18 +76,7 @@ export function createTimelineFollow({ effect, ctx, enabled = true }) {
   // `onLeaderGeometryChange` is called if the leader's items move while this
   // is showing, since these keyframes are laid out against where they are.
   function show(leader, { onLeaderGeometryChange } = {}) {
-    // Between neighbouring knots progress is linear in the leader's scroll,
-    // so any point in between is exact too - for a look that bends between
-    // whole items and asks for more of them (followSteps).
-    const steps = effect.followSteps ?? 1;
-    const knots = leader.getProgressKnots().flatMap((knot, k, all) => {
-      const next = all[k + 1];
-      if (!next) return [knot];
-      return Array.from({ length: steps }, (_, j) => ({
-        offset: knot.offset + ((next.offset - knot.offset) * j) / steps,
-        progress: knot.progress + ((next.progress - knot.progress) * j) / steps
-      }));
-    });
+    const knots = leader.getProgressKnots();
     const { anchors } = ctx.getGeometry();
     const scrollAnchor = ctx.currentScrollAnchor();
     const samples = knots.map(({ progress }) => ({

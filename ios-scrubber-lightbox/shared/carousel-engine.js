@@ -79,9 +79,6 @@ export function createCarousel(wrapper, options = {}) {
     const state = attribution.getMotionState();
     if (state === lastMotionState) return;
     lastMotionState = state;
-    // The look first, for one that draws motion itself (see
-    // flattenWhileLeading in effects/expand.js).
-    if (ready) effect.onMotionChange?.(ctx, state);
     motionListeners.forEach((listener) => listener(state));
   }
 
@@ -288,9 +285,6 @@ export function createCarousel(wrapper, options = {}) {
     // what they must not do is read it fresh every frame.
     getGeometry: geometry.get,
     currentScrollAnchor: geometry.currentScrollAnchor,
-    // Whether another carousel's timeline is drawing this one right now -
-    // in which case nothing the look paints itself may stand in its way.
-    isOnTimeline: () => Boolean(timelineFollow.leader()),
     onProgress: undefined
   };
 
@@ -306,9 +300,6 @@ export function createCarousel(wrapper, options = {}) {
   // to latch, and snap comes back on a layout where 0 belongs to the first
   // item alone.
   snap.suspend();
-  // Anything the look needs on the wrapper before its items are built and
-  // measured - a class its item sizes hang off, say.
-  effect.prepare?.(wrapper);
   populateItems();
   effect.setup(ctx);
   effect.apply(ctx);

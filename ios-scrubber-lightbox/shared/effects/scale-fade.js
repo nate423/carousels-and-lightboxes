@@ -24,7 +24,6 @@ import {
 } from "../carousel-math.js";
 import { computeTranslationBreakpoints, computeGapCompensatedFrame } from "./helpers/gap-compensation.js";
 import { RuleSheet } from "./helpers/style-swap.js";
-import { nextItemId } from "./helpers/item-id.js";
 
 // `animation-timing-function` only reshapes the curve *within* one
 // keyframe-to-keyframe segment - it can't move *where* a keyframe's value
@@ -40,8 +39,9 @@ import { nextItemId } from "./helpers/item-id.js";
 // exactly representable too.
 //
 // Ids only need to be unique site-wide (they're used in the
-// `[data-item-id="N"]` selector below), which helpers/item-id.js sees to
-// across every look on the page.
+// `[data-item-id="N"]` selector below), so this counter is module-global
+// and never resets.
+let nextItemId = 0;
 
 // The generated rules and the <style> elements holding them are kept
 // one-per-wrapper (via this WeakMap), not as module-level singletons. A
@@ -146,7 +146,7 @@ function flushKeyframeStyles(state) {
 }
 
 function onItemCreated(item) {
-  item.dataset.itemId = nextItemId();
+  item.dataset.itemId = String(nextItemId++);
 }
 
 // Sets each item's `animation-range` from its own geometry - sized to the
@@ -292,10 +292,7 @@ function apply(ctx) {
   // Measured against the imaginary items past each end (see
   // computeEdgeAnchors), so a progress driven past the end carries this
   // carousel at the same pitch its own overscroll would.
-  // Never over a timeline laid across another carousel: that draws this one
-  // while it follows on it, and the paint would outrank it.
-  const overscrolled =
-    !ctx.isOnTimeline() && isDriven && (currentProgress < 0 || currentProgress > items.length - 1);
+  const overscrolled = isDriven && (currentProgress < 0 || currentProgress > items.length - 1);
   if (overscrolled) {
     const scrollError = scrollAnchor - computeScrollAnchorForProgress(state.extendedAnchors, currentProgress + 1);
     wrapper.style.setProperty("--scroll-error", "0px");
