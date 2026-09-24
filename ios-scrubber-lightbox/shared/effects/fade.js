@@ -73,12 +73,34 @@ function setup(ctx) {
   state.noncurrentOpacity = parseFloat(getComputedStyle(wrapper).getPropertyValue("--noncurrent-opacity"));
 }
 
-// The timelines draw everything; this only reports which item is current,
-// since that's the one thing no timeline can hand back to JS.
+// Opacity at `progress` for item i - the same falloff the timelines draw.
+function opacityAt(state, i, progress) {
+  return transition(Math.max(1 - Math.abs(progress - i), 0), state.noncurrentOpacity, 1);
+}
+
+// The timelines draw everything, except while another carousel drives this
+// one and no timeline laid across that carousel is drawing it yet: a scroll
+// position written from script only reaches this carousel's own timelines
+// on the next frame, so for that frame they would draw where it was. Then
+// the opacity is set from script, at the progress it was driven to, until
+// something moves it for its own reasons. Otherwise this only reports which
+// item is current, since that's the one thing no timeline can hand back to
+// JS.
 function apply(ctx) {
   const { getGeometry, currentScrollAnchor, onProgress } = ctx;
-  if (!onProgress) return;
+  const state = getWrapperState(ctx.wrapper);
   const { items, anchors } = getGeometry();
+
+  if (ctx.getScrollSource() === "driven" && !ctx.isOnTimeline()) {
+    const progress = ctx.getDrivenProgress();
+    items.forEach((item, i) => item.style.setProperty("opacity", String(opacityAt(state, i, progress)), "important"));
+    state.painting = true;
+  } else if (state.painting) {
+    items.forEach((item) => item.style.removeProperty("opacity"));
+    state.painting = false;
+  }
+
+  if (!onProgress) return;
   const currentProgress = computeCurrentProgress(anchors, currentScrollAnchor());
   onProgress(computeCurrentIndex(currentProgress, items.length), currentProgress);
 }
@@ -90,11 +112,11 @@ function apply(ctx) {
 // correction stays out of it.
 function followFrames(ctx, samples) {
   const { items } = ctx.getGeometry();
-  const { noncurrentOpacity } = getWrapperState(ctx.wrapper);
+  const state = getWrapperState(ctx.wrapper);
   return Array.from(items, (item, i) => ({
     target: item,
     keyframes: samples.map(({ progress, scrollError }) => ({
-      opacity: String(transition(Math.max(1 - Math.abs(progress - i), 0), noncurrentOpacity, 1)),
+      opacity: String(opacityAt(state, i, progress)),
       translate: `${scrollError}px 0`,
       transform: "none"
     }))
