@@ -219,6 +219,8 @@ export function createRamkaSlidesController(slidesEl) {
       pressListeners.add(listener);
       return () => pressListeners.delete(listener);
     },
+    getScrollSource: attribution.getScrollSource,
+    getMotionState: attribution.getMotionState,
     yieldLead,
     onWheel: (listener) => onSidewaysWheel(slidesEl, listener),
     isMovingItself: attribution.isMovingItself,

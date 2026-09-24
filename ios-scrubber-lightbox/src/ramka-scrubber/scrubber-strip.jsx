@@ -26,6 +26,7 @@ import { createCarousel } from '../../shared/carousel-engine.js';
 import { expandEffect } from '../../shared/effects/expand.js';
 import { linkCarousels } from '../../shared/linked-scrolling/link.js';
 import { createRamkaSlidesController } from '../../shared/linked-scrolling/ramka-slides-controller.js';
+import { watchHandover } from '../../dev/debug-console.js';
 
 export function ScrubberStrip({ items }) {
   const wrapperRef = useRef(null);
@@ -76,6 +77,9 @@ export function ScrubberStrip({ items }) {
       // The strip tracks ramka's slides 1:1 while they're being dragged.
       bWhileFollowing: 'continuous'
     });
+
+    // Off unless the page is opened with ?log.
+    watchHandover(ramkaController, scrubber, 'A slides, B strip');
   }, [items]);
 
   return <div className="carousel-wrapper ios-thumbnail-scrubber-strip" ref={wrapperRef} />;

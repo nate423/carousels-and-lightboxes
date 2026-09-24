@@ -21,12 +21,12 @@ const CONSOLE_ENABLED = false;
 const BUFFER_LIMIT = 900;
 const TAIL_LINES = 7;
 
-function createPanel(title) {
+function createPanel(title, { top = false } = {}) {
   const lines = [];
 
   const panel = document.createElement("div");
   panel.style.cssText =
-    "position:fixed;left:0;right:0;bottom:0;z-index:200;padding:6px 8px;" +
+    `position:fixed;left:0;right:0;${top ? "top" : "bottom"}:0;z-index:2147483647;padding:6px 8px;` +
     "background:var(--bg-offset-2);border-top:1px solid var(--bg-offset-10);" +
     "font:10px/1.45 ui-monospace,monospace;color:var(--bg-offset-60)";
 
@@ -195,4 +195,89 @@ export function watchScrubberJitter(mainCarousel, scrubber, title = "main scroll
   mainCarousel.onScroll(() => sample("M    "));
   scrubber.onScroll(({ source }) => sample(source === "driven" ? "S/drv" : "S/own"));
   scrubber.wrapper.addEventListener("scrollend", () => sample("S/end"));
+}
+
+// On with ?log. Logs a handover between two linked carousels as it happens on
+// a phone: every touch starting and ending with the number of fingers down,
+// the first move of each touch and whether anything cancelled it (and at
+// which stage - before the page's own listeners run, or after), pointer
+// cancels, and every scroll of either carousel with its motion state and
+// the inline styles the link sets on it. Sits at the top of the screen, clear
+// of a strip along the bottom.
+export function watchHandover(a, b, title = "handover") {
+  if (!new URLSearchParams(location.search).has("log")) return;
+
+  const panel = createPanel(title, { top: true });
+  const start = performance.now();
+  const t = () => pad(Math.round(performance.now() - start), 6);
+  const named = [
+    [a.wrapper, "A"],
+    [b.wrapper, "B"]
+  ];
+  const nameOf = (target) => named.find(([el]) => el.contains(target))?.[1] ?? "-";
+  const state = (c) =>
+    `${c.getMotionState?.() ?? (c.isMovingItself() ? "leading" : "idle")}/${c.getScrollSource?.() ?? "?"}` +
+    ` ox:${c.wrapper.style.overflowX || "css"} ta:${c.wrapper.style.touchAction || "css"}`;
+  const both = () => `A ${state(a)} | B ${state(b)}`;
+
+  let moved = false;
+  let wasPrevented = null;
+
+  document.addEventListener(
+    "touchstart",
+    (e) => {
+      moved = false;
+      wasPrevented = null;
+      panel.log(`${t()} touchstart on ${nameOf(e.target)} fingers ${e.touches.length} | ${both()}`);
+    },
+    { capture: true, passive: true }
+  );
+  document.addEventListener(
+    "touchmove",
+    (e) => {
+      if (!moved) {
+        moved = true;
+        panel.log(`${t()} touchmove on ${nameOf(e.target)} fingers ${e.touches.length} cancelled-before:${e.defaultPrevented}`);
+      }
+    },
+    { capture: true, passive: true }
+  );
+  window.addEventListener(
+    "touchmove",
+    (e) => {
+      if (e.defaultPrevented !== wasPrevented) {
+        wasPrevented = e.defaultPrevented;
+        panel.log(`${t()} touchmove cancelled-after:${e.defaultPrevented} cancelable:${e.cancelable}`);
+      }
+    },
+    { passive: true }
+  );
+  ["touchend", "touchcancel"].forEach((type) =>
+    window.addEventListener(
+      type,
+      (e) => panel.log(`${t()} ${type} fingers left ${e.touches.length}`),
+      { passive: true }
+    )
+  );
+  window.addEventListener(
+    "pointercancel",
+    (e) => panel.log(`${t()} pointercancel on ${nameOf(e.target)}`),
+    { capture: true, passive: true }
+  );
+
+  window.addEventListener("scroll", () => panel.log(`${t()} page scroll ${Math.round(scrollY)}`), { passive: true });
+  const snapOf = (c) => (c.wrapper.style.scrollSnapType === "none" ? " snap-off" : "");
+
+  for (const [carousel, name] of [
+    [a, "A"],
+    [b, "B"]
+  ]) {
+    carousel.wrapper.addEventListener(
+      "scroll",
+      (e) => e.isTrusted && panel.log(`${t()} ${name} scroll ${fixed(carousel.wrapper.scrollLeft, 7)}${snapOf(carousel)} | ${both()}`),
+      { passive: true }
+    );
+    carousel.wrapper.addEventListener("scrollend", () => panel.log(`${t()} ${name} scrollend | ${both()}`));
+    carousel.onScrollEnd(() => panel.log(`${t()} ${name} gesture over`));
+  }
 }
