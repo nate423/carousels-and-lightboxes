@@ -165,16 +165,6 @@ h1 {
      rather than every item stuck permanently scaled down/faded. */
   scale: 1;
   opacity: 1;
-
-  /* Works around a WebKit bug (bugs.webkit.org #98538 and others):
-     overflow:hidden + border-radius on an element that's also being
-     transformed (here, animated `scale`) can lose sync between the clip
-     mask and the transform mid-scroll, so the item flashes fully
-     transparent instead of interpolating - worst right as it nears the
-     scrollport edge. isolation:isolate forces the item onto its own
-     stable stacking/compositing context, which keeps the clip and
-     transform composited together. */
-  isolation: isolate;
 }
 
 /* Demo content only - see placeholder-items.js. Background is a neutral

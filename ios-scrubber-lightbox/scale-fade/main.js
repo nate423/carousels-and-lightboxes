@@ -9,11 +9,9 @@ import { scaleFadeEffect } from "../shared/effects/scale-fade.js";
 import { attachPageDots } from "./page-dots.js";
 import { createPlaceholderItem } from "./placeholder-items.js";
 import { showBuildStamp } from "../dev/build-stamp.js";
-import { applyEdgeExperiment } from "../dev/edge-experiment.js";
 
 document.addEventListener("DOMContentLoaded", () => {
   showBuildStamp();
-  applyEdgeExperiment();
 
   const carousel = createCarousel(document.getElementById("carousel"), {
     itemCount: 30,

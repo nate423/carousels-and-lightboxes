@@ -65,14 +65,6 @@
     <span>·</span>
     <a href="?demo=filmstrip" data-demo="filmstrip">compare filmstrip</a>
     <a href="?demo=ios-scrubber" data-demo="ios-scrubber">compare ios scrubber</a>
-    <span>·</span>
-    <span>edge fix:</span>
-    <a data-edge="">none</a>
-    <a data-edge="willchange">willchange</a>
-    <a data-edge="outline">outline</a>
-    <a data-edge="backface">backface</a>
-    <a data-edge="slotlayer">slotlayer</a>
-    <a data-edge="noisolate">noisolate</a>
   </nav>
 
   <div class="panes">
@@ -87,24 +79,12 @@
   </div>
 
   <script>
-    const params = new URLSearchParams(location.search);
-    const demo = params.get("demo") === "ios-scrubber" ? "ios-scrubber" : "filmstrip";
-    // A candidate fix for items vanishing near the screen's edge on iOS 27,
-    // passed through to both panes - see dev/edge-experiment.js.
-    const edge = params.get("edge") || "";
+    const demo = new URLSearchParams(location.search).get("demo") === "ios-scrubber" ? "ios-scrubber" : "filmstrip";
     // Both panes lay out the same placeholder sizes - new ones each visit.
     const seed = Math.floor(Math.random() * 2 ** 31);
-    const shared = `seed=${seed}${edge ? `&edge=${edge}` : ""}`;
-    document.getElementById("before").src = `../${demo}/?follow=direct&${shared}`;
-    document.getElementById("after").src = `../${demo}/?${shared}`;
+    document.getElementById("before").src = `../${demo}/?follow=direct&seed=${seed}`;
+    document.getElementById("after").src = `../${demo}/?seed=${seed}`;
     document.querySelector(`[data-demo="${demo}"]`).classList.add("current");
-    for (const link of document.querySelectorAll("[data-demo]")) {
-      link.href = `?demo=${link.dataset.demo}${edge ? `&edge=${edge}` : ""}`;
-    }
-    for (const link of document.querySelectorAll("[data-edge]")) {
-      link.href = `?demo=${demo}${link.dataset.edge ? `&edge=${link.dataset.edge}` : ""}`;
-      if (link.dataset.edge === edge) link.classList.add("current");
-    }
 
     // Each demo's own page nav is this page's to show, once, above both;
     // inside a pane it only takes room from the carousels. Same origin, so

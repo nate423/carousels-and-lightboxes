@@ -14,7 +14,6 @@ import { fadeEffect } from "../shared/effects/fade.js";
 import { attachIosScrubber } from "./strip.js";
 import { createPlaceholderItem } from "./placeholder-items.js";
 import { showBuildStamp } from "../dev/build-stamp.js";
-import { applyEdgeExperiment } from "../dev/edge-experiment.js";
 import { attachScrollEventProbe } from "../dev/scroll-event-probe.js";
 import { watchScrubberJitter } from "../dev/debug-console.js";
 
@@ -24,7 +23,6 @@ const followOnTimeline = new URLSearchParams(location.search).get("follow") !== 
 
 document.addEventListener("DOMContentLoaded", () => {
   showBuildStamp();
-  applyEdgeExperiment();
 
   const mainCarousel = createCarousel(document.getElementById("main-carousel"), {
     itemCount: 30,

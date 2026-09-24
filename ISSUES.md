@@ -22,6 +22,7 @@ properties.
 - **Tried:** `isolation: isolate` (3522712) and the `?edge=` hints (09c5735) had no effect. The initial standalone single-transform experiment was reported working on-device.
 - **A/C device comparison:** filmstrip in A (`b64029c`) links the carousels correctly, but items in the actively scrolled carousel disappear near the edges. C (`42be56b`) fixes that disappearance in filmstrip but introduces follower-position drift and a settling jump (#15). The improvement is real, but the shared rollout is not acceptable as-is.
 - **Preserved attempt:** one explicit transform and one scroll timeline for scale-fade, plus changes to fade, expand, follower, overscroll, and flattening rendering. The initial isolated experiment changed much less than this rollout; the checkpoint notes preserve the distinction.
+- **Baseline correction:** A (`b64029c`) already included Claude's `isolation: isolate` workaround (`3522712`) and opt-in CSS experiments (`09c5735`). Our attempt built on both. They have now also been removed from the active demos on `main`; this clean baseline is therefore different from test build A. The frozen `archive/proto-v1` remains a historical reference.
 - **Next:** investigate the edge-culling fix independently on `codex/vanishing-items-fix`; preserve A's correct linked scrolling. No further fix attempted during wrap-up.
 
 ### #3 iOS scrubber strip flickers while it's dragged, as thumbnails expand
@@ -66,9 +67,9 @@ properties.
 
 ## Investigation branches and checkpoint
 
-- `main`: application code restored to `b64029c` (A), with these issue notes retained. The rollback is recorded as a new commit rather than rewriting history.
-- `codex/vanishing-items-fix`: preserves `42be56b`, all subsequent diagnostics, source snapshots, and investigation notes.
-- `codex/ios-scrubber-late-appearance`: starts from the restored baseline and updated issue notes, ready for a separate regression investigation.
+- `main`: A's implementation with both earlier edge-culling workarounds removed from the active demos as well. Unrelated carousel changes and these issue notes are retained. Rollbacks are new commits; history has not been rewritten.
+- `codex/vanishing-items-fix`: preserves the full progression: Claude's `3522712` isolation attempt → `09c5735` CSS experiments → our `42be56b` shared-transform attempt → `e6e3a29` diagnostics, source snapshots, and final device findings. These are original commits in its ancestry, not a squashed replacement.
+- `codex/ios-scrubber-late-appearance`: starts from the cleaned baseline (including removal of Claude's earlier active workarounds) and updated issue notes, ready for a separate regression investigation.
 - Checkpoint details: `investigation/2026-09-23-culling/README.md` on `codex/vanishing-items-fix`. Includes archived A/B/C sources and the diagnostic patch. Existing local copies may remain while working on `main`.
 
 ## Parked
@@ -84,7 +85,6 @@ properties.
 
 ## Temporary scaffolding to remove
 
-- `ios-scrubber-lightbox/dev/edge-experiment.js` and the `?edge=` switch (09c5735) - none of its candidates helped #1, so it can go.
 - The compare page and `?follow=direct`, if before/after comparison stops being useful.
 
 ## Done
