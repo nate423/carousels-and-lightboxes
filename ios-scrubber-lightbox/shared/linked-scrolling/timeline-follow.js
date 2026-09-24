@@ -43,10 +43,14 @@
 // moves the leader's scroll without anyone asking - a resnap, or iOS
 // nudging a strip as its thumbnails grow back - several times over.
 import { computeScrollAnchorForProgress, computeOffsetForProgress } from "../carousel-math.js";
+import { usingScrollTimelinePolyfill } from "../engine/polyfill.js";
 
-// Evaluated after the polyfill has installed its own where the browser has
-// none, since the polyfill loads before any module does.
-export const timelineFollowSupported = typeof ScrollTimeline === "function";
+// Only where the browser runs scroll timelines itself. The scroll-timeline
+// polyfill runs them from scroll events, in script, so drawing a follower on
+// one gains nothing over writing its scroll position - and the polyfill's
+// first update of a follower's animations holds up the leader's first
+// scroll by about 110ms, on the iOS scrubber (#17).
+export const timelineFollowSupported = typeof ScrollTimeline === "function" && !usingScrollTimelinePolyfill;
 
 // One per leader, shared by every carousel following it.
 const timelines = new WeakMap();
