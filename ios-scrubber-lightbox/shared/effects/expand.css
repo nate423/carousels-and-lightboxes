@@ -63,6 +63,7 @@
 }
 
 .expand-effect .expand-effect-item,
+.expand-effect .expand-effect-thumb,
 .expand-effect .expand-effect-thumb > * {
   animation-timeline: --carousel-scroll;
   animation-fill-mode: both;
@@ -72,8 +73,8 @@
   transition: none;
 }
 
-/* The layout box stays collapsed. Its transform combines the room made
-   for neighbours and the centered thumbnail's horizontal scale. */
+/* The item's own box stays at the collapsed width; the room it makes for a
+   grown neighbour is its translate. */
 .expand-effect .expand-effect-item {
   flex: 0 0 auto;
   width: var(--expand-item-width);
@@ -82,19 +83,20 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  transform: translateX(0px) scaleX(var(--expand-collapsed-scale, 1));
 }
 
-/* Always laid out at grown width; the parent scales it around their shared
-   center. Clip here and counter-scale the content to crop without squeezing. */
+/* Laid out at the grown width, always, and scaled on x to the width it
+   shows, so growing never changes a box. Clipped, so what it holds is
+   cropped to that width. At rest - before any animation resolves - it's
+   the collapsed width, and what it holds is scaled back to its own shape. */
 .expand-effect .expand-effect-thumb {
   flex: 0 0 auto;
   width: var(--expand-item-width-grown);
   height: var(--expand-item-height);
   overflow: hidden;
-
+  scale: var(--expand-collapsed-scale, 1) 1;
 }
 
 .expand-effect .expand-effect-thumb > * {
-  transform: scaleX(calc(1 / var(--expand-collapsed-scale, 1)));
+  scale: calc(1 / var(--expand-collapsed-scale, 1)) 1;
 }

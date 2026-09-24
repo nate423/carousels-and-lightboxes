@@ -2,7 +2,7 @@
 
 One entry per problem, referenced by number (#4). Numbers are permanent: a new
 issue takes the next one, and nothing is renumbered when an entry moves
-section. Next number: **#15**.
+section. Next number: **#16**.
 
 Status is one of: **open**, **fix attempted** (a change went in, not yet
 confirmed on a device), **parked** (known, deliberately not being worked on),
@@ -16,15 +16,13 @@ properties.
 ## Open
 
 ### #1 Items vanish near the screen edge while scrolling (iOS 27)
-- **Status:** fix attempted - standalone scale-fade confirmed on device; shared rollout needs confirmation.
-- **Where:** any carousel whose items scale down (filmstrip, scale-fade, both strips), only while it scrolls natively. A follower drawn on its leader's timeline keeps its edge items until it's touched.
-- **Seen:** an item disappears about where it would have left the screen at full size, though scaled down and moved inward it's still in view.
-- **Tried:**
-  - `isolation: isolate` on items (3522712) - no effect.
-  - The `?edge=` candidates from 09c5735 - `willchange`, `outline`, `backface`, `slotlayer`, `noisolate` - none had any effect.
-  - Single-transform experiment on standalone scale-fade: user reports edge items remain visible on iOS 27.
-- **Current attempt:** promoted to the default shared effects. Scale-fade combines translation and scale into one explicit `transform` animation on the wrapper's scroll timeline. The expand effect combines movement and horizontal scale on the item, retaining counter-scaling for image content. Follower, overscroll, and flattening frames use the same transform representation. This reaches filmstrip, iOS scrubber thumbnails, and ramka's shared scrubber without a query parameter.
-- **Validation:** build and motion-curve checks pass; desktop filmstrip and iOS scrubber scroll in both directions and the thumbnail expansion returns at rest. Confirm edge visibility on iOS 27 across these demos before closing.
+- **Status:** open - attempted fix preserved on `codex/vanishing-items-fix`, rolled back from `main` because of #15.
+- **Where:** carousels whose items scale down, while scrolling natively. A follower drawn on its leader's timeline keeps its edge items until it is touched.
+- **Seen:** an item disappears about where its full-size layout box would have left the screen, though its scaled and translated rendering is still visible.
+- **Tried:** `isolation: isolate` (3522712) and the `?edge=` hints (09c5735) had no effect. The initial standalone single-transform experiment was reported working on-device.
+- **A/C device comparison:** filmstrip in A (`b64029c`) links the carousels correctly, but items in the actively scrolled carousel disappear near the edges. C (`42be56b`) fixes that disappearance in filmstrip but introduces follower-position drift and a settling jump (#15). The improvement is real, but the shared rollout is not acceptable as-is.
+- **Preserved attempt:** one explicit transform and one scroll timeline for scale-fade, plus changes to fade, expand, follower, overscroll, and flattening rendering. The initial isolated experiment changed much less than this rollout; the checkpoint notes preserve the distinction.
+- **Next:** investigate the edge-culling fix independently on `codex/vanishing-items-fix`; preserve A's correct linked scrolling. No further fix attempted during wrap-up.
 
 ### #3 iOS scrubber strip flickers while it's dragged, as thumbnails expand
 - **Status:** open - introduced by the expand rewrite
@@ -51,11 +49,27 @@ properties.
 - **Seen:** mentioned but not yet described - separate from the motion's performance, and gets in the way of judging it.
 
 ### #14 iOS scrubber carousel items appear late, then flash into view (iOS 27)
-- **Status:** fix attempted - recently introduced; introducing change not yet identified.
-- **Where:** both the main carousel and thumbnail carousel in the iOS scrubber demo on iOS 27. Observed while scrolling the main carousel; also affects the thumbnail carousel, but is harder to reproduce there. Not observed in the filmstrip demo.
-- **Seen:** after scrolling to an item, it remains invisible for roughly a second, then abruptly flashes into view.
-- **Related:** possibly the entering-screen counterpart or a more severe form of #1, but a shared cause is unverified. Track separately because this delayed appearance does not occur in the filmstrip demo.
-- **Current attempt:** the main carousel's fade-only effect now uses the wrapper's scroll timeline with explicit identity transforms, and follower frames use `transform` for movement. The thumbnail carousel receives #1's combined-transform change. Delayed appearance still needs a separate iOS 27 check; the successful standalone scale-fade experiment does not establish that #14 is fixed.
+- **Status:** open - a fairly recent regression; introducing commit unknown. Investigation branch: `codex/ios-scrubber-late-appearance`.
+- **Where:** the iOS scrubber's main carousel and, less reproducibly, its thumbnail carousel. Not observed in filmstrip.
+- **Seen:** after scrolling to a position, items are missing for roughly a second, then appear abruptly.
+- **A/C device comparison:** present in both A (`b64029c`, before this work) and C (`42be56b`, shared culling fix). The attempted culling fix did not resolve it; it must be investigated separately. A already has the bug and is not a known-good bisect endpoint for this issue.
+- **Device isolation results on C:** disconnected but animated works; connected with `follow=direct` also works. This implicates the timeline-following path in this pairing, not timeline following generally: filmstrip works. Timeline following remains the intended implementation and the default.
+- **Preserved diagnostics:** `late=baseline`, `late=unlinked`, `late=plain`, `late=main-scale`, and `late=strip-scale`, with `seed=14`, are saved on `codex/vanishing-items-fix`. The two effect-swap modes force timeline following; no device result was reported for those modes. They are not installed on the restored baseline.
+- **Next:** find an earlier known-good revision and identify the introducing commit before attempting another fix. Do not assume a shared cause with #1.
+
+### #15 Filmstrip follower overshoots during scrolling, then jumps into place
+- **Status:** open on the attempted-fix branch; removed from `main` by restoring A's implementation.
+- **Introduced by:** the shared culling-fix rollout, `42be56b` (C). A (`b64029c`) links correctly.
+- **Seen:** starting at the beginning and scrolling rightward on the main carousel, the thumbnail follower does not track the correct position. The user reports what appears to be consistent overshoot or insufficient item translation. When the main carousel settles, the thumbnail carousel instantly jumps to the correct position.
+- **Tradeoff:** C fixes filmstrip's edge disappearance (#1), but adds this regression. Do not treat C as a complete fix.
+- **Hypothesis (unverified):** the timeline-drawn follower's transform/scroll-error composition or interpolation differs from the real scroll position applied at rest. The abrupt correction suggests checking that handoff and the live transform math; it does not establish the cause or even the precise direction of the error. No fix attempted.
+
+## Investigation branches and checkpoint
+
+- `main`: application code restored to `b64029c` (A), with these issue notes retained. The rollback is recorded as a new commit rather than rewriting history.
+- `codex/vanishing-items-fix`: preserves `42be56b`, all subsequent diagnostics, source snapshots, and investigation notes.
+- `codex/ios-scrubber-late-appearance`: starts from the restored baseline and updated issue notes, ready for a separate regression investigation.
+- Checkpoint details: `investigation/2026-09-23-culling/README.md` on `codex/vanishing-items-fix`. Includes archived A/B/C sources and the diagnostic patch. Existing local copies may remain while working on `main`.
 
 ## Parked
 

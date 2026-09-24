@@ -1,15 +1,54 @@
-/* Fade uses the same scroll timeline for its own and follower rendering.
-   Explicit identity transforms in its native keyframes give the renderer
-   complete bounds when handing back from a translated follower (#14). */
+/* The fade look's scaffolding: the per-item view-timeline that
+   shared/effects/fade.js hangs its generated animation-name/-range off.
+
+   Scoped to .fade, a class a wrapper opts into, the same way .scale-fade works
+   - and for the same reason: which carousels want which look is a fact about
+   the page, and saying it in the markup is where leaving it off is visible. */
+
+/* This look's own default for how faded a non-current item is - scoped
+   here, not to every .carousel-wrapper (see shared/effects/scale-fade.css's
+   header for why), since .fade never reads --noncurrent-scale at all. */
 .fade {
   --noncurrent-opacity: 0.5;
-  scroll-timeline-name: --carousel-scroll;
-  scroll-timeline-axis: inline;
 }
 
 .fade .carousel-item {
-  animation-timeline: --carousel-scroll;
+  view-timeline-name: --item-reveal;
+  view-timeline-axis: inline;
+
+  /* animation-range is computed and set per item in JS (see setup in
+     fade.js), from the same anchor math as everything else. */
+  animation-name: item-fade;
+  animation-timeline: --item-reveal;
   animation-fill-mode: both;
+  /* Not the default `ease`: a timing function applies within each
+     keyframe-to-keyframe segment, re-based to that segment's own local 0-1,
+     so anything but linear bends the two halves of the fade independently and
+     two neighbours equidistant from the current item stop matching. */
   animation-timing-function: linear;
-  translate: var(--scroll-error) 0;
+}
+
+/* The shared default, used until fade.js replaces it with a per-item rule
+   whose peak sits where that item's own geometry puts it rather than at a flat
+   50%. */
+@keyframes item-fade {
+  0% {
+    opacity: var(--noncurrent-opacity);
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: var(--noncurrent-opacity);
+  }
+}
+
+/* This look moves nothing, so the only thing left to write is the
+   scroll-error correction - not part of the look itself, but what makes
+   it land where it was asked to. It matters because a driven carousel's
+   scroll position is quantised: without this, a carousel being scrubbed
+   steps a whole pixel at a time instead of gliding. Static, and so free,
+   on any carousel that isn't currently being driven. */
+.fade .carousel-item {
+  transform: translateX(var(--scroll-error));
 }
