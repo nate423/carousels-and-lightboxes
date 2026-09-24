@@ -37,7 +37,9 @@ export function ScrubberStrip({ items }) {
 
     const scrubber = createCarousel(wrapper, {
       itemCount: items.length,
-      effect: expandEffect(),
+      // Same as the iOS scrubber page: the thumbnails flatten out while the
+      // strip itself is being dragged, and grow again once it comes to rest.
+      effect: expandEffect({ flattenWhileLeading: true }),
       createItem: (item, i) => {
         const thumb = item.querySelector('.expand-effect-thumb');
         const img = document.createElement('img');

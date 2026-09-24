@@ -38,11 +38,28 @@
 // The counter-scale is 1/s, which isn't linear in P, so its keyframes are
 // sampled more finely than the others (COUNTER_STEPS per item).
 //
+// --- Flattening while it leads --------------------------------------------
+//
+// With flattenWhileLeading, the look falls away while the strip is being
+// dragged - every thumbnail collapsed, no room made - and comes back once
+// it comes to rest, as iOS Photos does. That can't be a multiplier on the
+// look, since nothing on the compositor multiplies one animation by
+// another. It doesn't need to be: flat doesn't depend on progress, and
+// the look only needs to come back where the strip rests. So starting to
+// lead, the look eases from where it stands to flat and holds there; at
+// rest, it eases back to the look at that progress. Both are animations
+// over the top of the scroll-driven ones, which keep running underneath -
+// never paused - so the moment one goes, what's underneath already draws
+// the same thing. How far along one is, is worked out from its own timing,
+// so anything can start the next from exactly there: a drag that starts
+// while the thumbnails are still growing back, say.
 import { computeCurrentProgress, computeCurrentIndex, computeScrollAnchorForProgress } from "../carousel-math.js";
 import { RuleSheet } from "./helpers/style-swap.js";
 import { nextItemId } from "./helpers/item-id.js";
 
 const COUNTER_STEPS = 6;
+const FLATTEN_DURATION = 200;
+const FLATTEN_STEPS = 8;
 
 let nextStripId = 0;
 
@@ -52,7 +69,23 @@ function clamp01(x) {
   return Math.min(Math.max(x, 0), 1);
 }
 
-export function expandEffect() {
+// CSS's `ease`. The flattening samples it into keyframes rather than using
+// it as the animations' easing, since the counter-scale is sampled anyway,
+// and a timing function would bend its samples out of step with the
+// thumbnail's own.
+function ease(t) {
+  const [x1, y1, x2, y2] = [0.25, 0.1, 0.25, 1];
+  const bez = (a, b, s) => 3 * a * s * (1 - s) ** 2 + 3 * b * s * s * (1 - s) + s ** 3;
+  let s = t;
+  for (let i = 0; i < 8; i++) {
+    const dx = (bez(x1, x2, s + 1e-4) - bez(x1, x2, s - 1e-4)) / 2e-4;
+    if (!dx) break;
+    s = Math.min(Math.max(s - (bez(x1, x2, s) - t) / dx, 0), 1);
+  }
+  return bez(y1, y2, s);
+}
+
+export function expandEffect({ flattenWhileLeading = false } = {}) {
   function onItemCreated(item) {
     item.classList.add("expand-effect-item");
     item.dataset.itemId = nextItemId();
@@ -63,17 +96,17 @@ export function expandEffect() {
 
   // What each item draws at one progress, with `scrollError` - how far the
   // scroll position sits from where the progress belongs - carried in the
-  // translate.
-  function frameAt(state, progress, scrollError = 0) {
-    return state.items.map((item, i) => itemFrameAt(state.dims, i, progress, scrollError));
+  // translate, and at one strength of the look: 1 in full, 0 flat.
+  function frameAt(state, progress, scrollError = 0, strength = 1) {
+    return state.items.map((item, i) => itemFrameAt(state.dims, i, progress, scrollError, strength));
   }
 
-  function itemFrameAt(dims, i, progress, scrollError = 0) {
+  function itemFrameAt(dims, i, progress, scrollError = 0, strength = 1) {
     const u = i - progress;
     const lo = clamp01(1 + u);
     const hi = clamp01(u);
-    const shift = dims.footprintGrowth * ((lo + hi) / 2 - 0.5);
-    const scale = (dims.width + (lo - hi) * (dims.grownWidth - dims.width)) / dims.grownWidth;
+    const shift = dims.footprintGrowth * ((lo + hi) / 2 - 0.5) * strength;
+    const scale = (dims.width + (lo - hi) * strength * (dims.grownWidth - dims.width)) / dims.grownWidth;
     return {
       item: { translate: `${shift + scrollError}px 0` },
       thumb: { scale: `${scale} 1` },
@@ -120,7 +153,8 @@ export function expandEffect() {
       items: [...items],
       targets: [...items].map(targetsOf),
       anchors,
-      painting: previous?.painting ?? false
+      painting: previous?.painting ?? false,
+      flattening: previous?.flattening ?? { animations: [], from: 1, to: 1, start: 0 }
     };
     stateByWrapper.set(wrapper, state);
 
@@ -217,8 +251,9 @@ export function expandEffect() {
     const overscrolled = currentProgress < 0 || currentProgress > state.items.length - 1;
 
     // A timeline laid across another carousel draws this one while it
-    // follows on it; anything painted here would outrank it.
-    if (ctx.isOnTimeline()) {
+    // follows on it, and while flattened, the flattening does, even past
+    // either end; anything painted here would outrank either.
+    if (ctx.isOnTimeline() || state.flattening.to === 0) {
       clearPaint(state);
     } else if (isDriven || overscrolled) {
       const scrollError = currentScrollAnchor() - computeScrollAnchorForProgress(state.anchors, currentProgress);
@@ -228,6 +263,66 @@ export function expandEffect() {
     }
 
     onProgress?.(computeCurrentIndex(currentProgress, state.items.length), currentProgress);
+  }
+
+  // How strong the look is right now, 0 to 1, from where the flattening
+  // animations have got to.
+  function strengthAt(state, now) {
+    const { animations, from, to, start } = state.flattening;
+    if (!animations.length) return to;
+    return from + (to - from) * ease(clamp01((now - start) / FLATTEN_DURATION));
+  }
+
+  // Eases the look from wherever it is to `to` - see "Flattening while it
+  // leads" above. Started over the top of any still running, which it
+  // replaces: a new time-based animation draws its first keyframe in the
+  // frame it's made, which is where the one it replaces had got to.
+  function flattenTo(ctx, state, to) {
+    const now = document.timeline.currentTime;
+    const from = strengthAt(state, now);
+    const previous = state.flattening.animations;
+    if (from === to && !previous.length) return;
+
+    const progress = currentProgressOf(ctx, state);
+    const frames = Array.from({ length: FLATTEN_STEPS + 1 }, (_, k) =>
+      frameAt(state, progress, 0, from + (to - from) * ease(k / FLATTEN_STEPS))
+    );
+    const timing = { duration: FLATTEN_DURATION, fill: "forwards", easing: "linear" };
+    const animations = state.targets.flatMap(({ item, thumb, content }, i) => [
+      item.animate(frames.map((f) => f[i].item), timing),
+      ...(thumb ? [thumb.animate(frames.map((f) => f[i].thumb), timing)] : []),
+      ...content.map((el) => el.animate(frames.map((f) => f[i].content), timing))
+    ]);
+    previous.forEach((animation) => animation.cancel());
+    state.flattening = { animations, from, to, start: now };
+
+    // Back in full, it draws exactly what the scroll-driven animations
+    // underneath do, so once it has got there it can go.
+    if (to === 1) {
+      Promise.all(animations.map((animation) => animation.finished)).then(
+        () => {
+          if (state.flattening.animations !== animations) return;
+          animations.forEach((animation) => animation.cancel());
+          state.flattening = { animations: [], from: 1, to: 1, start: 0 };
+        },
+        () => {}
+      );
+    }
+  }
+
+  // Drops the flattening at once, for a strip another carousel has started
+  // to drive: what drives it draws the look in full, over the top.
+  function unflatten(state) {
+    state.flattening.animations.forEach((animation) => animation.cancel());
+    state.flattening = { animations: [], from: 1, to: 1, start: 0 };
+  }
+
+  function onMotionChange(ctx, motion) {
+    if (!flattenWhileLeading) return;
+    const state = stateByWrapper.get(ctx.wrapper);
+    if (motion === "leading") flattenTo(ctx, state, 0);
+    else if (motion === "idle") flattenTo(ctx, state, 1);
+    else unflatten(state);
   }
 
   // Following another carousel on its timeline (see
@@ -270,6 +365,7 @@ export function expandEffect() {
     onItemCreated,
     setup,
     apply,
+    onMotionChange,
     followFrames,
     skipItemResizeObserver: true
   };

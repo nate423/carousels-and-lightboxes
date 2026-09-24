@@ -13,7 +13,8 @@
 // bigger" visual logic lives in shared/effects/expand.js; this file just
 // wires up fixed-size, non-aspect-ratio-preserving items (unlike the
 // original, whose thumbnails mirror each source item's real aspect
-// ratio).
+// ratio), with the look's own option to flatten the thumbnails while the
+// strip itself is being dragged.
 //
 // The strip's dimensions (--expand-item-width/-height/-width-grown,
 // --expand-grown-padding, --wrapper-gap) are declared in ios-scrubber.css,
@@ -29,7 +30,9 @@ export function attachIosScrubber(mainCarousel, scrubberWrapper, { followOnTimel
 
   const scrubber = createCarousel(scrubberWrapper, {
     itemCount,
-    effect: expandEffect(),
+    // The thumbnails flatten out while you're dragging the strip itself,
+    // and whichever one you come to rest on grows, as in iOS Photos.
+    effect: expandEffect({ flattenWhileLeading: true }),
     // The thumb the look paints is added in onItemCreated; there is no
     // per-item content beyond it, and the engine's default would fill each
     // item with its own index as text.

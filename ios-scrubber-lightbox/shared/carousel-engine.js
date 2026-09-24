@@ -79,6 +79,9 @@ export function createCarousel(wrapper, options = {}) {
     const state = attribution.getMotionState();
     if (state === lastMotionState) return;
     lastMotionState = state;
+    // The look first, for one that draws motion itself (see
+    // flattenWhileLeading in effects/expand.js).
+    if (ready) effect.onMotionChange?.(ctx, state);
     motionListeners.forEach((listener) => listener(state));
   }
 
