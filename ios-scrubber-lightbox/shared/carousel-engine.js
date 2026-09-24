@@ -157,7 +157,10 @@ export function createCarousel(wrapper, options = {}) {
 
   function writeScroll(progress) {
     const { anchors, wrapperAnchorPoint } = geometry.get();
+    const from = wrapper.scrollLeft;
     wrapper.scrollLeft = computeScrollAnchorForProgress(anchors, progress) - wrapperAnchorPoint;
+    // Coming off a timeline, the write is the whole distance followed.
+    if (timelineFollow.leader() && wrapper.scrollLeft !== from) markTimelinesBehind();
 
     // The polyfill advances this wrapper's timelines only from a scroll event
     // on it, and the one this write causes is not dispatched until the next
@@ -247,6 +250,28 @@ export function createCarousel(wrapper, options = {}) {
   // width, while the geometry to read it against is still the old one.
   let restingAt = 0;
 
+  // Whether this carousel's own scroll-driven animations are still drawing
+  // the scroll position it had before a write that took it off a timeline.
+  // Chrome's timelines read a scroll position written from script a frame
+  // late, and there the write is the whole distance followed, so that frame
+  // would show this carousel where following began. The look draws it
+  // itself until the frame after, when they have caught up. The write's own
+  // scroll event can't say when that is: it is dispatched before the frame
+  // the timelines are still behind in.
+  let timelinesBehind = null;
+
+  function markTimelinesBehind() {
+    const behind = {};
+    timelinesBehind = behind;
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        if (timelinesBehind !== behind) return;
+        timelinesBehind = null;
+        applyIfReady();
+      })
+    );
+  }
+
   function rebase(progress) {
     restingAt = progress;
     writeScroll(progress);
@@ -292,6 +317,10 @@ export function createCarousel(wrapper, options = {}) {
     // Whether another carousel's timeline is drawing this one right now -
     // in which case nothing the look paints itself may stand in its way.
     isOnTimeline: () => timelineFollow.drawing(),
+    // Whether this carousel's own scroll-driven animations are a frame
+    // behind its scroll position - in which case the look has to draw it
+    // itself (see timelinesBehind).
+    timelinesBehind: () => timelinesBehind !== null,
     onProgress: undefined
   };
 

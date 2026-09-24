@@ -197,30 +197,34 @@ function setup(ctx) {
   state.noncurrentOpacity = parseFloat(getComputedStyle(wrapper).getPropertyValue("--noncurrent-opacity"));
 }
 
-// Past either end while driven, the progress asked for is somewhere this
-// carousel's own scroll can't go - it stops at 0 or maxScroll - so the
-// timelines, which only ever see that scroll, hold the end item at full.
-// The look is painted from JS instead, for just those frames: !important,
-// because that is what outranks a running animation, and taken off again
-// the moment the progress is back in range, where the timelines already
-// agree with it.
+// Painted from JS for the frames the timelines can't show what this
+// carousel should:
+//   - past either end while driven, the progress asked for is somewhere
+//     this carousel's own scroll can't go - it stops at 0 or maxScroll - so
+//     the timelines, which only ever see that scroll, hold the end item at
+//     full;
+//   - the frame after a write takes it off another carousel's timeline, when
+//     its own timelines still draw where it was (see timelinesBehind in
+//     carousel-engine.js).
+// !important, because that is what outranks a running animation, and taken
+// off again the moment the timelines agree with it.
 //
 // The scroll error rides along in the same translate, rather than on
 // transform as usual: transform applies inside scale, so each item would
 // carry the error scaled by its own size - a fraction of a pixel's
-// difference in range, but out here, where the error is the whole
+// difference in range, but past the ends, where the error is the whole
 // overscroll, it visibly opens the gaps back up.
-function paintOverscroll(state, items, anchors, sizes, currentProgress, scrollError) {
+function paint(state, items, anchors, sizes, currentProgress, scrollError) {
   const styles = frameStyles(state, anchors, sizes, currentProgress, scrollError);
   items.forEach((item, i) => {
     Object.entries(styles[i]).forEach(([property, value]) => item.style.setProperty(property, value, "important"));
   });
-  state.paintingOverscroll = true;
+  state.painting = true;
 }
 
 // The whole look at one progress, as what each item draws. Painted directly
-// past the ends (above), and keyframed across a leader's timeline while
-// following one (followFrames, below).
+// where the timelines can't show it (above), and keyframed across a leader's
+// timeline while following one (followFrames, below).
 function frameStyles(state, anchors, sizes, currentProgress, scrollError) {
   const { scales, itemProgress, translations } = computeGapCompensatedFrame(
     anchors,
@@ -251,20 +255,20 @@ function followFrames(ctx, samples) {
   }));
 }
 
-function clearOverscroll(state, items) {
-  if (!state.paintingOverscroll) return;
+function clearPaint(state, items) {
+  if (!state.painting) return;
   items.forEach((item) => {
     item.style.removeProperty("scale");
     item.style.removeProperty("opacity");
     item.style.removeProperty("translate");
   });
-  state.paintingOverscroll = false;
+  state.painting = false;
 }
 
 // Scale/opacity/translate are driven by the CSS scroll-driven animations on
-// .carousel-item, except while driven past either end (see
-// paintOverscroll); otherwise this only computes the discrete current index
-// for the page dots, since no timeline hands that back to JS.
+// .carousel-item, except where they can't show it (see paint); otherwise
+// this only computes the discrete current index for the page dots, since no
+// timeline hands that back to JS.
 function apply(ctx) {
   const { wrapper, getScrollSource, getDrivenProgress, getGeometry, currentScrollAnchor, onProgress } = ctx;
   // Shared with the engine and with anything else watching this wrapper,
@@ -294,14 +298,13 @@ function apply(ctx) {
   // carousel at the same pitch its own overscroll would.
   // Never over a timeline laid across another carousel: that draws this one
   // while it follows on it, and the paint would outrank it.
-  const overscrolled =
-    !ctx.isOnTimeline() && isDriven && (currentProgress < 0 || currentProgress > items.length - 1);
-  if (overscrolled) {
+  const overscrolled = isDriven && (currentProgress < 0 || currentProgress > items.length - 1);
+  if (!ctx.isOnTimeline() && (overscrolled || ctx.timelinesBehind())) {
     const scrollError = scrollAnchor - computeScrollAnchorForProgress(state.extendedAnchors, currentProgress + 1);
     wrapper.style.setProperty("--scroll-error", "0px");
-    paintOverscroll(state, items, anchors, sizes, currentProgress, scrollError);
+    paint(state, items, anchors, sizes, currentProgress, scrollError);
   } else {
-    clearOverscroll(state, items);
+    clearPaint(state, items);
     if (isDriven) {
       wrapper.style.setProperty(
         "--scroll-error",
