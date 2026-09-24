@@ -124,7 +124,11 @@ export function linkCarousels(a, b, { aWhileFollowing, bWhileFollowing }) {
     // ever fires on a real leading gesture ending (see its own doc comment
     // in carousel-engine.js), so unlike onScroll below, sync() here needs no
     // "was this a driven echo" check - by definition it wasn't.
+    //
+    // Not while source is still held: a scroll that ends under a finger -
+    // one the browser made itself, say - isn't the end of the gesture.
     source.onScrollEnd(() => {
+      if (source.isPressed?.()) return;
       dest.yieldLead?.(false);
       sync({ atRest: true });
       dest.endFollowing();

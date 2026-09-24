@@ -26,10 +26,17 @@
 // with it hidden, which is all the browser needs to stop the motion. Leading
 // stays with the other carousel until it comes to rest either way.
 //
+// A scroller whose overflow can't be touched while the other carousel is
+// being panned (`stopsOnTouch: false`) only yields for a touch, and isn't
+// stopped: on the ramka scrubber page, whose strip lies over ramka's slides,
+// changing the slides' overflow at any point in a pan on the strip ends that
+// pan. The drive writes into whatever is left of their motion instead, which
+// iOS lets win within a frame or two.
+//
 // Returns the function the link calls with whether the other carousel is
 // pressed, and on release whether it is moving, or `wheel` for a wheel;
 // `onYield` runs once this carousel has stopped leading.
-export function createYieldLead(el, { attribution, isPressed, onYield }) {
+export function createYieldLead(el, { attribution, isPressed, onYield, stopsOnTouch = true }) {
   let overflowBefore = null;
 
   function restoreOverflow() {
@@ -44,6 +51,11 @@ export function createYieldLead(el, { attribution, isPressed, onYield }) {
       return;
     }
     if (isPressed() || !attribution.isMovingItself()) return;
+    if (!wheel && !stopsOnTouch) {
+      attribution.yieldLead();
+      onYield?.();
+      return;
+    }
     if (overflowBefore === null) overflowBefore = el.style.overflowX;
     el.style.overflowX = "hidden";
     attribution.yieldLead();

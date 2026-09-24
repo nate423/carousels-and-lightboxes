@@ -515,6 +515,7 @@ export function createCarousel(wrapper, options = {}) {
       wrapper.style.touchAction = locked ? "pan-y" : "";
     },
     yieldLead,
+    isPressed: press.isPressed,
     // Notified on every wheel event on this carousel that is more sideways
     // than vertical. Returns an unsubscribe function.
     onWheel: (listener) => onSidewaysWheel(wrapper, listener),

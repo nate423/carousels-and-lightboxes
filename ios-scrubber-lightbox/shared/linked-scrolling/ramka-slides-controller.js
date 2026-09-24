@@ -171,7 +171,8 @@ export function createRamkaSlidesController(slidesEl) {
   // them - and setting touch-action on its scrollport would take them over.
   const pressListeners = new Set();
   const press = trackPress(slidesEl, { onChange: (pressed) => pressListeners.forEach((listener) => listener(pressed)) });
-  const yieldLead = createYieldLead(slidesEl, { attribution, isPressed: press.isPressed });
+  // Not stopped for a touch on the strip: see yield-lead.js.
+  const yieldLead = createYieldLead(slidesEl, { attribution, isPressed: press.isPressed, stopsOnTouch: false });
 
   const geometryListeners = new Set();
   const resizeObserver = new ResizeObserver(() => {
@@ -222,6 +223,7 @@ export function createRamkaSlidesController(slidesEl) {
     getScrollSource: attribution.getScrollSource,
     getMotionState: attribution.getMotionState,
     yieldLead,
+    isPressed: press.isPressed,
     onWheel: (listener) => onSidewaysWheel(slidesEl, listener),
     isMovingItself: attribution.isMovingItself,
     selfScrollStartedAt: attribution.selfScrollStartedAt,
