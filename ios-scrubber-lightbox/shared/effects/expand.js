@@ -154,7 +154,7 @@ export function expandEffect({ flattenWhileLeading = false } = {}) {
       targets: [...items].map(targetsOf),
       anchors,
       painting: previous?.painting ?? false,
-      flattening: previous?.flattening ?? { animations: [], from: 1, to: 1, start: 0 }
+      flattening: previous?.flattening ?? { animations: [], replaced: [], from: 1, to: 1, start: 0 }
     };
     stateByWrapper.set(wrapper, state);
 
@@ -275,35 +275,49 @@ export function expandEffect({ flattenWhileLeading = false } = {}) {
 
   // Eases the look from wherever it is to `to` - see "Flattening while it
   // leads" above. Started over the top of any still running, which it
-  // replaces: a new time-based animation draws its first keyframe in the
-  // frame it's made, which is where the one it replaces had got to.
+  // replaces - but only once it has started drawing. A new animation may
+  // not draw until a frame after it's made, and cancelling the one it
+  // replaces first would leave that frame to the scroll-driven animations
+  // underneath: the look in full, between flat and the start of growing
+  // back.
   function flattenTo(ctx, state, to) {
     const now = document.timeline.currentTime;
     const from = strengthAt(state, now);
-    const previous = state.flattening.animations;
+    const { animations: previous, replaced } = state.flattening;
     if (from === to && !previous.length) return;
 
     const progress = currentProgressOf(ctx, state);
     const frames = Array.from({ length: FLATTEN_STEPS + 1 }, (_, k) =>
       frameAt(state, progress, 0, from + (to - from) * ease(k / FLATTEN_STEPS))
     );
-    const timing = { duration: FLATTEN_DURATION, fill: "forwards", easing: "linear" };
+    // Filled backwards too: a new animation's start time can land a
+    // moment after the frame it first draws in, and before it starts, one
+    // filled only forwards draws nothing - leaving that frame, too, to the
+    // look in full underneath.
+    const timing = { duration: FLATTEN_DURATION, fill: "both", easing: "linear" };
     const animations = state.targets.flatMap(({ item, thumb, content }, i) => [
       item.animate(frames.map((f) => f[i].item), timing),
       ...(thumb ? [thumb.animate(frames.map((f) => f[i].thumb), timing)] : []),
       ...content.map((el) => el.animate(frames.map((f) => f[i].content), timing))
     ]);
-    previous.forEach((animation) => animation.cancel());
-    state.flattening = { animations, from, to, start: now };
+    const flattening = { animations, replaced: [...previous, ...replaced], from, to, start: now };
+    state.flattening = flattening;
+    Promise.all(animations.map((animation) => animation.ready)).then(
+      () => {
+        flattening.replaced.forEach((animation) => animation.cancel());
+        flattening.replaced = [];
+      },
+      () => {}
+    );
 
     // Back in full, it draws exactly what the scroll-driven animations
     // underneath do, so once it has got there it can go.
     if (to === 1) {
       Promise.all(animations.map((animation) => animation.finished)).then(
         () => {
-          if (state.flattening.animations !== animations) return;
+          if (state.flattening !== flattening) return;
           animations.forEach((animation) => animation.cancel());
-          state.flattening = { animations: [], from: 1, to: 1, start: 0 };
+          state.flattening = { animations: [], replaced: [], from: 1, to: 1, start: 0 };
         },
         () => {}
       );
@@ -313,8 +327,8 @@ export function expandEffect({ flattenWhileLeading = false } = {}) {
   // Drops the flattening at once, for a strip another carousel has started
   // to drive: what drives it draws the look in full, over the top.
   function unflatten(state) {
-    state.flattening.animations.forEach((animation) => animation.cancel());
-    state.flattening = { animations: [], from: 1, to: 1, start: 0 };
+    [...state.flattening.animations, ...state.flattening.replaced].forEach((animation) => animation.cancel());
+    state.flattening = { animations: [], replaced: [], from: 1, to: 1, start: 0 };
   }
 
   function onMotionChange(ctx, motion) {
