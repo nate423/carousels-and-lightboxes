@@ -65,20 +65,22 @@ export function expandEffect() {
   // scroll position sits from where the progress belongs - carried in the
   // translate.
   function frameAt(state, progress, scrollError = 0) {
-    const { dims } = state;
-    return state.items.map((item, i) => {
-      const u = i - progress;
-      const lo = clamp01(1 + u);
-      const hi = clamp01(u);
-      const shift = dims.footprintGrowth * ((lo + hi) / 2 - 0.5);
-      const scale = (dims.width + (lo - hi) * (dims.grownWidth - dims.width)) / dims.grownWidth;
-      return {
-        item: { translate: `${shift + scrollError}px 0` },
-        thumb: { scale: `${scale} 1` },
-        content: { scale: `${1 / scale} 1` }
-      };
-    });
+    return state.items.map((item, i) => itemFrameAt(state.dims, i, progress, scrollError));
   }
+
+  function itemFrameAt(dims, i, progress, scrollError = 0) {
+    const u = i - progress;
+    const lo = clamp01(1 + u);
+    const hi = clamp01(u);
+    const shift = dims.footprintGrowth * ((lo + hi) / 2 - 0.5);
+    const scale = (dims.width + (lo - hi) * (dims.grownWidth - dims.width)) / dims.grownWidth;
+    return {
+      item: { translate: `${shift + scrollError}px 0` },
+      thumb: { scale: `${scale} 1` },
+      content: { scale: `${1 / scale} 1` }
+    };
+  }
+
 
   // Each element the look draws on, per item: the item, its thumbnail, and
   // whatever the thumbnail holds.
@@ -214,7 +216,11 @@ export function expandEffect() {
     const currentProgress = currentProgressOf(ctx, state);
     const overscrolled = currentProgress < 0 || currentProgress > state.items.length - 1;
 
-    if (isDriven || overscrolled) {
+    // A timeline laid across another carousel draws this one while it
+    // follows on it; anything painted here would outrank it.
+    if (ctx.isOnTimeline()) {
+      clearPaint(state);
+    } else if (isDriven || overscrolled) {
       const scrollError = currentScrollAnchor() - computeScrollAnchorForProgress(state.anchors, currentProgress);
       paint(state, currentProgress, isDriven ? scrollError : 0);
     } else {
@@ -222,6 +228,38 @@ export function expandEffect() {
     }
 
     onProgress?.(computeCurrentIndex(currentProgress, state.items.length), currentProgress);
+  }
+
+  // Following another carousel on its timeline (see
+  // linked-scrolling/timeline-follow.js). The item's translate, carrying
+  // the distance between this carousel's scroll and where it is being
+  // shown, is linear in progress between whole items, and so is the
+  // thumbnail's scale: a keyframe at each of the leader's knots is exact
+  // for both. The counter-scale bends between whole items, so it gets
+  // COUNTER_STEPS keyframes per item, but only across the two items either
+  // side of its own, where it changes, and one at each end of the timeline
+  // either side of that, where it holds. The same keyframes at every knot
+  // would be far more: too many keyframes per animation is what left items
+  // blank for a second on iOS 27 in #14.
+  function followFrames(ctx, samples, { offsetOf }) {
+    const state = stateByWrapper.get(ctx.wrapper);
+    const { dims } = state;
+    const first = samples[0].progress;
+    const last = samples[samples.length - 1].progress;
+    return state.targets.flatMap(({ item, thumb, content }, i) => {
+      const bends = Array.from({ length: 2 * COUNTER_STEPS + 1 }, (_, k) => i - 1 + k / COUNTER_STEPS).filter(
+        (progress) => progress > first && progress < last
+      );
+      const counterScale = [first, ...bends, last].map((progress) => ({
+        offset: offsetOf(progress),
+        ...itemFrameAt(dims, i, progress).content
+      }));
+      return [
+        { target: item, keyframes: samples.map(({ progress, scrollError }) => itemFrameAt(dims, i, progress, scrollError).item) },
+        ...(thumb ? [{ target: thumb, keyframes: samples.map(({ progress }) => itemFrameAt(dims, i, progress).thumb) }] : []),
+        ...content.map((el) => ({ target: el, keyframes: counterScale }))
+      ];
+    });
   }
 
   // This effect owns every item's rendering, and nothing it draws changes
@@ -232,6 +270,7 @@ export function expandEffect() {
     onItemCreated,
     setup,
     apply,
+    followFrames,
     skipItemResizeObserver: true
   };
 }

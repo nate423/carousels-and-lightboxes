@@ -202,7 +202,7 @@ export function createCarousel(wrapper, options = {}) {
       // already looks the same underneath it, and so the error it folds in
       // is measured from where this carousel really is.
       setProgressDirect(withinItems);
-      timelineFollow.show(leader, { onLeaderGeometryChange: () => refollow(leader) });
+      timelineFollow.show(leader, { onLeaderGeometryChange: () => refollow(leader), onDrawing: applyIfReady });
     } else {
       // Nothing to write, but still the progress this carousel is being
       // driven to, for anything that asks.
@@ -287,7 +287,7 @@ export function createCarousel(wrapper, options = {}) {
     currentScrollAnchor: geometry.currentScrollAnchor,
     // Whether another carousel's timeline is drawing this one right now -
     // in which case nothing the look paints itself may stand in its way.
-    isOnTimeline: () => Boolean(timelineFollow.leader()),
+    isOnTimeline: () => timelineFollow.drawing(),
     onProgress: undefined
   };
 

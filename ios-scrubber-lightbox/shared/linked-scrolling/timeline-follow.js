@@ -12,10 +12,13 @@
 //
 // This is exact rather than sampled. The follower's progress is the
 // leader's, and the leader's progress is linear in its scroll offset
-// between neighbouring item anchors. Every look here is linear in progress
-// between whole items too, and so is where the follower's track would be
-// scrolled to. So a keyframe at each of the leader's anchors
-// (computeProgressKnots) is the entire curve.
+// between neighbouring item anchors. Most of what a look draws is linear in
+// progress between whole items too, and so is where the follower's track
+// would be scrolled to. So a keyframe at each of the leader's anchors
+// (computeProgressKnots) is the entire curve. What bends between whole
+// items, a look places keyframes for itself, at whatever progress it
+// needs, through offsetOf - only over the stretch where it bends, since
+// every keyframe has a cost when the animations are built.
 //
 // While this is showing, the follower's real scroll position stays wherever
 // it was when following began, and its look is drawn with the difference
@@ -26,9 +29,10 @@
 //
 // Starting and stopping never shows. The carousel engine writes the real
 // scroll position to the progress being shown before starting, and again
-// before stopping, so either way the frame that paints shows the same thing
-// the previous one did, drawn the other way - including a new animation's
-// first frame, which the browser may leave for the next one to start. When
+// before stopping, and the look draws that progress itself until the
+// timeline's animations are ready - a new animation may leave its first
+// frame or so for later ones to draw. So either way the frame that paints
+// shows the same thing the previous one did, drawn the other way. When
 // to stop - the moment real input lands on the follower, not when anything
 // settles - is the engine's to decide; see follow() in carousel-engine.js.
 //
@@ -38,8 +42,7 @@
 // link.js). Left on at rest, it would carry into the follower anything that
 // moves the leader's scroll without anyone asking - a resnap, or iOS
 // nudging a strip as its thumbnails grow back - several times over.
-import { computeScrollAnchorForProgress } from "../carousel-math.js";
-import { usingScrollTimelinePolyfill } from "../engine/polyfill.js";
+import { computeScrollAnchorForProgress, computeOffsetForProgress } from "../carousel-math.js";
 
 // Evaluated after the polyfill has installed its own where the browser has
 // none, since the polyfill loads before any module does.
@@ -75,7 +78,9 @@ export function createTimelineFollow({ effect, ctx, enabled = true }) {
 
   // `onLeaderGeometryChange` is called if the leader's items move while this
   // is showing, since these keyframes are laid out against where they are.
-  function show(leader, { onLeaderGeometryChange } = {}) {
+  // `onDrawing` is called once the timeline has actually started drawing
+  // this carousel (see drawing below).
+  function show(leader, { onLeaderGeometryChange, onDrawing } = {}) {
     const knots = leader.getProgressKnots();
     const { anchors } = ctx.getGeometry();
     const scrollAnchor = ctx.currentScrollAnchor();
@@ -84,37 +89,46 @@ export function createTimelineFollow({ effect, ctx, enabled = true }) {
       scrollError: scrollAnchor - computeScrollAnchorForProgress(anchors, progress)
     }));
 
-    // This carousel's own scroll-driven animations stand aside while the
-    // timeline draws it. Outranked, they would draw nothing, but still
-    // running on the same items they keep the browser from handing any of
-    // those items' animations to the compositor: Chrome reports every one
-    // as sharing its target with an incompatible animation, and runs them
-    // all on the main thread, where the follower drops frames the leader
-    // doesn't. Paused rather than removed, they stay tied to the keyframes
-    // the look regenerates, and pick up from this carousel's own scroll the
-    // frame they resume. Under the polyfill there is no compositor to hand
-    // anything to, and its animations are its own to run.
-    const ownAnimations = usingScrollTimelinePolyfill
-      ? []
-      : ctx.wrapper.getAnimations({ subtree: true }).filter((animation) => animation instanceof CSSAnimation);
-    ownAnimations.forEach((animation) => animation.pause());
-
+    // This carousel's own scroll-driven animations keep running
+    // underneath, outranked, rather than being paused while the timeline
+    // draws it. A paused one holds the look it had when it was paused, and
+    // a resumed one can take a frame to catch up, so on the way off it
+    // would show that old look at the scroll position just written.
+    //
+    // A keyframe is one per sample, placed at that sample's knot, unless
+    // the look places it itself - at any progress, through offsetOf - for
+    // a curve that bends between knots.
+    const offsetOf = (progress) => computeOffsetForProgress(knots, progress);
     const timeline = timelineFor(leader.wrapper);
-    const animations = effect.followFrames(ctx, samples).map(({ target, keyframes }) =>
+    const animations = effect.followFrames(ctx, samples, { offsetOf }).map(({ target, keyframes }) =>
       target.animate(
-        keyframes.map((keyframe, i) => ({ ...keyframe, offset: knots[i].offset })),
+        keyframes.map((keyframe, i) => ("offset" in keyframe ? keyframe : { ...keyframe, offset: knots[i].offset })),
         { timeline, fill: "both", easing: "linear" }
       )
     );
 
     const unsubscribe = leader.onGeometryChange?.(() => onLeaderGeometryChange?.());
-    showing = { leader, animations, ownAnimations, scrollLeft: ctx.wrapper.scrollLeft, unsubscribe };
+    const shown = { leader, animations, scrollLeft: ctx.wrapper.scrollLeft, unsubscribe, drawing: false };
+    showing = shown;
+
+    // A new animation may not draw until a frame or so after it starts, and
+    // nothing underneath it can be trusted to show the right thing in the
+    // meantime: Chrome's timeline for this carousel still reads its scroll
+    // position from before the write that preceded this, for a frame. So
+    // until these are ready, the look keeps drawing this carousel itself.
+    Promise.all(animations.map((animation) => animation.ready)).then(
+      () => {
+        if (showing !== shown) return;
+        shown.drawing = true;
+        onDrawing?.();
+      },
+      () => {}
+    );
   }
 
   function stop() {
     if (!showing) return;
     showing.animations.forEach((animation) => animation.cancel());
-    showing.ownAnimations.forEach((animation) => animation.play());
     showing.unsubscribe?.();
     showing = null;
   }
@@ -126,6 +140,9 @@ export function createTimelineFollow({ effect, ctx, enabled = true }) {
     // The leader this carousel is showing, or null while it shows its own
     // scroll position.
     leader: () => showing?.leader ?? null,
+    // Whether the timeline is drawing this carousel yet, which it doesn't
+    // until its animations are ready.
+    drawing: () => Boolean(showing?.drawing),
     // Where this carousel's real scroll position was when the timeline took
     // over, which every keyframe's error is measured from.
     scrollLeftShownFrom: () => showing?.scrollLeft
