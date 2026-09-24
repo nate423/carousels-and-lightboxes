@@ -18,16 +18,28 @@
 // (endFollowing in scroll-attribution.js), or straight away if it was let go
 // without moving.
 //
+// A sideways wheel on the other carousel yields this one the same way, but a
+// wheel has no release to hold the overflow until, and a wheel gesture picks
+// the scroller it moves as it begins, before the page hears of it - so an
+// overflow still hidden then leaves the next gesture on this carousel moving
+// nothing. For a wheel the overflow comes back once a frame has been drawn
+// with it hidden, which is all the browser needs to stop the motion. Leading
+// stays with the other carousel until it comes to rest either way.
+//
 // Returns the function the link calls with whether the other carousel is
-// pressed, and on release whether it is moving; `onYield` runs once this
-// carousel has stopped leading.
+// pressed, and on release whether it is moving, or `wheel` for a wheel;
+// `onYield` runs once this carousel has stopped leading.
 export function createYieldLead(el, { attribution, isPressed, onYield }) {
   let overflowBefore = null;
 
-  return function yieldLead(otherPressed, { otherMoving = false } = {}) {
+  function restoreOverflow() {
+    if (overflowBefore !== null) el.style.overflowX = overflowBefore;
+    overflowBefore = null;
+  }
+
+  return function yieldLead(otherPressed, { otherMoving = false, wheel = false } = {}) {
     if (!otherPressed) {
-      if (overflowBefore !== null) el.style.overflowX = overflowBefore;
-      overflowBefore = null;
+      restoreOverflow();
       if (!otherMoving) attribution.endYield();
       return;
     }
@@ -36,5 +48,8 @@ export function createYieldLead(el, { attribution, isPressed, onYield }) {
     el.style.overflowX = "hidden";
     attribution.yieldLead();
     onYield?.();
+    // The first callback runs before the frame that draws it hidden, the
+    // second after it.
+    if (wheel) requestAnimationFrame(() => requestAnimationFrame(restoreOverflow));
   };
 }

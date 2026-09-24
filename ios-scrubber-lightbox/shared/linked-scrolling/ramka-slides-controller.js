@@ -22,7 +22,7 @@
 import { createScrollAttribution } from "./scroll-attribution.js";
 import { computeCurrentProgress, computeScrollAnchorForProgress, computeProgressKnots } from "../carousel-math.js";
 import { onScrollEnd } from "../engine/scroll-end.js";
-import { trackPress } from "../engine/press.js";
+import { trackPress, onSidewaysWheel } from "../engine/press.js";
 import { createYieldLead } from "./yield-lead.js";
 
 const SLIDE_SELECTOR = "[data-ramka-slide]";
@@ -220,6 +220,7 @@ export function createRamkaSlidesController(slidesEl) {
       return () => pressListeners.delete(listener);
     },
     yieldLead,
+    onWheel: (listener) => onSidewaysWheel(slidesEl, listener),
     isMovingItself: attribution.isMovingItself,
     selfScrollStartedAt: attribution.selfScrollStartedAt,
     onScroll(listener) {

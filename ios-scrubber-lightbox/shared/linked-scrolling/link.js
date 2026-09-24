@@ -125,6 +125,7 @@ export function linkCarousels(a, b, { aWhileFollowing, bWhileFollowing }) {
     // in carousel-engine.js), so unlike onScroll below, sync() here needs no
     // "was this a driven echo" check - by definition it wasn't.
     source.onScrollEnd(() => {
+      dest.yieldLead?.(false);
       sync({ atRest: true });
       dest.endFollowing();
     });
@@ -143,6 +144,13 @@ export function linkCarousels(a, b, { aWhileFollowing, bWhileFollowing }) {
       dest.lockPanning?.(pressed);
       dest.yieldLead?.(pressed, { otherMoving: source.isMovingItself() });
     });
+
+    // A sideways wheel on source does the same, until source comes to rest
+    // (onScrollEnd, above) - a wheel has no moment of being let go. The
+    // carousel it leaves behind is usually still snapping onto an item,
+    // whose scroll events would otherwise keep driving source and mark its
+    // own scrolling as echoes of that.
+    source.onWheel?.(() => dest.yieldLead?.(true, { wheel: true }));
 
     source.onScroll(({ source: scrollSource }) => {
       if (scrollSource === "driven") {

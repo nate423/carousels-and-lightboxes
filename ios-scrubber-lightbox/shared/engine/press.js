@@ -67,3 +67,14 @@ export function trackPress(el, { onRelease, onChange } = {}) {
 
   return { isPressed };
 }
+
+// Calls `listener` on every wheel event on `el` that moves it more sideways
+// than vertically - scrolling a horizontal carousel, rather than the page
+// with the cursor over it. Returns an unsubscribe function.
+export function onSidewaysWheel(el, listener) {
+  const handle = (e) => {
+    if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) listener();
+  };
+  el.addEventListener("wheel", handle, { passive: true });
+  return () => el.removeEventListener("wheel", handle);
+}

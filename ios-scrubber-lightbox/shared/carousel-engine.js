@@ -23,7 +23,7 @@ import { createYieldLead } from "./linked-scrolling/yield-lead.js";
 import { createGeometryCache } from "./engine/geometry-cache.js";
 import { createSpacers } from "./engine/spacers.js";
 import { onScrollEnd } from "./engine/scroll-end.js";
-import { trackPress } from "./engine/press.js";
+import { trackPress, onSidewaysWheel } from "./engine/press.js";
 import { usingScrollTimelinePolyfill } from "./engine/polyfill.js";
 import { populateItems as populateItemsInto } from "./engine/populate-items.js";
 
@@ -515,6 +515,9 @@ export function createCarousel(wrapper, options = {}) {
       wrapper.style.touchAction = locked ? "pan-y" : "";
     },
     yieldLead,
+    // Notified on every wheel event on this carousel that is more sideways
+    // than vertical. Returns an unsubscribe function.
+    onWheel: (listener) => onSidewaysWheel(wrapper, listener),
     // Notified once this carousel's items have been measured again - after
     // a resize, or an item changing size. Returns an unsubscribe function.
     onGeometryChange(listener) {
