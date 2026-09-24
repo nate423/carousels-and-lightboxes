@@ -31,6 +31,9 @@ export default defineConfig(({ command }) => ({
   base: command === "build" ? "/carousels-and-lightboxes/" : "/",
   plugins: [react(), copyScrollTimelineScripts()],
   server: {
+    // Listen on the LAN too, so a phone on the same wifi can open the dev
+    // server at this Mac's IP address.
+    host: true,
     port: 56576,
     strictPort: true
   },
