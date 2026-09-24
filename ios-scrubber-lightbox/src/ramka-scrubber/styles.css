@@ -61,6 +61,7 @@ body {
   --expand-item-width: calc(var(--expand-item-height) * 2 / 3);
   --expand-item-width-grown: var(--expand-item-height);
   --expand-grown-padding: 16px;
+  /* --expand-thumb-radius: 4px; */
   /* .lb-bottom (this strip's parent) is click-through by default - see
      lightbox.css - so the strip has to opt back in the same way .lb-caption
      does, or every drag/click on it falls through to the backdrop. */
@@ -70,7 +71,6 @@ body {
 /* The thumbnails' own finish. Their size, and everything about how they
    grow, is the expand look's (see shared/effects/expand.css). */
 .ios-thumbnail-scrubber-strip .expand-effect-thumb {
-  border-radius: 4px;
   background-color: hsl(220, 14%, 70%);
 }
 

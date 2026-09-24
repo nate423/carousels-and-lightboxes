@@ -140,21 +140,6 @@ export function computeProgressKnots(anchors, wrapperAnchorPoint, maxScroll) {
   return [at(0), ...inner.map(at), at(maxScroll)];
 }
 
-// Where on a carousel's scroll timeline, 0 to 1, it shows `progress`: the
-// inverse of the map computeProgressKnots describes, linear between its
-// knots and held at either end.
-export function computeOffsetForProgress(knots, progress) {
-  const n = knots.length;
-  if (n === 0) return 0;
-  if (progress <= knots[0].progress) return knots[0].offset;
-  if (progress >= knots[n - 1].progress) return knots[n - 1].offset;
-  let k = 0;
-  while (knots[k + 1].progress < progress) k++;
-  const a = knots[k];
-  const b = knots[k + 1];
-  return a.offset + ((b.offset - a.offset) * (progress - a.progress)) / (b.progress - a.progress);
-}
-
 // Anchors for an imaginary item past each end, the same size as the end
 // item beside it and at the same gap. Only reachable while overscrolling,
 // where they give the end item a neighbour to wind down towards instead of

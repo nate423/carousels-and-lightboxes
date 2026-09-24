@@ -37,11 +37,11 @@
   /* --expand-item-width: calc(var(--expand-item-height) * 2 / 3); */
   /* --expand-item-width-grown: var(--expand-item-height); */
   /* --expand-grown-padding: 12px; */
+  /* --expand-thumb-radius: 4px; */
 }
 
 /* The thumbnails' own finish. Their size, and everything about how they
    grow, is the expand look's (see shared/effects/expand.css). */
 .expand-effect-thumb {
-  border-radius: 4px;
   background-color: hsl(220, 14%, 70%);
 }

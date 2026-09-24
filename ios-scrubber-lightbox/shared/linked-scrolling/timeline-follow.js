@@ -12,13 +12,10 @@
 //
 // This is exact rather than sampled. The follower's progress is the
 // leader's, and the leader's progress is linear in its scroll offset
-// between neighbouring item anchors. Most of what a look draws is linear in
-// progress between whole items too, and so is where the follower's track
-// would be scrolled to. So a keyframe at each of the leader's anchors
-// (computeProgressKnots) is the entire curve. What bends between whole
-// items, a look places keyframes for itself, at whatever progress it
-// needs, through offsetOf - only over the stretch where it bends, since
-// every keyframe has a cost when the animations are built.
+// between neighbouring item anchors. Every look here is linear in progress
+// between whole items too, and so is where the follower's track would be
+// scrolled to. So a keyframe at each of the leader's anchors
+// (computeProgressKnots) is the entire curve.
 //
 // While this is showing, the follower's real scroll position stays wherever
 // it was when following began, and its look is drawn with the difference
@@ -42,7 +39,7 @@
 // link.js). Left on at rest, it would carry into the follower anything that
 // moves the leader's scroll without anyone asking - a resnap, or iOS
 // nudging a strip as its thumbnails grow back - several times over.
-import { computeScrollAnchorForProgress, computeOffsetForProgress } from "../carousel-math.js";
+import { computeScrollAnchorForProgress } from "../carousel-math.js";
 import { usingScrollTimelinePolyfill } from "../engine/polyfill.js";
 
 // Only where the browser runs scroll timelines itself. The scroll-timeline
@@ -98,15 +95,10 @@ export function createTimelineFollow({ effect, ctx, enabled = true }) {
     // draws it. A paused one holds the look it had when it was paused, and
     // a resumed one can take a frame to catch up, so on the way off it
     // would show that old look at the scroll position just written.
-    //
-    // A keyframe is one per sample, placed at that sample's knot, unless
-    // the look places it itself - at any progress, through offsetOf - for
-    // a curve that bends between knots.
-    const offsetOf = (progress) => computeOffsetForProgress(knots, progress);
     const timeline = timelineFor(leader.wrapper);
-    const animations = effect.followFrames(ctx, samples, { offsetOf }).map(({ target, keyframes }) =>
+    const animations = effect.followFrames(ctx, samples).map(({ target, keyframes }) =>
       target.animate(
-        keyframes.map((keyframe, i) => ("offset" in keyframe ? keyframe : { ...keyframe, offset: knots[i].offset })),
+        keyframes.map((keyframe, i) => ({ ...keyframe, offset: knots[i].offset })),
         { timeline, fill: "both", easing: "linear" }
       )
     );

@@ -1,8 +1,7 @@
 /* === The expand look, painted natively ===
    Fixed-size items at a constant gap, where only the one nearest the center
    grows - both its thumbnail and the room its neighbours leave around it -
-   drawn with translate and scale alone, so the compositor can run all of
-   it, and never as a bigger layout box, so this carousel's own layout (and
+   drawn with translates alone, so the compositor can run all of it, and never as a bigger layout box, so this carousel's own layout (and
    therefore its snap points, and the offsetLeft/offsetWidth reads
    carousel-math derives progress from) can't move as a side effect of what
    the look paints. See archive/proto-v1/js/effects/looks/ios-box-look.js for
@@ -21,8 +20,10 @@
    those files). A page overrides --expand-item-height (or any of the three
    directly) on its own wrapper to get a different size without touching
    the ratios; expand.js reads them back via getComputedStyle, and adds
-   .expand-effect-item/.expand-effect-thumb to its item markup - see
-   expand.js's onItemCreated. */
+   .expand-effect-item, its two clipping edges and .expand-effect-thumb to
+   its item markup - see expand.js's onItemCreated. A page styles the
+   thumbnail itself (its colour, what it holds) on .expand-effect-thumb, and
+   its corners through --expand-thumb-radius, which the edges clip with. */
 
 /* Registered so a page's calc()'d --expand-item-width/-width-grown resolve
    to an absolute length when expand.js reads them back via
@@ -60,11 +61,12 @@
   --expand-item-width: calc(var(--expand-item-height) * 2 / 3);
   --expand-item-width-grown: var(--expand-item-height);
   --expand-grown-padding: 12px;
+  --expand-thumb-radius: 4px;
 }
 
-.expand-effect .expand-effect-item,
-.expand-effect .expand-effect-thumb,
-.expand-effect .expand-effect-thumb > * {
+.expand-effect .expand-effect-left-edge,
+.expand-effect .expand-effect-right-edge,
+.expand-effect .expand-effect-thumb {
   animation-timeline: --carousel-scroll;
   animation-fill-mode: both;
   animation-timing-function: linear;
@@ -74,7 +76,7 @@
 }
 
 /* The item's own box stays at the collapsed width; the room it makes for a
-   grown neighbour is its translate. */
+   grown neighbour is its outer edge's translate. */
 .expand-effect .expand-effect-item {
   flex: 0 0 auto;
   width: var(--expand-item-width);
@@ -85,18 +87,32 @@
   justify-content: center;
 }
 
-/* Laid out at the grown width, always, and scaled on x to the width it
-   shows, so growing never changes a box. Clipped, so what it holds is
-   cropped to that width. At rest - before any animation resolves - it's
-   the collapsed width, and what it holds is scaled back to its own shape. */
-.expand-effect .expand-effect-thumb {
+/* The two clipping edges and the thumbnail are all laid out at the grown
+   width, always, so growing never changes a box. The outer edge clips
+   with the left corners rounded, the inner one with the right, and the
+   opening between them is how wide the thumbnail shows (see expand.js).
+   At rest - before any animation resolves - each edge sits in by the
+   collapsed inset, and the thumbnail moves back to where it started. */
+.expand-effect .expand-effect-left-edge {
   flex: 0 0 auto;
   width: var(--expand-item-width-grown);
   height: var(--expand-item-height);
   overflow: hidden;
-  scale: var(--expand-collapsed-scale, 1) 1;
+  border-radius: var(--expand-thumb-radius) 0 0 var(--expand-thumb-radius);
+  translate: var(--expand-collapsed-inset, 0px) 0;
 }
 
-.expand-effect .expand-effect-thumb > * {
-  scale: calc(1 / var(--expand-collapsed-scale, 1)) 1;
+.expand-effect .expand-effect-right-edge {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 0 var(--expand-thumb-radius) var(--expand-thumb-radius) 0;
+  translate: calc(var(--expand-collapsed-inset, 0px) * -2) 0;
+}
+
+.expand-effect .expand-effect-thumb {
+  width: 100%;
+  height: 100%;
+  border-radius: var(--expand-thumb-radius);
+  translate: var(--expand-collapsed-inset, 0px) 0;
 }

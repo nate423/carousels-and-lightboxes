@@ -1,7 +1,7 @@
 // A carousel look for fixed-size items at a constant gap, where only the
 // one nearest the center grows - both its own thumbnail and the room its
-// neighbours leave around it - drawn entirely with translate and scale,
-// never with a bigger layout box. Used by the iOS-Photos-style scrubber
+// neighbours leave around it - drawn entirely with translates, never with
+// a bigger layout box. Used by the iOS-Photos-style scrubber
 // strip, but nothing here is specific to that page.
 //
 // The same look computed by hand is archived at
@@ -29,14 +29,21 @@
 //
 // Only translate, scale and opacity animate off the main thread, so the
 // thumbnail's width can't be what grows. The thumbnail is laid out at its
-// grown width, always, clipped, and scaled on x down to the width it should
-// show; whatever it holds is scaled back the other way, so an image in it
-// is cropped narrower rather than squeezed. Nothing about the look ever
-// changes a box's size, so nothing it does can move the layout, the snap
-// points, or the scroll position underneath it.
+// grown width, always, and shown through two clipping edges nested inside
+// each other, each also laid out at the grown width: the outer one clips
+// with the left corners rounded, the inner one with the right. Moving the
+// outer one right by d and the inner one left by 2d leaves an opening 2d
+// narrower than the thumbnail, centred, with all four corners rounded -
+// never scaled, so never stretched (#8). The thumbnail moves right by d
+// inside them, back to where it started, so what it holds stays put and is
+// cropped narrower rather than squeezed. The outer edge also carries the
+// item's shift. Nothing about the look ever changes a box's size, so
+// nothing it does can move the layout, the snap points, or the scroll
+// position underneath it.
 //
-// The counter-scale is 1/s, which isn't linear in P, so its keyframes are
-// sampled more finely than the others (COUNTER_STEPS per item).
+// With G the grown width and W the collapsed one, d = (1 - grow) * (G - W) / 2,
+// linear in P like the rest, so every animation here is a straight line
+// between whole items.
 //
 // --- Flattening while it leads --------------------------------------------
 //
@@ -57,7 +64,6 @@ import { computeCurrentProgress, computeCurrentIndex, computeScrollAnchorForProg
 import { RuleSheet } from "./helpers/style-swap.js";
 import { nextItemId } from "./helpers/item-id.js";
 
-const COUNTER_STEPS = 6;
 const FLATTEN_DURATION = 200;
 const FLATTEN_STEPS = 8;
 
@@ -70,9 +76,9 @@ function clamp01(x) {
 }
 
 // CSS's `ease`. The flattening samples it into keyframes rather than using
-// it as the animations' easing, since the counter-scale is sampled anyway,
-// and a timing function would bend its samples out of step with the
-// thumbnail's own.
+// it as the animations' easing, since the look is linear in its strength
+// but a timing function would bend each segment between keyframes on its
+// own, out of step with the others.
 function ease(t) {
   const [x1, y1, x2, y2] = [0.25, 0.1, 0.25, 1];
   const bez = (a, b, s) => 3 * a * s * (1 - s) ** 2 + 3 * b * s * s * (1 - s) + s ** 3;
@@ -89,9 +95,15 @@ export function expandEffect({ flattenWhileLeading = false } = {}) {
   function onItemCreated(item) {
     item.classList.add("expand-effect-item");
     item.dataset.itemId = nextItemId();
+    const leftEdge = document.createElement("div");
+    leftEdge.classList.add("expand-effect-left-edge");
+    const rightEdge = document.createElement("div");
+    rightEdge.classList.add("expand-effect-right-edge");
     const thumb = document.createElement("div");
     thumb.classList.add("expand-effect-thumb");
-    item.appendChild(thumb);
+    rightEdge.appendChild(thumb);
+    leftEdge.appendChild(rightEdge);
+    item.appendChild(leftEdge);
   }
 
   // What each item draws at one progress, with `scrollError` - how far the
@@ -106,20 +118,24 @@ export function expandEffect({ flattenWhileLeading = false } = {}) {
     const lo = clamp01(1 + u);
     const hi = clamp01(u);
     const shift = dims.footprintGrowth * ((lo + hi) / 2 - 0.5) * strength;
-    const scale = (dims.width + (lo - hi) * strength * (dims.grownWidth - dims.width)) / dims.grownWidth;
+    const inset = (1 - (lo - hi) * strength) * dims.inset;
     return {
-      item: { translate: `${shift + scrollError}px 0` },
-      thumb: { scale: `${scale} 1` },
-      content: { scale: `${1 / scale} 1` }
+      leftEdge: { translate: `${shift + inset + scrollError}px 0` },
+      rightEdge: { translate: `${-2 * inset}px 0` },
+      thumb: { translate: `${inset}px 0` }
     };
   }
 
+  // Each element the look draws on, per item: its two clipping edges and
+  // the thumbnail inside them.
+  const PARTS = ["leftEdge", "rightEdge", "thumb"];
 
-  // Each element the look draws on, per item: the item, its thumbnail, and
-  // whatever the thumbnail holds.
   function targetsOf(item) {
-    const thumb = item.querySelector(".expand-effect-thumb");
-    return { item, thumb, content: thumb ? [...thumb.children] : [] };
+    return {
+      leftEdge: item.querySelector(".expand-effect-left-edge"),
+      rightEdge: item.querySelector(".expand-effect-right-edge"),
+      thumb: item.querySelector(".expand-effect-thumb")
+    };
   }
 
   // Before the items are built: their sizes, and the look's default
@@ -137,10 +153,10 @@ export function expandEffect({ flattenWhileLeading = false } = {}) {
     const width = parseFloat(style.getPropertyValue("--expand-item-width"));
     const grownWidth = parseFloat(style.getPropertyValue("--expand-item-width-grown"));
     const grownPadding = parseFloat(style.getPropertyValue("--expand-grown-padding"));
-    const dims = { width, grownWidth, footprintGrowth: grownWidth - width + 2 * grownPadding };
-    // The thumbnail's scale at rest, for the stylesheet to fall back on
-    // before any animation resolves.
-    wrapper.style.setProperty("--expand-collapsed-scale", String(width / grownWidth));
+    const dims = { inset: (grownWidth - width) / 2, footprintGrowth: grownWidth - width + 2 * grownPadding };
+    // How far each clipping edge sits in from the grown width at rest, for
+    // the stylesheet to fall back on before any animation resolves.
+    wrapper.style.setProperty("--expand-collapsed-inset", `${dims.inset}px`);
 
     const previous = stateByWrapper.get(wrapper);
     const stripId = previous ? previous.stripId : nextStripId++;
@@ -159,21 +175,16 @@ export function expandEffect({ flattenWhileLeading = false } = {}) {
     stateByWrapper.set(wrapper, state);
 
     // One curve for every item, across the two items either side of it:
-    // 0% is the previous item current, 50% this one, 100% the next.
-    const names = { item: `expand-item-${stripId}`, thumb: `expand-thumb-${stripId}`, content: `expand-content-${stripId}` };
-    // Sampled as item 0 at progress 2t - 1, which is any item i at i - 1 + 2t.
-    const steps = COUNTER_STEPS * 2;
-    const curve = Array.from({ length: steps + 1 }, (_, k) => {
-      const t = k / steps;
-      const [frame] = frameAt({ dims, items: [null] }, 2 * t - 1);
-      return { percent: t * 100, frame };
-    });
-    const keyframes = (name, pick, stops) =>
-      `@keyframes ${name} {\n${stops.map((stop) => `  ${stop.percent}% { ${pick(stop.frame)} }`).join("\n")}\n}`;
-    const linearStops = [0, steps / 2, steps].map((k) => curve[k]);
-    sheet.set("keyframes-item", keyframes(names.item, (f) => `translate: ${f.item.translate};`, linearStops));
-    sheet.set("keyframes-thumb", keyframes(names.thumb, (f) => `scale: ${f.thumb.scale};`, linearStops));
-    sheet.set("keyframes-content", keyframes(names.content, (f) => `scale: ${f.content.scale};`, curve));
+    // 0% is the previous item current, 50% this one, 100% the next. Item 0
+    // at progress -1, 0 and 1 is any item i at i - 1, i and i + 1.
+    const stops = [-1, 0, 1].map((progress, k) => ({ percent: k * 50, frame: itemFrameAt(dims, 0, progress) }));
+    const names = Object.fromEntries(PARTS.map((part) => [part, `expand-${part}-${stripId}`]));
+    PARTS.forEach((part) =>
+      sheet.set(
+        `keyframes-${part}`,
+        `@keyframes ${names[part]} {\n${stops.map((stop) => `  ${stop.percent}% { translate: ${stop.frame[part].translate}; }`).join("\n")}\n}`
+      )
+    );
 
     // Each item's range: from the scroll offset where the item before it is
     // current to where the item after it is. The pitch is uniform, so the
@@ -182,22 +193,21 @@ export function expandEffect({ flattenWhileLeading = false } = {}) {
     items.forEach((item, i) => {
       const start = anchors[i] - pitch - wrapperAnchorPoint;
       const range = `${start}px ${start + 2 * pitch}px`;
-      const { thumb } = state.targets[i];
       const id = item.dataset.itemId;
-      const rules = [
-        [item, `.expand-effect-item[data-item-id="${id}"]`, names.item],
-        [thumb, `.expand-effect-item[data-item-id="${id}"] > .expand-effect-thumb`, names.thumb],
-        [null, `.expand-effect-item[data-item-id="${id}"] > .expand-effect-thumb > *`, names.content]
-      ];
-      rules.forEach(([el, selector, name]) => {
+      const selectors = {
+        leftEdge: `.expand-effect-item[data-item-id="${id}"] .expand-effect-left-edge`,
+        rightEdge: `.expand-effect-item[data-item-id="${id}"] .expand-effect-right-edge`,
+        thumb: `.expand-effect-item[data-item-id="${id}"] .expand-effect-thumb`
+      };
+      PARTS.forEach((part) => {
+        const el = state.targets[i][part];
+        const selector = selectors[part];
+        const name = names[part];
         // Inline for native engines, and as a real rule for the polyfill,
         // which only finds animations by parsing stylesheets (see
-        // scale-fade.js's positionSheet); the content has no single
-        // element to set inline on, so it only has the rule.
-        if (el) {
-          el.style.animationName = name;
-          el.style.animationRange = range;
-        }
+        // scale-fade.js's positionSheet).
+        el.style.animationName = name;
+        el.style.animationRange = range;
         // The polyfill reads a rule's animation-timeline alongside its
         // animation-name, so it's restated here rather than left to
         // expand.css's shared rule.
@@ -219,21 +229,15 @@ export function expandEffect({ flattenWhileLeading = false } = {}) {
   // outranks a running animation.
   function paint(state, progress, scrollError) {
     const frame = frameAt(state, progress, scrollError);
-    state.targets.forEach(({ item, thumb, content }, i) => {
-      item.style.setProperty("translate", frame[i].item.translate, "important");
-      thumb?.style.setProperty("scale", frame[i].thumb.scale, "important");
-      content.forEach((el) => el.style.setProperty("scale", frame[i].content.scale, "important"));
-    });
+    state.targets.forEach((targets, i) =>
+      PARTS.forEach((part) => targets[part].style.setProperty("translate", frame[i][part].translate, "important"))
+    );
     state.painting = true;
   }
 
   function clearPaint(state) {
     if (!state.painting) return;
-    state.targets.forEach(({ item, thumb, content }) => {
-      item.style.removeProperty("translate");
-      thumb?.style.removeProperty("scale");
-      content.forEach((el) => el.style.removeProperty("scale"));
-    });
+    state.targets.forEach((targets) => PARTS.forEach((part) => targets[part].style.removeProperty("translate")));
     state.painting = false;
   }
 
@@ -295,11 +299,9 @@ export function expandEffect({ flattenWhileLeading = false } = {}) {
     // filled only forwards draws nothing - leaving that frame, too, to the
     // look in full underneath.
     const timing = { duration: FLATTEN_DURATION, fill: "both", easing: "linear" };
-    const animations = state.targets.flatMap(({ item, thumb, content }, i) => [
-      item.animate(frames.map((f) => f[i].item), timing),
-      ...(thumb ? [thumb.animate(frames.map((f) => f[i].thumb), timing)] : []),
-      ...content.map((el) => el.animate(frames.map((f) => f[i].content), timing))
-    ]);
+    const animations = state.targets.flatMap((targets, i) =>
+      PARTS.map((part) => targets[part].animate(frames.map((f) => f[i][part]), timing))
+    );
     const flattening = { animations, replaced: [...previous, ...replaced], from, to, start: now };
     state.flattening = flattening;
     Promise.all(animations.map((animation) => animation.ready)).then(
@@ -340,35 +342,18 @@ export function expandEffect({ flattenWhileLeading = false } = {}) {
   }
 
   // Following another carousel on its timeline (see
-  // linked-scrolling/timeline-follow.js). The item's translate, carrying
-  // the distance between this carousel's scroll and where it is being
-  // shown, is linear in progress between whole items, and so is the
-  // thumbnail's scale: a keyframe at each of the leader's knots is exact
-  // for both. The counter-scale bends between whole items, so it gets
-  // COUNTER_STEPS keyframes per item, but only across the two items either
-  // side of its own, where it changes, and one at each end of the timeline
-  // either side of that, where it holds. The same keyframes at every knot
-  // would be far more: too many keyframes per animation is what left items
-  // blank for a second on iOS 27 in #14.
-  function followFrames(ctx, samples, { offsetOf }) {
-    const state = stateByWrapper.get(ctx.wrapper);
-    const { dims } = state;
-    const first = samples[0].progress;
-    const last = samples[samples.length - 1].progress;
-    return state.targets.flatMap(({ item, thumb, content }, i) => {
-      const bends = Array.from({ length: 2 * COUNTER_STEPS + 1 }, (_, k) => i - 1 + k / COUNTER_STEPS).filter(
-        (progress) => progress > first && progress < last
-      );
-      const counterScale = [first, ...bends, last].map((progress) => ({
-        offset: offsetOf(progress),
-        ...itemFrameAt(dims, i, progress).content
-      }));
-      return [
-        { target: item, keyframes: samples.map(({ progress, scrollError }) => itemFrameAt(dims, i, progress, scrollError).item) },
-        ...(thumb ? [{ target: thumb, keyframes: samples.map(({ progress }) => itemFrameAt(dims, i, progress).thumb) }] : []),
-        ...content.map((el) => ({ target: el, keyframes: counterScale }))
-      ];
-    });
+  // linked-scrolling/timeline-follow.js): everything here is linear in
+  // progress between whole items, so a keyframe at each of the leader's
+  // knots is exact. The outer edge's translate also carries the distance
+  // between this carousel's scroll and where it is being shown.
+  function followFrames(ctx, samples) {
+    const { dims, targets } = stateByWrapper.get(ctx.wrapper);
+    return targets.flatMap((parts, i) =>
+      PARTS.map((part) => ({
+        target: parts[part],
+        keyframes: samples.map(({ progress, scrollError }) => itemFrameAt(dims, i, progress, part === "leftEdge" ? scrollError : 0)[part])
+      }))
+    );
   }
 
   // This effect owns every item's rendering, and nothing it draws changes
