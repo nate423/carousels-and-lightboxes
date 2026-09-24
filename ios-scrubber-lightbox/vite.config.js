@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { versionBadge } from "./dev/version-badge-plugin.js";
 
 // The scroll-timeline polyfill and what loads it: classic scripts, which
 // Vite leaves alone rather than bundling, and whose paths it never sees
@@ -29,7 +30,7 @@ function copyScrollTimelineScripts() {
 
 export default defineConfig(({ command }) => ({
   base: command === "build" ? "/carousels-and-lightboxes/" : "/",
-  plugins: [react(), copyScrollTimelineScripts()],
+  plugins: [react(), copyScrollTimelineScripts(), versionBadge(__dirname)],
   server: {
     // Listen on the LAN too, so a phone on the same wifi can open the dev
     // server at this Mac's IP address.
