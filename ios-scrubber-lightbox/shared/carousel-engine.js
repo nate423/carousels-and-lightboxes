@@ -19,6 +19,7 @@ import { rafThrottle } from "./engine/raf-throttle.js";
 import { createScrollAttribution } from "./linked-scrolling/scroll-attribution.js";
 import { createSnapSuspension } from "./linked-scrolling/snap-suspension.js";
 import { createTimelineFollow } from "./linked-scrolling/timeline-follow.js";
+import { createYieldLead } from "./linked-scrolling/yield-lead.js";
 import { createGeometryCache } from "./engine/geometry-cache.js";
 import { createSpacers } from "./engine/spacers.js";
 import { onScrollEnd } from "./engine/scroll-end.js";
@@ -453,6 +454,15 @@ export function createCarousel(wrapper, options = {}) {
     applyIfReady();
   }
 
+  const yieldLead = createYieldLead(wrapper, {
+    attribution,
+    isPressed: press.isPressed,
+    onYield: () => {
+      notifyMotion();
+      applyIfReady();
+    }
+  });
+
   return {
     wrapper,
     getItems,
@@ -504,6 +514,7 @@ export function createCarousel(wrapper, options = {}) {
     lockPanning(locked) {
       wrapper.style.touchAction = locked ? "pan-y" : "";
     },
+    yieldLead,
     // Notified once this carousel's items have been measured again - after
     // a resize, or an item changing size. Returns an unsubscribe function.
     onGeometryChange(listener) {

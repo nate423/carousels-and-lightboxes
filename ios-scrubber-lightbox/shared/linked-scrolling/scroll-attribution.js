@@ -76,6 +76,14 @@ export function createScrollAttribution(wrapper, { onSelfReclaim, leadsUnasked =
   // provoked a scroll, which restarted leading, which changed it back.
   let selfMoveRequested = false;
 
+  // Whether this carousel has handed the lead to another one that was just
+  // touched (see yield-lead.js). Until it is touched or commanded again, or
+  // the other one has finished moving, none of its scrolling counts as
+  // moving for its own reasons - not even for a carousel that otherwise leads
+  // unasked, whose own settling onto an item would otherwise pull back the
+  // carousel it yielded to while that one is still coasting.
+  let yielded = false;
+
   // The same question asked about the other source: whether a drive is
   // currently moving this carousel. Unlike movingItself it cannot be read
   // off scroll events alone, because a drive does not reliably produce one -
@@ -104,6 +112,7 @@ export function createScrollAttribution(wrapper, { onSelfReclaim, leadsUnasked =
   function markSelfDriven() {
     scrollSource = "self";
     selfMoveRequested = true;
+    yielded = false;
     // Whatever a driver was doing to this carousel, it is not what is moving
     // it any more.
     movingDriven = false;
@@ -134,6 +143,7 @@ export function createScrollAttribution(wrapper, { onSelfReclaim, leadsUnasked =
     noteSelfCommand() {
       scrollSource = "self";
       selfMoveRequested = true;
+      yielded = false;
     },
 
     // Called by setProgressDirect: an outside driver is about to write this
@@ -149,7 +159,7 @@ export function createScrollAttribution(wrapper, { onSelfReclaim, leadsUnasked =
     // Called from the wrapper's own 'scroll' listener to update movingItself
     // and selfScrollStartedAt from the current attribution.
     noteScrollEvent() {
-      const nowMovingItself = scrollSource === "self" && (movingItself || selfMoveRequested || leadsUnasked);
+      const nowMovingItself = scrollSource === "self" && !yielded && (movingItself || selfMoveRequested || leadsUnasked);
       if (nowMovingItself && !movingItself) selfScrollStartedAt = performance.now();
       movingItself = nowMovingItself;
     },
@@ -170,6 +180,21 @@ export function createScrollAttribution(wrapper, { onSelfReclaim, leadsUnasked =
       return wasLeading;
     },
 
+    // Ends leading because another carousel has taken over, rather than
+    // because the motion came to rest (see yield-lead.js). Uses up the
+    // request that started it too, and whatever scrolling is left of that
+    // motion no longer counts as moving for its own reasons.
+    yieldLead() {
+      movingItself = false;
+      selfMoveRequested = false;
+      yielded = true;
+    },
+
+    // The carousel it yielded to has been let go without moving.
+    endYield() {
+      yielded = false;
+    },
+
     // Ends "following" - called once the carousel actually driving this one
     // reports that *its* gesture is over (see link.js), not off
     // this wrapper's own 'scrollend': a driven carousel's scroll position is
@@ -180,7 +205,10 @@ export function createScrollAttribution(wrapper, { onSelfReclaim, leadsUnasked =
     // leader's scrollend has no such problem - it's real, continuous scroll
     // input - so it's the only reliable end-of-motion signal for the side
     // being driven. Returns whether anything actually changed.
+    //
+    // The carousel it yielded to, if any, has finished moving too.
     endFollowing() {
+      yielded = false;
       if (!movingDriven) return false;
       movingDriven = false;
       return true;

@@ -37,6 +37,9 @@ export function ScrubberStrip({ items }) {
 
     const scrubber = createCarousel(wrapper, {
       itemCount: items.length,
+      // ?follow=direct follows by writing scroll positions rather than on the
+      // slides' timeline, as on the iOS scrubber page.
+      followOnTimeline: new URLSearchParams(location.search).get('follow') !== 'direct',
       // Same as the iOS scrubber page: the thumbnails flatten out while the
       // strip itself is being dragged, and grow again once it comes to rest.
       effect: expandEffect({ flattenWhileLeading: true }),

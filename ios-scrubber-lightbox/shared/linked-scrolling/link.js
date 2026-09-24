@@ -134,7 +134,15 @@ export function linkCarousels(a, b, { aWhileFollowing, bWhileFollowing }) {
     // both moved by hand at once, can only disagree about where they are.
     // Whichever is touched first is the one being driven by hand, until it
     // is let go.
-    source.onPressChange?.((pressed) => dest.lockPanning?.(pressed));
+    //
+    // And the last touch leads. Touching source stops whatever dest is still
+    // doing of its own accord - coasting from a flick let go of a moment
+    // ago - so source drives it from its first frame, rather than the two
+    // writing each other until one of them comes to rest.
+    source.onPressChange?.((pressed) => {
+      dest.lockPanning?.(pressed);
+      dest.yieldLead?.(pressed, { otherMoving: source.isMovingItself() });
+    });
 
     source.onScroll(({ source: scrollSource }) => {
       if (scrollSource === "driven") {
@@ -153,15 +161,17 @@ export function linkCarousels(a, b, { aWhileFollowing, bWhileFollowing }) {
       }
       // `source` is moving for its own reasons, or we'd have returned above.
       // It may drive unless `dest` is also moving for its own reasons and
-      // started doing so more recently - flick one carousel hard, then flick
-      // the other while the first is still coasting, and both are genuinely
-      // moving at once; without a rule each wire writes the other every frame
-      // and they settle disagreeing.
+      // started doing so more recently - flick one carousel with a wheel,
+      // then the other while the first is still coasting, and both are
+      // genuinely moving at once; without a rule each wire writes the other
+      // every frame and they settle disagreeing. A touch or click settles
+      // this before either moves (yieldLead, above); a wheel can't.
       //
-      // Both facts come from real scroll events, never from input events. The
-      // browser latches a wheel gesture to the scroller it began on while
-      // still dispatching wheel events to whatever is under the cursor, so
-      // input says nothing reliable about which carousel is actually moving.
+      // For a wheel both facts come from real scroll events, never from
+      // input events. The browser latches a wheel gesture to the scroller it
+      // began on while still dispatching wheel events to whatever is under
+      // the cursor, so a wheel event says nothing reliable about which
+      // carousel is actually moving.
       sync();
     });
   }

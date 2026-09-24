@@ -23,6 +23,7 @@ import { createScrollAttribution } from "./scroll-attribution.js";
 import { computeCurrentProgress, computeScrollAnchorForProgress, computeProgressKnots } from "../carousel-math.js";
 import { onScrollEnd } from "../engine/scroll-end.js";
 import { trackPress } from "../engine/press.js";
+import { createYieldLead } from "./yield-lead.js";
 
 const SLIDE_SELECTOR = "[data-ramka-slide]";
 const SNAP_RESTORE_DELAY = 150;
@@ -169,7 +170,8 @@ export function createRamkaSlidesController(slidesEl) {
   // locked in return: ramka handles its own touches - pinch to zoom among
   // them - and setting touch-action on its scrollport would take them over.
   const pressListeners = new Set();
-  trackPress(slidesEl, { onChange: (pressed) => pressListeners.forEach((listener) => listener(pressed)) });
+  const press = trackPress(slidesEl, { onChange: (pressed) => pressListeners.forEach((listener) => listener(pressed)) });
+  const yieldLead = createYieldLead(slidesEl, { attribution, isPressed: press.isPressed });
 
   const geometryListeners = new Set();
   const resizeObserver = new ResizeObserver(() => {
@@ -217,6 +219,7 @@ export function createRamkaSlidesController(slidesEl) {
       pressListeners.add(listener);
       return () => pressListeners.delete(listener);
     },
+    yieldLead,
     isMovingItself: attribution.isMovingItself,
     selfScrollStartedAt: attribution.selfScrollStartedAt,
     onScroll(listener) {

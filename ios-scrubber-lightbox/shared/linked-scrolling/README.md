@@ -30,7 +30,7 @@ implements.
 ## What a carousel has to provide
 
 `link.js` calls `getCurrentProgress`, `getProgressKnots`, `setProgressDirect`,
-`follow`, `onPressChange` and `lockPanning` (both optional), `isMovingItself`, `selfScrollStartedAt`, `getItems`, `onScroll`,
+`follow`, `onPressChange`, `lockPanning` and `yieldLead` (all optional), `isMovingItself`, `selfScrollStartedAt`, `getItems`, `onScroll`,
 `onScrollEnd` and `endFollowing`, and a leader's `wrapper` is the source of
 the scroll timeline a continuous follower is drawn on. `carousel-engine.js`
 implements all of them, and builds the attribution, snap suspension and
@@ -42,6 +42,12 @@ this codebase doesn't own the internals of (ramka's Lightbox `Slides`
 viewport, reached only through its public `data-ramka-slides`/`data-ramka-slide`
 data attributes) so `link.js` can drive it the same way, with no knowledge
 that it isn't a carousel-engine wrapper. See the ramka-scrubber page.
+
+Both implementers build what they share from the same modules -
+`scroll-attribution.js`, `yield-lead.js`, `../engine/press.js`,
+`../engine/scroll-end.js` - so a change to how carousels hand over the lead
+reaches both. What each does around them (snap, geometry, following) is its
+own, and a change there usually needs making in both.
 
 ## The part that is easy to get wrong
 
