@@ -14,7 +14,7 @@
 // have to agree, which is also where the comments explaining *why* now live.
 // The pure math they all build on was already factored out to
 // carousel-math.js.
-import { computeScrollAnchorForProgress, computeCurrentIndex } from "./carousel-math.js";
+import { computeScrollAnchorForProgress, computeCurrentIndex, computeCurrentProgress } from "./carousel-math.js";
 import { rafThrottle } from "./engine/raf-throttle.js";
 import { createScrollAttribution } from "./linked-scrolling/scroll-attribution.js";
 import { createSnapSuspension } from "./linked-scrolling/snap-suspension.js";
@@ -61,7 +61,38 @@ export function createCarousel(wrapper, options = {}) {
   const geometry = createGeometryCache({ wrapper, getItems });
   const spacers = createSpacers(wrapper, { getItems });
   const pressListeners = new Set();
-  const press = trackPress(wrapper, { onChange: (pressed) => pressListeners.forEach((listener) => listener(pressed)) });
+  const press = trackPress(wrapper, {
+    onChange: (pressed) => {
+      if (pressed) stopMove();
+      else resumeMove();
+      pressListeners.forEach((listener) => listener(pressed));
+    }
+  });
+  onSidewaysWheel(wrapper, stopMove);
+
+  // A look that draws the move to a tapped item itself (see goTo in
+  // effects/expand.js) has the scroll position there from the start, and
+  // what's shown catching up over a fixed time. A finger or the wheel on
+  // the carousel stops it where it's shown, and puts the scroll position
+  // back there, since that is where a drag pans from. Let go without
+  // moving it or tapping another item, it carries on to where it was going.
+  let movingTo = null;
+  let stoppedMove = null;
+
+  function stopMove() {
+    const shown = ready ? effect.freeze?.(ctx) : null;
+    if (shown == null) return;
+    const { anchors, wrapperAnchorPoint } = geometry.get();
+    snap.suspend();
+    rebase(computeCurrentProgress(anchors, shown + wrapperAnchorPoint));
+    stoppedMove = movingTo;
+  }
+
+  function resumeMove() {
+    const index = stoppedMove;
+    stoppedMove = null;
+    if (index !== null) goToIndex(index);
+  }
 
   // Whoever is watching this carousel move - today, the iOS strip, which
   // flattens its thumbnails while you are dragging it and lets them grow
@@ -80,6 +111,11 @@ export function createCarousel(wrapper, options = {}) {
     const state = attribution.getMotionState();
     if (state === lastMotionState) return;
     lastMotionState = state;
+    // A drag or the wheel taking over a stopped move.
+    if (state === "leading" && stoppedMove !== null) {
+      stoppedMove = null;
+      snap.restore();
+    }
     // The look first, for one that draws motion itself (see
     // flattenWhileLeading in effects/expand.js).
     if (ready) effect.onMotionChange?.(ctx, state);
@@ -126,7 +162,16 @@ export function createCarousel(wrapper, options = {}) {
     reclaim();
     attribution.noteSelfCommand();
 
-    wrapper.scrollTo({ left: anchors[index] - wrapperAnchorPoint, behavior });
+    const left = anchors[index] - wrapperAnchorPoint;
+    stoppedMove = null;
+    if (behavior === "smooth" && effect.goTo) {
+      // See stopMove.
+      effect.goTo(ctx, { index, scrollLeft: left });
+      movingTo = index;
+      wrapper.scrollTo({ left, behavior: "instant" });
+      return;
+    }
+    wrapper.scrollTo({ left, behavior });
   }
 
   // Manually takes over the scroll position to match an externally-driven

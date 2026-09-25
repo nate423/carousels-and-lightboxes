@@ -66,10 +66,12 @@ import { nextItemId } from "./helpers/item-id.js";
 
 const FLATTEN_DURATION = 200;
 const FLATTEN_STEPS = 8;
+const MOVE_DURATION = 300;
 
 let nextStripId = 0;
 
 const stateByWrapper = new WeakMap();
+
 
 function clamp01(x) {
   return Math.min(Math.max(x, 0), 1);
@@ -106,24 +108,41 @@ export function expandEffect({ flattenWhileLeading = false } = {}) {
     item.appendChild(leftEdge);
   }
 
-  // What each item draws at one progress, with `scrollError` - how far the
+  // What an item draws at one progress, with `scrollError` - how far the
   // scroll position sits from where the progress belongs - carried in the
   // translate, and at one strength of the look: 1 in full, 0 flat.
-  function frameAt(state, progress, scrollError = 0, strength = 1) {
-    return state.items.map((item, i) => itemFrameAt(state.dims, i, progress, scrollError, strength));
+  function itemFrameAt(dims, i, progress, scrollError = 0, strength = 1) {
+    return frameOf(lookAt(dims, i, progress, strength), scrollError);
   }
 
-  function itemFrameAt(dims, i, progress, scrollError = 0, strength = 1) {
+  // An item's look as two numbers: how far it moves aside for a grown
+  // neighbor (shift), and how far each clipping edge sits in from the grown
+  // width (inset). Every translate is linear in both, so blending two looks
+  // blends what they draw.
+  function lookAt(dims, i, progress, strength = 1) {
     const u = i - progress;
     const lo = clamp01(1 + u);
     const hi = clamp01(u);
-    const shift = dims.footprintGrowth * ((lo + hi) / 2 - 0.5) * strength;
-    const inset = (1 - (lo - hi) * strength) * dims.inset;
+    return {
+      shift: dims.footprintGrowth * ((lo + hi) / 2 - 0.5) * strength,
+      inset: (1 - (lo - hi) * strength) * dims.inset
+    };
+  }
+
+  function frameOf({ shift, inset }, scrollError = 0) {
     return {
       leftEdge: { translate: `${shift + inset + scrollError}px 0` },
       rightEdge: { translate: `${-2 * inset}px 0` },
       thumb: { translate: `${inset}px 0` }
     };
+  }
+
+  function mix(a, b, t) {
+    return { shift: a.shift + (b.shift - a.shift) * t, inset: a.inset + (b.inset - a.inset) * t };
+  }
+
+  function looksAt(state, progress, strength = 1) {
+    return state.items.map((item, i) => lookAt(state.dims, i, progress, strength));
   }
 
   // Each element the look draws on, per item: its two clipping edges and
@@ -170,7 +189,7 @@ export function expandEffect({ flattenWhileLeading = false } = {}) {
       targets: [...items].map(targetsOf),
       anchors,
       painting: previous?.painting ?? false,
-      flattening: previous?.flattening ?? { animations: [], replaced: [], from: 1, to: 1, start: 0 }
+      flattening: previous?.flattening ?? idle()
     };
     stateByWrapper.set(wrapper, state);
 
@@ -222,16 +241,17 @@ export function expandEffect({ flattenWhileLeading = false } = {}) {
 
   // Painting from script, where the scroll-driven animations can't show
   // what this carousel should: past either end, where they hold the end
-  // item at full, and while another carousel writes its scroll position
-  // directly, where they would draw the quantised position rather than the
+  // item at full; while another carousel writes its scroll position
+  // directly, where they would draw the quantized position rather than the
   // exact progress the driver asked for - which on a strip this short moves
-  // the thumbnails in visible steps. !important, since that is what
-  // outranks a running animation.
-  function paint(state, progress, scrollError) {
-    const frame = frameAt(state, progress, scrollError);
-    state.targets.forEach((targets, i) =>
-      PARTS.forEach((part) => targets[part].style.setProperty("translate", frame[i][part].translate, "important"))
-    );
+  // the thumbnails in visible steps; and a move to a tapped item, stopped
+  // by input (see freeze below). !important, since that is what outranks a
+  // running animation.
+  function paint(state, looks, scrollError = 0) {
+    state.targets.forEach((targets, i) => {
+      const frame = frameOf(looks[i], scrollError);
+      PARTS.forEach((part) => targets[part].style.setProperty("translate", frame[part].translate, "important"));
+    });
     state.painting = true;
   }
 
@@ -254,14 +274,18 @@ export function expandEffect({ flattenWhileLeading = false } = {}) {
     const currentProgress = currentProgressOf(ctx, state);
     const overscrolled = currentProgress < 0 || currentProgress > state.items.length - 1;
 
-    // A timeline laid across another carousel draws this one while it
-    // follows on it, and while flattened, the flattening does, even past
-    // either end; anything painted here would outrank either.
-    if (ctx.isOnTimeline() || state.flattening.to === 0) {
+    // A frozen move stays painted until whatever replaces it has started
+    // drawing (see freeze). Otherwise a timeline laid across another
+    // carousel draws this one while it follows on it, and while flattened,
+    // the flattening does, even past either end; anything painted here
+    // would outrank either.
+    if (state.paintHeld) {
+      // Left as it is.
+    } else if (ctx.isOnTimeline() || state.flattening.to === 0) {
       clearPaint(state);
     } else if (isDriven || overscrolled) {
       const scrollError = currentScrollAnchor() - computeScrollAnchorForProgress(state.anchors, currentProgress);
-      paint(state, currentProgress, isDriven ? scrollError : 0);
+      paint(state, looksAt(state, currentProgress), isDriven ? scrollError : 0);
     } else {
       clearPaint(state);
     }
@@ -269,12 +293,27 @@ export function expandEffect({ flattenWhileLeading = false } = {}) {
     onProgress?.(computeCurrentIndex(currentProgress, state.items.length), currentProgress);
   }
 
-  // How strong the look is right now, 0 to 1, from where the flattening
-  // animations have got to.
-  function strengthAt(state, now) {
+  // What each item shows right now: stopped or partway through a move to
+  // a tapped item, partway through flattening or growing back, or the
+  // look at the current progress.
+  function shownLooks(ctx, state, now) {
+    if (state.frozen) return state.frozen.looks;
+    if (state.move) {
+      const t = moveProgress(state.move);
+      return state.move.start.map((look, i) => mix(look, state.move.end[i], t));
+    }
     const { animations, from, to, start } = state.flattening;
-    if (!animations.length) return to;
-    return from + (to - from) * ease(clamp01((now - start) / FLATTEN_DURATION));
+    if (!animations.length) return looksAt(state, currentProgressOf(ctx, state), to);
+    const t = ease(clamp01((now - start) / FLATTEN_DURATION));
+    return from.map((look, i) => mix(look, to === 0 ? flatLook(state) : state.flattening.target[i], t));
+  }
+
+  function flatLook(state) {
+    return { shift: 0, inset: state.dims.inset };
+  }
+
+  function idle() {
+    return { animations: [], replaced: [], to: 1 };
   }
 
   // Eases the look from wherever it is to `to` - see "Flattening while it
@@ -286,13 +325,13 @@ export function expandEffect({ flattenWhileLeading = false } = {}) {
   // back.
   function flattenTo(ctx, state, to) {
     const now = document.timeline.currentTime;
-    const from = strengthAt(state, now);
     const { animations: previous, replaced } = state.flattening;
-    if (from === to && !previous.length) return;
+    if (to === 1 && !previous.length && !state.frozen) return;
 
-    const progress = currentProgressOf(ctx, state);
+    const from = shownLooks(ctx, state, now);
+    const target = to === 0 ? from.map(() => flatLook(state)) : looksAt(state, currentProgressOf(ctx, state));
     const frames = Array.from({ length: FLATTEN_STEPS + 1 }, (_, k) =>
-      frameAt(state, progress, 0, from + (to - from) * ease(k / FLATTEN_STEPS))
+      from.map((look, i) => frameOf(mix(look, target[i], ease(k / FLATTEN_STEPS))))
     );
     // Filled backwards too: a new animation's start time can land a
     // moment after the frame it first draws in, and before it starts, one
@@ -315,7 +354,7 @@ export function expandEffect({ flattenWhileLeading = false } = {}) {
       ...holds,
       ...state.targets.flatMap((targets, i) => PARTS.map((part) => targets[part].animate(frames.map((f) => f[i][part]), timing)))
     ];
-    const flattening = { animations, replaced: [...previous, ...replaced], from, to, start: now };
+    const flattening = { animations, replaced: [...previous, ...replaced, ...releaseMove(state)], from, target, to, start: now };
     state.flattening = flattening;
     Promise.all(animations.map((animation) => animation.ready)).then(
       () => {
@@ -332,7 +371,7 @@ export function expandEffect({ flattenWhileLeading = false } = {}) {
         () => {
           if (state.flattening !== flattening) return;
           animations.forEach((animation) => animation.cancel());
-          state.flattening = { animations: [], replaced: [], from: 1, to: 1, start: 0 };
+          state.flattening = idle();
         },
         () => {}
       );
@@ -343,15 +382,140 @@ export function expandEffect({ flattenWhileLeading = false } = {}) {
   // to drive: what drives it draws the look in full, over the top.
   function unflatten(state) {
     [...state.flattening.animations, ...state.flattening.replaced].forEach((animation) => animation.cancel());
-    state.flattening = { animations: [], replaced: [], from: 1, to: 1, start: 0 };
+    state.flattening = idle();
+  }
+
+  // --- Moving to a tapped item -------------------------------------------
+  //
+  // Tapping a thumbnail moves the strip to it in a fixed time, however far
+  // away it is. The tapped item grows and the one it leaves collapses in
+  // one motion, and nothing between them grows on the way.
+  //
+  // The strip's scroll position goes straight to the tapped item (see
+  // goToIndex in carousel-engine.js), so anything linked to it goes there
+  // at once too. What moves is what's drawn: each item eases from where and
+  // how it was shown to where it belongs, with the distance the scroll
+  // jumped carried in its outer edge's translate. It is a time-based
+  // animation like the flattening, so the compositor runs it everywhere.
+  //
+  // Input on the strip while it moves - a finger or the wheel - stops it
+  // where it's shown (freeze below): the engine puts the scroll position
+  // back there, since a drag pans from the real scroll position, and the
+  // look holds what it showed until what comes next takes over from there.
+  function goTo(ctx, { index, scrollLeft: to }) {
+    const state = stateByWrapper.get(ctx.wrapper);
+    const now = document.timeline.currentTime;
+    const from = shownScroll(ctx, state);
+    const start = shownLooks(ctx, state, now);
+    const end = looksAt(state, index);
+
+    // Its first frame is painted until the move draws, since a new
+    // animation may not draw in the frame it's made, and the scroll
+    // position jumps in that one. The paint outranks everything, so what it
+    // replaces can go at once.
+    [...state.flattening.animations, ...state.flattening.replaced, ...releaseMove(state)].forEach((animation) => animation.cancel());
+    state.flattening = idle();
+    const painted = holdPaint(state, start, to - from);
+
+    const timing = { duration: MOVE_DURATION, fill: "both", easing: "ease" };
+    const frames = state.targets.map((targets, i) => [frameOf(start[i], to - from), frameOf(end[i])]);
+    // A second animation holds where it lands underneath the glide, and
+    // keeps running until whatever comes next replaces it, as for the
+    // flattening (see flattenTo): WebKit draws a scroll-driven animation
+    // over one that only holds its end.
+    const holds = state.targets.flatMap((targets, i) =>
+      PARTS.map((part) => targets[part].animate([frames[i][1][part], frames[i][1][part]], { duration: MOVE_DURATION, iterations: Infinity }))
+    );
+    const glides = state.targets.flatMap((targets, i) => PARTS.map((part) => targets[part].animate([frames[i][0][part], frames[i][1][part]], timing)));
+    const move = { from, to, start, end, glides, animations: [...holds, ...glides], arrived: false };
+    state.move = move;
+
+    Promise.all(move.animations.map((animation) => animation.ready)).then(
+      () => painted.cancel(),
+      () => {}
+    );
+    Promise.all(glides.map((animation) => animation.finished)).then(
+      () => {
+        if (state.move !== move) return;
+        glides.forEach((animation) => animation.cancel());
+        move.animations = holds;
+        move.arrived = true;
+      },
+      () => {}
+    );
+  }
+
+  // How far along a move is, 0 to 1, from its own timing.
+  function moveProgress(move) {
+    if (move.arrived) return 1;
+    return ease(clamp01((move.glides[0].currentTime ?? 0) / MOVE_DURATION));
+  }
+
+  // Where the strip is shown scrolled to, which is its scroll position
+  // except partway through a move.
+  function shownScroll(ctx, state) {
+    if (!state.move) return ctx.wrapper.scrollLeft;
+    const { from, to } = state.move;
+    return from + (to - from) * moveProgress(state.move);
+  }
+
+  // Stops a move where it's shown, for input on the strip, and returns the
+  // scroll position it's shown at, or null if it wasn't moving. What it
+  // shows is painted until whatever comes next replaces it. One that has
+  // arrived is left holding.
+  function freeze(ctx) {
+    const state = stateByWrapper.get(ctx.wrapper);
+    if (!state.move || state.move.arrived) return null;
+    const now = document.timeline.currentTime;
+    const scrollLeft = shownScroll(ctx, state);
+    const looks = shownLooks(ctx, state, now);
+    // The paint outranks every animation, so the move can go at once.
+    releaseMove(state).forEach((animation) => animation.cancel());
+    state.frozen = { looks, painted: holdPaint(state, looks) };
+    return scrollLeft;
+  }
+
+  // Ends a move, or what a freeze painted, and returns what still draws
+  // it, for whatever replaces it to cancel once that has started drawing.
+  function releaseMove(state) {
+    const { move, frozen } = state;
+    state.move = null;
+    state.frozen = null;
+    return [...(move?.animations ?? []), ...(frozen ? [frozen.painted] : [])];
+  }
+
+  // Paints `looks` and keeps them painted (see apply) until the returned
+  // hold is cancelled, or a later one replaces it.
+  function holdPaint(state, looks, scrollError = 0) {
+    paint(state, looks, scrollError);
+    const hold = {
+      cancel() {
+        if (state.paintHeld !== hold) return;
+        state.paintHeld = null;
+        clearPaint(state);
+      }
+    };
+    state.paintHeld = hold;
+    return hold;
   }
 
   function onMotionChange(ctx, motion) {
-    if (!flattenWhileLeading) return;
     const state = stateByWrapper.get(ctx.wrapper);
-    if (motion === "leading") flattenTo(ctx, state, 0);
-    else if (motion === "idle") flattenTo(ctx, state, 1);
-    else unflatten(state);
+    // The jump to a tapped item is the move's own; it draws it, start to
+    // end. Once it has arrived, anything that moves the strip takes over.
+    if (state.move && !state.move.arrived) {
+      if (motion !== "following") return;
+      releaseMove(state).forEach((animation) => animation.cancel());
+    }
+    if (motion === "leading") {
+      if (flattenWhileLeading) flattenTo(ctx, state, 0);
+      else releaseMove(state).forEach((animation) => animation.cancel());
+    } else if (motion === "idle") {
+      if (flattenWhileLeading) flattenTo(ctx, state, 1);
+    } else {
+      releaseMove(state).forEach((animation) => animation.cancel());
+      unflatten(state);
+    }
   }
 
   // Following another carousel on its timeline (see
@@ -378,6 +542,8 @@ export function expandEffect({ flattenWhileLeading = false } = {}) {
     setup,
     apply,
     onMotionChange,
+    goTo,
+    freeze,
     followFrames,
     skipItemResizeObserver: true
   };
