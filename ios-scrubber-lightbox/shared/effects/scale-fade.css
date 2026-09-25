@@ -1,89 +1,30 @@
-/* The scale-fade look's scaffolding: the per-item view-timeline and the
-   wrapper-level scroll-timeline that shared/effects/scale-fade.js hangs
-   its generated per-item animation-name/-range off.
+/* Styles for the scale-fade look (shared/effects/scale-fade.js). A carousel
+   opts in with the .scale-fade class on its wrapper. */
 
-   Scoped to .scale-fade, a class a wrapper opts into, rather than to
-   every .carousel-wrapper on the page - because which carousels want
-   this look varies (the scale-fade page's one carousel, both of the
-   filmstrip page's, but only the main carousel on the iOS page, whose
-   strip draws itself with width and displacement instead). Each page
-   used to say that with its own selector, which is how the iOS page once
-   ended up with the effect running and no timeline for it to run against
-   - a flat carousel, from CSS that was missing rather than wrong. A
-   class is visible in the markup, where leaving it off is something you
-   can see. */
-
-/* --- The scale-fade look ------------------------------------------------- */
-
-/* The look's own default for how strongly a non-current item shrinks and
-   fades - scoped here rather than to every .carousel-wrapper (as these once
-   were, in shared/base.css) because a wrapper whose look never reads one of
-   these has no business inheriting a value for it: .fade only ever reads
-   --noncurrent-opacity, and .expand-effect reads neither. A page that wants
-   different numbers overrides them on its own wrapper (see filmstrip.css's
-   --noncurrent-scale/--noncurrent-opacity on .thumbnail-scrubber-strip),
-   which wins because every page's own stylesheet loads after this one. */
+/* The scale and opacity of every item except the centered one. A page can
+   override these on its own wrapper (see filmstrip.css). */
 .scale-fade {
   --noncurrent-scale: 0.8;
   --noncurrent-opacity: 0.5;
 }
 
-.scale-fade .carousel-item {
-  view-timeline-name: --item-reveal;
-  view-timeline-axis: inline;
-
-  /* animation-range is computed and set per item in JS
-     (setItemCurrentKeyframes in shared/effects/scale-fade.js), from the
-     same anchor/alignment math as everything else in
-     carousel-math.js - keyword ranges (entry/exit/contain) don't track a
-     custom alignment anchor point across items of wildly different sizes. */
-  animation-name: item-current;
-  animation-timeline: --item-reveal;
-  animation-fill-mode: both;
-  animation-timing-function: linear;
-}
-
-/* Second, wrapper-level named timeline (distinct from the per-item
-   --item-reveal view-timeline above), tracking raw scroll offset across
-   the whole scrollable range. Drives the gap-compensating translate,
-   which (unlike scale/opacity) needs global state a per-item
-   view-timeline can't see. Items reference it directly since they're
-   descendants of the wrapper - see setItemCurrentKeyframes in
-   scale-fade.js for the generated per-item @keyframes, and
-   computeTranslationBreakpoints in gap-compensation.js for why this is
-   exact rather than sampled. */
+/* The carousel's scroll position, as a timeline its items animate on.
+   Each item's animation-name and animation-range are generated in
+   scale-fade.js. */
 .scale-fade {
   scroll-timeline-name: --carousel-scroll;
   scroll-timeline-axis: inline;
 }
 
-/* Scale, opacity and translate are written by the generated per-item
-   keyframes themselves (see setItemCurrentKeyframes in scale-fade.js),
-   which is what keeps this look on the compositor. Nothing is left here
-   to interpolate.
-
-   The scroll-error correction stays on its own property: the animation
-   owns translate, so nothing can be added to it there, but translate and
-   transform compose, so the correction lands either way. Static, and so
-   free, on any carousel that isn't currently being driven. */
 .scale-fade .carousel-item {
-  transform: translateX(var(--scroll-error));
+  animation-timeline: --carousel-scroll;
+  animation-fill-mode: both;
+  animation-timing-function: linear;
 }
 
-/* The shared default, used until scale-fade.js replaces it with a
-   per-item rule whose peak sits where that item's own geometry puts it rather
-   than at a flat 50%. Draws the same properties the generated ones do. */
-@keyframes item-current {
-  0% {
-    scale: var(--noncurrent-scale);
-    opacity: var(--noncurrent-opacity);
-  }
-  50% {
-    scale: 1;
-    opacity: 1;
-  }
-  100% {
-    scale: var(--noncurrent-scale);
-    opacity: var(--noncurrent-opacity);
-  }
+/* Shifts every item by --scroll-error, set while another carousel drives
+   this one (see apply in scale-fade.js). The animation sets transform;
+   translate is a separate property, so the two add up. */
+.scale-fade .carousel-item {
+  translate: var(--scroll-error) 0;
 }

@@ -1,77 +1,44 @@
-// The default carousel look: every item scales and fades toward its
-// noncurrent state the further it sits from current, with a translate that
-// compensates for the gap scaling opens between neighbours.
+// The default carousel look. The centered item is full size and fully
+// opaque. Every other item is drawn at one smaller scale and one lower
+// opacity (--noncurrent-scale, --noncurrent-opacity). An item changes
+// between the two only while moving between the center and the next item
+// over. Items also shift to close the gaps that shrinking opens, so the
+// spacing between them stays even.
 //
-// All native: `animation-range` plus per-item @keyframes on .carousel-item
-// drive scale/opacity off a per-item view-timeline, and translate off a
-// wrapper-level scroll-timeline (both declared in the page's stylesheet).
-// This module only precomputes that animation geometry in setup(); apply()
-// just derives the current index for a navigator, since that's the one
-// thing no timeline can hand back to JS.
+// Used by the scale-fade page and by both carousels on the filmstrip page.
 //
-// Shared by the scale-fade page and by the filmstrip page, whose strip is
-// this same look tuned smaller.
+// The browser draws the look by itself: each item has an animation tied to
+// the carousel's scroll position (a scroll timeline). setup() generates
+// those animations. apply() runs on scroll, reports the current item, and
+// draws the look from JS in the few cases the animations can't (see paint).
 //
-// The same look computed by hand instead of via @keyframes is archived at
-// archive/proto-v1/js/effects/looks/scale-fade-look.js - the reference this
-// one's output was checked against.
+// "Progress" throughout is the carousel's position in items: 3 means item 3
+// is centered, 3.5 means halfway between items 3 and 4.
 import {
   computeCurrentProgress,
   computeCurrentIndex,
   computeScrollAnchorForProgress,
-  computeAnimationRanges,
   computeEdgeAnchors
 } from "../carousel-math.js";
-import { computeTranslationBreakpoints, computeGapCompensatedFrame } from "./helpers/gap-compensation.js";
+import { computeFrameBreakpoints, computeGapCompensatedFrame } from "./helpers/gap-compensation.js";
 import { RuleSheet } from "./helpers/style-swap.js";
 import { nextItemId } from "./helpers/item-id.js";
 
-// `animation-timing-function` only reshapes the curve *within* one
-// keyframe-to-keyframe segment - it can't move *where* a keyframe's value
-// falls across the whole range. Each item's peak sits at its own
-// asymmetric position (computeAnimationRanges' peakX), so placing it
-// correctly means giving that item its own @keyframes rule with "scale: 1"
-// at that exact percentage. That needs a distinct, stable id per item
-// (assigned in onItemCreated) and a shared stylesheet holding one
-// generated rule per item, rebuilt whenever setup() recomputes geometry.
-// The gap-compensating translate gets the same treatment - off a second,
-// wrapper-level scroll-timeline instead of the per-item one - see
-// computeTranslationBreakpoints in gap-compensation.js for why that's
-// exactly representable too.
-//
-// Ids only need to be unique site-wide (they're used in the
-// `[data-item-id="N"]` selector below), which helpers/item-id.js sees to
-// across every look on the page.
-
-// The generated rules and the <style> elements holding them are kept
-// one-per-wrapper (via this WeakMap), not as module-level singletons. A
-// single shared set would mean every carousel using this look (the
-// filmstrip page runs two at once) flushes the same 3 <style> elements on
-// every setup() call, so one carousel's resize churn forces a full
-// teardown-and-reinsert of every other carousel's rules too. The
-// scroll-timeline polyfill (below) only (re)parses a <style> element the
-// moment it's inserted, so that churn keeps re-discovering rules for items
-// whose animations may already be running - and a freshly-dispatched
-// animationstart can race the polyfill's own parse of the very rule it
-// needs, permanently missing the hijack for whichever item loses that
-// race. Scoping rules per wrapper means one carousel's churn never touches
-// another's.
+// Each carousel keeps its own generated stylesheets. The scroll-timeline
+// polyfill (used on iOS 18 and Safari 17) only reads a stylesheet when it is
+// inserted, so rebuilding one carousel's rules makes it re-read them. Kept
+// separate, a resize of one carousel doesn't disturb another's running
+// animations.
 const stateByWrapper = new WeakMap();
 
 function getWrapperState(wrapper) {
   let state = stateByWrapper.get(wrapper);
   if (!state) {
     state = {
-      currentKeyframeSheet: new RuleSheet(),
-      translateKeyframeSheet: new RuleSheet(),
-      // Safari's scroll-timeline polyfill can't see animation-timeline etc.
-      // set as inline styles - it only discovers them by parsing real
-      // stylesheet rules and matching selectors against the DOM (see
-      // getAnimationTimelineOptions in vendor/scroll-timeline.js). So every
-      // item's animation-name/-timeline/-range also gets a generated
-      // selector rule here, alongside the inline styles below (which
-      // native engines read directly and which win in the CSSOM anyway -
-      // same values, no conflict).
+      keyframeSheet: new RuleSheet(),
+      // Each item's animation-name/-timeline/-range as a stylesheet rule. The
+      // polyfill only finds these in stylesheets, not in inline styles.
+      // Native engines read the inline styles set alongside them.
       positionSheet: new RuleSheet()
     };
     stateByWrapper.set(wrapper, state);
@@ -79,141 +46,98 @@ function getWrapperState(wrapper) {
   return state;
 }
 
-// Builds the rule text and points the item at it, but doesn't touch the
-// shared stylesheet's textContent yet - setting that is a full reparse of
-// every rule in it, so setup() batches all n items' rules and writes each
-// stylesheet once, after the items.forEach loop. Writing per-item instead
-// would reparse the whole, growing rule set on every write - O(n^2) -
-// which shows up as jank on window resize, since resize has no debounce.
+// Gives an item its own @keyframes, since every item draws something
+// different at each point. `stops` are what the item draws at each point
+// across the range.
 //
-// The keyframes write scale, opacity and translate outright, properties
-// the compositor understands on its own, so the look keeps animating even
+// Scale and translate are one transform, and the whole look runs on one
+// timeline. On iOS 27, an item animated with separate scale and translate
+// animations disappears as its full-size box nears the screen edge, while
+// its shrunken shape is still on screen (#1). Translate comes before scale
+// in the transform so it moves the item in screen pixels.
+//
+// Transform and opacity animate on the compositor, so the look keeps moving
 // when the main thread is busy.
 //
-// A contrast-dimmable version of this look used to exist: every drawn
-// value multiplied by how much contrast is showing, which meant the
-// keyframes wrote --item-progress/--item-shift and a calc() in the
-// stylesheet turned those into the real values. calc() is nothing the
-// compositor can evaluate, so the browser had to resolve the animation on
-// the main thread every frame instead - measured to freeze solid under
-// three seconds of main-thread load, where this simpler version keeps
-// animating.
-//
-// No carousel using this look drops contrast any more; the iOS scrubber,
-// which does, pays that cost in its own look instead. Contrast can't just
-// be composed on top as a second animation either: transforms do compose
-// multiplicatively, but what contrast scales is each value's *distance
-// from neutral* (1 + c * (s - 1)), not a plain factor of c.
-function setItemCurrentKeyframes(state, item, peakX, range, translateStops, translateRange) {
-  const currentName = `item-current-${item.dataset.itemId}`;
-  state.currentKeyframeSheet.set(
-    currentName,
-    `@keyframes ${currentName} {
-      0% { scale: var(--noncurrent-scale); opacity: var(--noncurrent-opacity); }
-      ${peakX * 100}% { scale: 1; opacity: 1; }
-      100% { scale: var(--noncurrent-scale); opacity: var(--noncurrent-opacity); }
-    }`
-  );
-
-  const translateName = `item-translate-${item.dataset.itemId}`;
-  const stops = translateStops
-    .map(({ percent, value }) => `${percent}% { translate: ${value}px 0; }`)
+// The rule is only queued here; setup() writes each stylesheet once, after
+// all items, since every write reparses the whole sheet.
+function setItemKeyframes(state, item, stops, animationRange) {
+  const name = `item-look-${item.dataset.itemId}`;
+  const keyframes = stops
+    .map(
+      ({ percent, translate, scale, opacity }) =>
+        `${percent}% { transform: translateX(${translate}px) scale(${scale}); opacity: ${opacity}; }`
+    )
     .join("\n      ");
-  state.translateKeyframeSheet.set(translateName, `@keyframes ${translateName} {\n      ${stops}\n    }`);
+  state.keyframeSheet.set(name, `@keyframes ${name} {\n      ${keyframes}\n    }`);
 
-  const animationName = `${currentName}, ${translateName}`;
-  const animationTimeline = "--item-reveal, --carousel-scroll";
-  const animationRange = `cover ${range.start * 100}% cover ${range.end * 100}%, ${translateRange}`;
-
-  item.style.animationName = animationName;
-  item.style.animationTimeline = animationTimeline;
+  item.style.animationName = name;
   item.style.animationRange = animationRange;
 
   state.positionSheet.set(
     item.dataset.itemId,
     `.carousel-item[data-item-id="${item.dataset.itemId}"] {
-      animation-name: ${animationName};
-      animation-timeline: ${animationTimeline};
+      animation-name: ${name};
+      animation-timeline: --carousel-scroll;
       animation-range: ${animationRange};
     }`
   );
 }
 
 function flushKeyframeStyles(state) {
-  state.currentKeyframeSheet.flush();
-  state.translateKeyframeSheet.flush();
+  state.keyframeSheet.flush();
   state.positionSheet.flush();
 }
 
+// A page-wide unique id, which the generated rules select items by.
 function onItemCreated(item) {
   item.dataset.itemId = nextItemId();
 }
 
-// Sets each item's `animation-range` from its own geometry - sized to the
-// real pixel gap to each neighbouring anchor, so the falloff reaches
-// exactly 0 exactly when that neighbour becomes current (asymmetric
-// whenever neighbours differ in size, which they always do here). That
-// asymmetry means an item's real peak generally isn't at the range's
-// midpoint, so each item gets its own @keyframes rule
-// (setItemCurrentKeyframes) with "scale: 1" placed at peakX instead of a
-// fixed 50%. Pure layout math - only needs recomputing when geometry or
-// alignment changes, not on scroll.
-//
-// Known limitation, not a bug: right after an item enters a fresh
-// animation-range, Chromium holds it clamped at the boundary's keyframe
-// value for a few more pixels of scroll before it starts interpolating,
-// even though the declared range is already correct at that point.
-// Confirmed at the painted-layout level and reproduces even with the
-// default range, so it's a browser quirk in view-timeline boundary
-// detection, not something our geometry can fix - and not worth
-// hard-coding an undocumented pixel offset for.
+// Generates every item's animation from the carousel's layout. Runs when the
+// layout changes, not on scroll.
 function setup(ctx) {
   const { wrapper, getNoncurrentScale } = ctx;
   const state = getWrapperState(wrapper);
   const { items, anchors, sizes, wrapperAnchorPoint } = ctx.getGeometry();
-  const ranges = computeAnimationRanges(anchors, sizes, wrapper.offsetWidth);
+  state.noncurrentScale = getNoncurrentScale(wrapper);
+  state.noncurrentOpacity = parseFloat(getComputedStyle(wrapper).getPropertyValue("--noncurrent-opacity"));
 
-  // The breakpoints run past both ends of the scroll range, out to where
-  // an overscroll can carry the end item (see computeTranslationBreakpoints),
-  // so the translate's range is set in raw scroll offsets that go past 0
-  // and maxScroll too, rather than as the timeline's own 0%-100%.
-  // scrollAnchor = scrollOffset + wrapperAnchorPoint (see getItemMetrics).
-  const { breakpoints, start, end } = computeTranslationBreakpoints(anchors, sizes, getNoncurrentScale(wrapper));
-  const translateRange = `${start - wrapperAnchorPoint}px ${end - wrapperAnchorPoint}px`;
+  // The breakpoints extend past both ends of the scroll range, to cover
+  // overscroll, so the range is in scroll offsets (px) and can start below
+  // 0. Breakpoints are measured at the carousel's center, which is
+  // wrapperAnchorPoint px past the scroll offset.
+  const { breakpoints, start, end } = computeFrameBreakpoints(anchors, sizes, state.noncurrentScale);
+  const animationRange = `${start - wrapperAnchorPoint}px ${end - wrapperAnchorPoint}px`;
   const percentFor = (scrollAnchor) => (end > start ? ((scrollAnchor - start) / (end - start)) * 100 : 0);
 
   items.forEach((item, i) => {
-    const translateStops = breakpoints.map((bp) => ({
-      percent: percentFor(bp.scrollAnchor),
-      value: bp.translations[i]
+    const stops = breakpoints.map(({ scrollAnchor, frame }) => ({
+      percent: percentFor(scrollAnchor),
+      translate: frame.translations[i],
+      scale: frame.scales[i],
+      opacity: opacityFor(state, frame.itemProgress[i])
     }));
-    setItemCurrentKeyframes(state, item, ranges[i].peakX, ranges[i], translateStops, translateRange);
+    setItemKeyframes(state, item, stops, animationRange);
   });
   flushKeyframeStyles(state);
 
   const { before, after } = computeEdgeAnchors(anchors, sizes);
   state.extendedAnchors = [before, ...anchors, after];
-  state.noncurrentScale = getNoncurrentScale(wrapper);
-  state.noncurrentOpacity = parseFloat(getComputedStyle(wrapper).getPropertyValue("--noncurrent-opacity"));
 }
 
-// Painted from JS for the frames the timelines can't show what this
-// carousel should:
-//   - past either end while driven, the progress asked for is somewhere
-//     this carousel's own scroll can't go - it stops at 0 or maxScroll - so
-//     the timelines, which only ever see that scroll, hold the end item at
-//     full;
-//   - the frame after a write takes it off another carousel's timeline, when
-//     its own timelines still draw where it was (see timelinesBehind in
-//     carousel-engine.js).
-// !important, because that is what outranks a running animation, and taken
-// off again the moment the timelines agree with it.
-//
-// The scroll error rides along in the same translate, rather than on
-// transform as usual: transform applies inside scale, so each item would
-// carry the error scaled by its own size - a fraction of a pixel's
-// difference in range, but past the ends, where the error is the whole
-// overscroll, it visibly opens the gaps back up.
+function opacityFor(state, itemProgress) {
+  return state.noncurrentOpacity + itemProgress * (1 - state.noncurrentOpacity);
+}
+
+// Draws the look from JS, as !important inline styles, which outrank the
+// animations. Used for the frames the animations can't show:
+//   - when another carousel drives this one past either end: its scroll
+//     position stops at the end, so the animations stop there too;
+//   - the frame after this carousel stops following another one's timeline
+//     (see timelinesBehind in carousel-engine.js), when its own animations
+//     are a frame out of date.
+// Removed by clearPaint as soon as the animations are right again.
 function paint(state, items, anchors, sizes, currentProgress, scrollError) {
   const styles = frameStyles(state, anchors, sizes, currentProgress, scrollError);
   items.forEach((item, i) => {
@@ -222,9 +146,11 @@ function paint(state, items, anchors, sizes, currentProgress, scrollError) {
   state.painting = true;
 }
 
-// The whole look at one progress, as what each item draws. Painted directly
-// where the timelines can't show it (above), and keyframed across a leader's
-// timeline while following one (followFrames, below).
+// What each item draws at one progress, as CSS properties. Used by paint and
+// followFrames. `scrollError` is how far to shift every item, in screen
+// pixels, to show this progress from where the carousel is really scrolled.
+// It goes in translate, which applies outside scale. Transform is set to
+// none to hide the scroll-driven animation's own transform.
 function frameStyles(state, anchors, sizes, currentProgress, scrollError) {
   const { scales, itemProgress, translations } = computeGapCompensatedFrame(
     anchors,
@@ -234,24 +160,22 @@ function frameStyles(state, anchors, sizes, currentProgress, scrollError) {
   );
   return scales.map((scale, i) => ({
     scale: String(scale),
-    opacity: String(state.noncurrentOpacity + itemProgress[i] * (1 - state.noncurrentOpacity)),
-    translate: `${translations[i] + scrollError}px 0`
+    opacity: String(opacityFor(state, itemProgress[i])),
+    translate: `${translations[i] + scrollError}px 0`,
+    transform: "none"
   }));
 }
 
-// One animation per item, keyframed at each sample the engine asks for - see
-// linked-scrolling/timeline-follow.js. The error is the whole distance
-// between where this carousel's scroll sits and where it is being shown, so
-// it rides in the translate for the same reason it does past the ends, and
-// transform is held at none to keep the stylesheet's own correction out of
-// it. All four are properties the compositor can animate by itself.
+// Keyframes for drawing this carousel on another carousel's timeline while
+// it follows that one (see linked-scrolling/timeline-follow.js): one set per
+// item, at each progress the engine samples.
 function followFrames(ctx, samples) {
   const { items, anchors, sizes } = ctx.getGeometry();
   const state = getWrapperState(ctx.wrapper);
   const frames = samples.map(({ progress, scrollError }) => frameStyles(state, anchors, sizes, progress, scrollError));
   return Array.from(items, (item, i) => ({
     target: item,
-    keyframes: frames.map((styles) => ({ ...styles[i], transform: "none" }))
+    keyframes: frames.map((styles) => styles[i])
   }));
 }
 
@@ -261,43 +185,34 @@ function clearPaint(state, items) {
     item.style.removeProperty("scale");
     item.style.removeProperty("opacity");
     item.style.removeProperty("translate");
+    item.style.removeProperty("transform");
   });
   state.painting = false;
 }
 
-// Scale/opacity/translate are driven by the CSS scroll-driven animations on
-// .carousel-item, except where they can't show it (see paint); otherwise
-// this only computes the discrete current index for the page dots, since no
-// timeline hands that back to JS.
+// Runs on every scroll frame. Reports the current item, and switches between
+// the animations and paint.
 function apply(ctx) {
   const { wrapper, getScrollSource, getDrivenProgress, getGeometry, currentScrollAnchor, onProgress } = ctx;
-  // Shared with the engine and with anything else watching this wrapper,
-  // rather than re-measured here: this runs on every scroll frame, and a
-  // pass over every item is the one thing it must not do per frame.
+  // Cached layout, shared with the engine. Measuring every item here would
+  // be too slow for every frame.
   const { items, anchors, sizes } = getGeometry();
   const state = getWrapperState(wrapper);
   const scrollAnchor = currentScrollAnchor();
 
-  // While something else drives this carousel, its progress is exact but
-  // the scroll position written from it is quantised, so every item sits
-  // a fraction of a pixel off from where it belongs. The timelines draw
-  // everything from that scroll position, so they inherit the same error
-  // - invisible in scale/opacity (fractions of a percent) but visible in
-  // position, where it makes the whole strip step instead of glide.
-  // --scroll-error is what the translate adds back to land where the
-  // driver actually asked for.
-  //
-  // Zero and removed whenever this carousel scrolls itself, since progress
-  // comes straight from the scroll position then - the two can't disagree.
+  // "Driven" means another carousel is setting this one's position. It asks
+  // for an exact progress, but scroll positions are whole pixels, so the
+  // animations show a slightly different one. That fraction of a pixel makes
+  // the carousel step instead of glide. --scroll-error shifts the items by
+  // the difference (see .scale-fade .carousel-item in scale-fade.css). It is
+  // removed when the carousel scrolls itself.
   const isDriven = getScrollSource() === "driven";
   const currentProgress = isDriven ? getDrivenProgress() : computeCurrentProgress(anchors, scrollAnchor);
 
-  //
-  // Measured against the imaginary items past each end (see
-  // computeEdgeAnchors), so a progress driven past the end carries this
-  // carousel at the same pitch its own overscroll would.
-  // Never over a timeline laid across another carousel: that draws this one
-  // while it follows on it, and the paint would outrank it.
+  // Past either end, progress is measured against an imaginary item beyond
+  // each end item, spaced like the real ones (computeEdgeAnchors), so the
+  // carousel keeps moving at the same rate. Never painted while following another
+  // carousel's timeline: that draws this carousel, and paint would hide it.
   const overscrolled = isDriven && (currentProgress < 0 || currentProgress > items.length - 1);
   if (!ctx.isOnTimeline() && (overscrolled || ctx.timelinesBehind())) {
     const scrollError = scrollAnchor - computeScrollAnchorForProgress(state.extendedAnchors, currentProgress + 1);

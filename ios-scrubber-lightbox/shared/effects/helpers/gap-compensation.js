@@ -1,60 +1,23 @@
-// Scaling an item down opens a gap to its neighbours. This works out how
-// far each item needs to move to close that gap, so a scaled carousel
-// stays evenly spaced instead of loosening around whatever's current.
-//
-// Only the scale-fade look needs this - a fade moves nothing - which is
-// why it lives beside that look instead of in carousel-math.js with the
-// progress/anchor math every carousel uses.
+// The scale-fade look's math. Items other than the centered one are drawn
+// smaller, which opens gaps between them; each item is shifted toward the
+// center to close those gaps, so the spacing stays even.
 import { transition, computeCurrentProgress, computeEdgeAnchors } from "../../carousel-math.js";
 
-// How current item i is, 0 to 1: 1 exactly when currentProgress lands on
-// i, down to 0 by the time currentProgress reaches either adjacent index.
+// How centered item i is: 1 when it is exactly centered, falling linearly
+// to 0 as either neighbor reaches the center.
 function computeItemProgress(currentProgress, i) {
   return Math.min(Math.max(1 - Math.abs(currentProgress - i), 0), 1);
 }
 
-// Per-item `animation-range`, in native CSS `cover <percent>` units, for
-// the scroll-driven scale/opacity keyframe. `cover 0%`/`100%` mean "item's
-// leading edge at the wrapper's trailing edge" and "item's trailing edge
-// at the wrapper's leading edge" - a span of (wrapperSize + itemSize) - so
-// an item whose leading edge sits at on-screen position x is at
-// cover-percent (wrapperSize - x) / (wrapperSize + itemSize).
+// How far to shift each item toward the center. Scaling an item down pulls
+// each of its edges in by half the width it loses. Each item moves by the
+// width lost by every item between it and the center, plus half its own.
 //
-// The how-current-is-it window has to be asymmetric - sized to the real
-// pixel gap to each neighbouring anchor (or the item's own size at the
-// carousel's edges, where there's only one neighbour). Otherwise it won't
-// reach exactly 0 the moment that neighbour actually becomes current: too
-// wide a window leaves a dead zone, too narrow leaves a lag, visible as
-// the neighbour's own window starting or finishing late.
-//
-// But an asymmetric range means an item's real peak - where it's
-// genuinely "current" - usually isn't at the range's midpoint, which is
-// where a plain 0%/50%/100% @keyframes would put it. `peakX` is where in
-// [0, 1] across [start, end] that true peak actually falls.
-// `animation-timing-function` can't fix this: it only reshapes the curve
-// *within* one keyframe segment, not where a keyframe's value falls
-// across the whole range. So scale-fade.js gives each item its own
-// generated @keyframes rule with "scale: 1" placed directly at `peakX%` -
-// the only way to put a keyframe value at an arbitrary per-item position.
-//
-// (The translate math below doesn't need peakX at all - computeCurrentProgress
-// + computeItemProgress already give the same how-current-is-it curve this
-// asymmetric range encodes, just derived directly from real anchor
-// distances instead of via cover-percent/peakX.)
-
-// Each item's scale() shrinks it symmetrically around its own center,
-// pulling both edges inward by scaleDiff/2 and widening the visual gap to
-// every neighbour further out. To keep every gap equal to the layout's
-// natural gap, translate each item toward the current item by the
-// accumulated scale-loss of every item between it and the current one.
-//
-// The split between the two accumulation directions must use the
-// continuous currentProgress, not the discrete currentIndex:
-// currentProgress crosses an item's own index exactly when that item's
-// itemProgress is 1 (scaleDiff is 0 there), so anchoring on it keeps the
-// running sums continuous. Anchoring on currentIndex would flip at the
-// midpoint between two items instead, where scaleDiff is usually nonzero
-// on both sides - a visible jump.
+// Items are split into left and right of the center at the exact progress,
+// not the nearest whole item. At a whole item that item is full size and
+// loses nothing, so moving it from one side to the other changes nothing.
+// Splitting at the nearest item would switch sides halfway between items,
+// where both are shrunk, and the carousel would jump.
 function computeTranslations(anchors, sizes, scales, currentProgress) {
   const n = anchors.length;
   const translations = new Array(n).fill(0);
@@ -79,10 +42,7 @@ function computeTranslations(anchors, sizes, scales, currentProgress) {
   return translations;
 }
 
-// The whole look at one currentProgress: how current each item is, the
-// scale that gives it, and the translate that closes the gaps those scales
-// open. What the breakpoints below sample, and what scale-fade.js paints
-// directly when the timelines can't reach a progress at all.
+// Every item's centeredness, scale and shift at one progress.
 export function computeGapCompensatedFrame(anchors, sizes, noncurrentScale, currentProgress) {
   const itemProgress = anchors.map((_, i) => computeItemProgress(currentProgress, i));
   const scales = itemProgress.map((p) => transition(p, noncurrentScale, 1));
@@ -90,29 +50,20 @@ export function computeGapCompensatedFrame(anchors, sizes, noncurrentScale, curr
   return { itemProgress, scales, translations };
 }
 
-// Precomputes the exact breakpoints needed to reconstruct
-// computeTranslations' output as a native CSS @keyframes curve - one per
-// item, driven by a scroll-timeline (see scale-fade.js).
+// The scroll positions where the look can change direction, and what every
+// item draws at each. Keyframes at these points, with linear interpolation
+// between them, reproduce the look exactly.
 //
-// As a function of raw scroll offset, every item's translation is
-// piecewise-linear: computeItemProgress's how-current-is-it curve reaches
-// exactly 0 right as scrollAnchor crosses a neighbouring anchor, so each
-// item's scaleDiff only bends at its neighbours' anchors - meaning the
-// anchors are the only interior points where any item's translation can
-// change slope.
+// These are the positions where each item is centered. Between two of them,
+// progress moves linearly with scroll, so each item's centeredness, scale,
+// opacity and shift do too.
 //
-// The curve runs out to the imaginary item past each end (see
-// computeEdgeAnchors), not just to the ends of the scroll range, because
-// overscrolling carries the scroll past them: the end item keeps winding
-// down there, and its neighbours have to keep closing the gap it opens.
-// Progress past the ends is measured against those same imaginary anchors,
-// so the translate falls off at the same pitch as the scale-fade's own
-// per-item range for the end item (computeAnimationRanges).
+// They include an imaginary item beyond each end (see computeEdgeAnchors),
+// so the end item keeps shrinking while overscrolled.
 //
-// That's `n + 2` breakpoints total, shared by every item - exact, not a
-// sampled approximation. Their span is returned alongside them, as the
-// scroll-anchor range the keyframes have to be laid across.
-export function computeTranslationBreakpoints(anchors, sizes, noncurrentScale) {
+// `start` and `end` are the first and last positions, measured at the
+// carousel's center.
+export function computeFrameBreakpoints(anchors, sizes, noncurrentScale) {
   const n = anchors.length;
   if (n === 0) return { breakpoints: [], start: 0, end: 0 };
 
@@ -121,9 +72,9 @@ export function computeTranslationBreakpoints(anchors, sizes, noncurrentScale) {
 
   const breakpoints = extendedAnchors.map((scrollAnchor) => {
     const currentProgress = computeCurrentProgress(extendedAnchors, scrollAnchor) - 1;
-    const { translations } = computeGapCompensatedFrame(anchors, sizes, noncurrentScale, currentProgress);
+    const frame = computeGapCompensatedFrame(anchors, sizes, noncurrentScale, currentProgress);
 
-    return { scrollAnchor, translations };
+    return { scrollAnchor, frame };
   });
 
   return { breakpoints, start: before, end: after };
