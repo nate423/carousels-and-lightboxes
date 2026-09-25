@@ -70,18 +70,27 @@ How keyframe counts grow:
 - **Following on a timeline, any look:** O(n × m), one keyframe per item
   per leader item.
 
-At 1,000 items, scale-fade alone is about a million keyframes.
+At 1,000 items, scale-fade alone is about a million keyframes. Most of
+them describe items at positions where they're off screen.
 
 ## Principles
 
 1. **Motion shared by every item goes on one element.** A carousel-wide
    offset (follow distance, scroll error) is one animation on a track that
    wraps the items. Items carry only their own look. Items can then never
-   drift apart, since there is only one copy of the shared motion.
-2. **Looks are local.** An item's look depends only on its distance from
-   the current item, `u = i - progress`, and is constant beyond a small
-   window. Local looks need O(1) keyframes per item, allow virtualization,
-   and let one item's resize touch only its neighbors.
+   drift apart, since there is only one copy of the shared motion. The look
+   itself (an item growing, its neighbors moving over) differs per item and
+   stays on each item.
+2. **An item only needs keyframes where it's on screen.** Each item's
+   keyframes cover the positions where it's visible, plus a margin, and it
+   holds an unseen value elsewhere. This works for any look, and keyframes
+   grow with (items × items visible at once). It is the first step toward
+   virtualization: an item with no keyframes outside its window can also
+   have no content there, and a resize only redoes the items whose windows
+   include it. A look that depends only on an item's distance from the
+   current one, `u = i - progress`, can go further and share one set of
+   keyframes across items, but only when every item is the same size (the
+   expand strip).
 3. **An animation runs where its interrupter lives.** While a native
    scroller is the input, motion belongs on the compositor (scroll
    timelines). While script is the input (a drag, a tap, a released
@@ -114,8 +123,8 @@ At 1,000 items, scale-fade alone is about a million keyframes.
   compositor animation (`linear()` easing). It stays smooth while the main
   thread is busy, and on interruption script computes the exact state from
   the spring's equation and launches the next one.
-- **Looks as data.** A look declares its parts (the elements it draws on), a
-  pure `frame(u, strength)`, and its window. One compiler turns that into
+- **Looks as data.** A look declares its parts (the elements it draws on)
+  and a pure `frame(u, strength)`. One compiler turns that into
   keyframes for its own timeline, animations on another carousel's
   timeline, a script painter, and time-based transitions.
 - **One item, many presentations.** Thumbnail *i* and slide *i* are the
@@ -128,12 +137,22 @@ At 1,000 items, scale-fade alone is about a million keyframes.
   and the DOM follows it. Virtualize item contents and animations, and keep
   every slot: empty, sized slots are cheap, and keep native snap and scroll
   length correct.
+- **Slots and a sticky visual layer.** For looks whose items overlap, the
+  scroller holds only empty slots, and the visuals sit in one layer inside
+  the same scroller, held in place with `position: sticky`. The slots give
+  native momentum and snap and set the scroll distance per item; the layer
+  lays items out freely. Because the visuals stay inside the scroller, a
+  touch on them still pans it and a text field in an item still works
+  natively. Whether the layer rubber-bands on iOS is untested (#46).
 
 ### Looks this should carry
 
-- **Card stack (iMessage-style):** local, with a cap on how many cards show
-  behind the top one.
-- **Cover flow:** local.
+- **Card stack (iMessage-style):** each card's look depends on its distance
+  from the top card, with a cap on how many show behind it. Cards overlap,
+  so it needs the sticky visual layer. A JS version of this stack
+  (abjt.dev/lab/card-stack) computes each card's transform on scroll.
+- **Cover flow:** each item's look depends on its distance from the
+  current one.
 - **Slot-machine wheel:** items placed statically around a drum; only the
   drum rotates. One animated element. `rotateX` is linear in progress, so
   keyframes at item anchors stay exact.
@@ -164,6 +183,9 @@ At 1,000 items, scale-fade alone is about a million keyframes.
 - **Linking more than two carousels.** One shared progress with a single
   elected leader, in place of pairwise links.
 - **WebGL for a single item's content**, where an effect needs shaders.
+- **HTML-in-canvas** (Chromium only, origin trial from Chrome 148). It draws
+  in a `paint` event on the main thread, so scroll timelines can't drive it.
+  Worth revisiting if its proposed threaded mode ships.
 - **Spec proposals.** If the prototype needs primitives the web lacks
   (reading compositor state, interruptible view transitions,
   WICG/view-transitions#157), it is the evidence for proposing them.
@@ -172,11 +194,12 @@ At 1,000 items, scale-fade alone is about a million keyframes.
 
 1. Test #32's suspect: fast-drag the strip itself, then the main carousel.
 2. Move shared motion onto a track element (#40).
-3. Build the handoff prototype alongside it (#42, see
-   [handoff-proto.md](handoff-proto.md)).
-4. Make scale-fade local, whenever convenient (#41).
-5. After the prototype: looks as data with one compiler and explicit
-   presenter state (#43); then virtualization and dynamic sizes (#44).
+3. Give each item keyframes only where it's on screen (#41).
+4. Alongside: the handoff prototype (#42, see
+   [handoff-proto.md](handoff-proto.md)) and the sticky visual layer
+   proof of concept (#46).
+5. After those: looks as data with one compiler and explicit presenter
+   state (#43); then virtualization and dynamic sizes (#44).
 
 Polyfill drawing: see #19.
 
