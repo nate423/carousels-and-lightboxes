@@ -2,6 +2,33 @@
 
 Tracked in #42.
 
+## Context
+
+Written on Friday, Sep 25, 2026, during the architecture review described
+in [architecture.md](architecture.md). The review found that the hardest
+problems of the previous ten days were handoffs: moments where an item
+passes from one thing drawing it to another, each fixed separately.
+
+Three comparisons shaped this plan:
+
+- **View transitions** move between two frozen snapshots, which is why
+  they can't be interrupted
+  ([WICG/view-transitions#157](https://github.com/WICG/view-transitions/issues/157)).
+  Handing off a live element is the missing piece.
+- **iOS's [Portal](https://github.com/Aeastr/Portal) library** carries live
+  views between screens, the same idea on native.
+- **A public debate that week (Sep 15–16)** over SwiftUI running
+  animations in the app process rather than in Core Animation's render
+  server (see [Kyle Macomber's thread](https://x.com/kylemacomber/status/2100029347419877794)). It showed
+  the trade-off: animations off the main thread stay smooth when it's
+  blocked, and animations beside the event handling can be interrupted and
+  keep their velocity. This plan aims for both.
+
+We agreed to prove the model on its own page before refactoring any
+carousel onto it.
+
+## Plan
+
 A standalone page that proves the handoff model in
 [architecture.md](architecture.md) before any carousel is refactored onto
 it. It imports nothing from `shared/`.

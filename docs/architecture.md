@@ -1,5 +1,28 @@
 # Architecture: where we are, where we're going
 
+## Context
+
+Written on Friday, Sep 25, 2026, from an architecture review. Over the
+previous ten days (about 145 commits since Sep 16) we had fixed the linked
+carousels one problem at a time: flicker, lag, handovers between carousels,
+and frame rate on the scroll-timeline polyfill (#1–#39). That Friday we
+stepped back to review everything we'd built, how it got here, and whether
+it can carry what's planned next.
+
+What prompted it:
+
+- #32 and #19, which both ask whether we animate too many things at once.
+- Shortcuts that won't scale, like keeping every photo mounted (#10).
+- Planned work the current design wasn't built for: card stacks,
+  slot-machine wheels, editable items that change size, and collections of
+  hundreds or thousands of items.
+
+The review was a conversation, and several ideas here changed during it.
+Laying scale-fade out at its non-current size was proposed and dropped
+(#41). Decoupling the scroller from the visuals was weighed against how
+messy interaction gets when a separate scroller sits over or under
+interactive content, which led to the sticky visual layer (#46).
+
 ## The goal
 
 Interfaces that feel like an extension of the mind: every response instant,
