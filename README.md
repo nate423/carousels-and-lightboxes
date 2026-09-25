@@ -42,6 +42,13 @@ implementation for the hand-computed looks and the A/B baseline for checking
 the reduced versions against. It never imports from outside itself, and it
 never gets fixed. See its own README.
 
+## Planning
+
+- [docs/architecture.md](docs/architecture.md) - where the architecture is
+  and where it's going.
+- [docs/handoff-proto.md](docs/handoff-proto.md) - the prototype that proves
+  the handoff model first.
+
 ## Running locally
 
 ```bash
