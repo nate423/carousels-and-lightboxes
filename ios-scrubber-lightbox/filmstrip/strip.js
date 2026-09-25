@@ -11,6 +11,7 @@
 import { createCarousel } from "../shared/carousel-engine.js";
 import { scaleFadeEffect } from "../shared/effects/scale-fade.js";
 import { linkCarousels } from "../shared/linked-scrolling/link.js";
+import { watchHandover } from "../dev/debug-console.js";
 
 export function attachFilmstrip(mainCarousel, scrubberWrapper, { followOnTimeline } = {}) {
   const thumbnailCrossSize = parseFloat(
@@ -45,6 +46,7 @@ export function attachFilmstrip(mainCarousel, scrubberWrapper, { followOnTimelin
     aWhileFollowing: "continuous",
     bWhileFollowing: "continuous"
   });
+  watchHandover(mainCarousel, scrubber, "A main, B strip");
 
   return scrubber;
 }

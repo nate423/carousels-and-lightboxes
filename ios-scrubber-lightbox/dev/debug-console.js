@@ -11,11 +11,12 @@
 // Everything it samples is a cheap read - scrollLeft and inline style strings,
 // never offsetLeft/offsetWidth - because it runs on every scroll frame and a
 // forced layout here would add exactly the kind of jank it exists to measure.
+import { onScrollEnd } from "../shared/engine/scroll-end.js";
 
 // Bumped by hand whenever the scrubber's motion changes, so a capture taken on
 // a phone says which build produced it - otherwise a stale page and a fixed one
 // are indistinguishable from the log alone.
-const LOG_VERSION = 4;
+const LOG_VERSION = 6;
 
 const CONSOLE_ENABLED = false;
 const BUFFER_LIMIT = 900;
@@ -277,7 +278,9 @@ export function watchHandover(a, b, title = "handover") {
       (e) => e.isTrusted && panel.log(`${t()} ${name} scroll ${fixed(carousel.wrapper.scrollLeft, 7)}${snapOf(carousel)} | ${both()}`),
       { passive: true }
     );
-    carousel.wrapper.addEventListener("scrollend", () => panel.log(`${t()} ${name} scrollend | ${both()}`));
+    // Inferred where the browser has no 'scrollend' (see scroll-end.js), so
+    // an end that doesn't reach the link as "gesture over" shows too.
+    onScrollEnd(carousel.wrapper, () => panel.log(`${t()} ${name} scrollend | ${both()}`));
     carousel.onScrollEnd(() => panel.log(`${t()} ${name} gesture over`));
   }
 }

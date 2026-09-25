@@ -24,6 +24,7 @@
 import { createCarousel } from "../shared/carousel-engine.js";
 import { expandEffect } from "../shared/effects/expand.js";
 import { linkCarousels } from "../shared/linked-scrolling/link.js";
+import { watchHandover } from "../dev/debug-console.js";
 
 export function attachIosScrubber(mainCarousel, scrubberWrapper, { followOnTimeline } = {}) {
   const itemCount = mainCarousel.getItems().length;
@@ -45,6 +46,7 @@ export function attachIosScrubber(mainCarousel, scrubberWrapper, { followOnTimel
     aWhileFollowing: "continuous",
     bWhileFollowing: "continuous"
   });
+  watchHandover(mainCarousel, scrubber, "A main, B strip");
 
   return scrubber;
 }
