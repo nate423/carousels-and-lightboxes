@@ -12,11 +12,19 @@
 // that stops and lifts with no momentum still ends. Only a scroll ever arms
 // the timer, so a tap or click with no movement behind it fires nothing,
 // just as native 'scrollend' wouldn't.
+//
+// A finger isn't always seen, though. iOS sends no touch or pointer events
+// for a finger that lands while the scroller is still moving - catching a
+// snap or momentum - so a drag begun that way and held still looks exactly
+// like a scroll that has stopped. `isAtRest`, where given, says whether the
+// scroller is somewhere it could have stopped on its own; while it isn't,
+// the operation is still ongoing, until its next scroll event arms the timer
+// again.
 import { trackPress } from "./press.js";
 
 const SETTLE_DELAY = 120;
 
-export function onScrollEnd(el, listener) {
+export function onScrollEnd(el, listener, { isAtRest } = {}) {
   if ("onscrollend" in window) {
     el.addEventListener("scrollend", listener);
     return;
@@ -42,6 +50,7 @@ export function onScrollEnd(el, listener) {
       arm();
       return;
     }
+    if (isAtRest && !isAtRest()) return;
     pending = false;
     listener();
   }

@@ -36,5 +36,5 @@ export function createSnapSuspension(wrapper) {
     }
   }
 
-  return { suspend, restore };
+  return { suspend, restore, isSuspended: () => wrapper.style.scrollSnapType === "none" };
 }

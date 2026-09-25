@@ -250,6 +250,14 @@ export function createCarousel(wrapper, options = {}) {
   // width, while the geometry to read it against is still the old one.
   let restingAt = 0;
 
+  // Whether this carousel came to rest on an item, with snap on, and nothing
+  // has moved it or its items since. From there, the browser has nothing to
+  // correct - a resnap only ever moves a carousel onto an item - so the next
+  // scroll is someone moving it, whether or not the page heard them ask: iOS
+  // sends no touch events for a finger that lands on a carousel still
+  // finishing a snap.
+  let restsOnItem = false;
+
   // Whether this carousel's own scroll-driven animations are still drawing
   // the scroll position it had before a write that took it off a timeline.
   // Chrome's timelines read a scroll position written from script a frame
@@ -370,6 +378,8 @@ export function createCarousel(wrapper, options = {}) {
     const rebased = rebasedTo !== null && wrapper.scrollLeft === rebasedTo;
     rebasedTo = null;
     if (rebased) return;
+    if (restsOnItem && attribution.getScrollSource() === "self") attribution.noteSelfCommand();
+    restsOnItem = false;
     attribution.noteScrollEvent();
     // A timeline draws this carousel relative to where its real scroll
     // position sat when it took over, so anything else moving that position
@@ -402,6 +412,11 @@ export function createCarousel(wrapper, options = {}) {
   // ending (wasLeading), so a spurious/early scrollend while merely being
   // driven, or one with no motion behind it at all, never gets relayed as if
   // it were the authoritative "the gesture is over" signal.
+  //
+  // Where the end is inferred (see engine/scroll-end.js), it is only an end
+  // once the carousel sits on an item. With snap on, nothing else leaves it
+  // at rest between two - only a finger the page never heard about, holding
+  // it there mid-drag.
   onScrollEnd(wrapper, () => {
     const wasLeading = attribution.endLeading();
     // Only where its own motion ended. A scroll that ends without it having
@@ -409,6 +424,7 @@ export function createCarousel(wrapper, options = {}) {
     // its items have been measured again, say - and measured against the
     // old geometry it says nothing true about where it rests.
     if (wasLeading) restingAt = geometry.getCurrentProgress();
+    restsOnItem = !snap.isSuspended() && isOnItem();
     // Came to rest somewhere a drive didn't put it: motion of its own that
     // the drive's writes didn't cancel - a smooth scroll still running when
     // the other carousel took over, say - whose scroll events all read as
@@ -423,7 +439,15 @@ export function createCarousel(wrapper, options = {}) {
     if (wasLeading) {
       scrollEndListeners.forEach((listener) => listener());
     }
-  });
+  }, { isAtRest: () => snap.isSuspended() || isOnItem() });
+
+  // Whether the scroll position is on an item's anchor, give or take the
+  // whole pixel it is rounded to.
+  function isOnItem() {
+    const { anchors } = geometry.get();
+    const scrollAnchor = geometry.currentScrollAnchor();
+    return anchors.some((anchor) => Math.abs(anchor - scrollAnchor) <= 1);
+  }
 
   // Shared by both triggers below so a resize that also changes an item's
   // own size (e.g. dragging the window while an image is still loading)
@@ -441,6 +465,8 @@ export function createCarousel(wrapper, options = {}) {
     // snapped to - neither of which is the item that was centred. One being
     // moved by a finger or a gesture of its own is left to it.
     const resting = !leader && !press.isPressed() && !attribution.isMovingItself() ? restingAt : null;
+    // Its items are about to move, and the browser may resnap it after them.
+    restsOnItem = false;
     timelineFollow.stop();
     updateSpacers();
     effect.setup(ctx);

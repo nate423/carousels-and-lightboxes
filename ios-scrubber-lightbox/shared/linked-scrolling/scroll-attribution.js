@@ -137,7 +137,8 @@ export function createScrollAttribution(wrapper, { onSelfReclaim, leadsUnasked =
     // Called by goToIndex: an explicit command to this
     // carousel, not an echo of something driving it, so the scrolling it is
     // about to do counts as moving for its own reasons and propagates
-    // through a link. Unlike markSelfDriven this isn't a reclaim from a
+    // through a link. Also called for a scroll that could only be someone
+    // moving it, unheard (restsOnItem in carousel-engine.js). Unlike markSelfDriven this isn't a reclaim from a
     // drive - a command can equally happen while already "self" - so it
     // doesn't touch movingDriven or trigger onSelfReclaim.
     noteSelfCommand() {
