@@ -299,9 +299,22 @@ export function expandEffect({ flattenWhileLeading = false } = {}) {
     // filled only forwards draws nothing - leaving that frame, too, to the
     // look in full underneath.
     const timing = { duration: FLATTEN_DURATION, fill: "both", easing: "linear" };
-    const animations = state.targets.flatMap((targets, i) =>
-      PARTS.map((part) => targets[part].animate(frames.map((f) => f[i][part]), timing))
-    );
+    // Flattening, a second animation holds flat underneath the ease and
+    // keeps running until replaced. WebKit runs an animation on the
+    // compositor only while it is running, not while it holds its end, and
+    // any scroll-driven animation already running there draws over a held
+    // one: without this, the items current when the drag started spring
+    // back to the full look as soon as the ease ends.
+    const holds =
+      to === 0
+        ? state.targets.flatMap((targets, i) =>
+            PARTS.map((part) => targets[part].animate([frames.at(-1)[i][part], frames.at(-1)[i][part]], { duration: FLATTEN_DURATION, iterations: Infinity }))
+          )
+        : [];
+    const animations = [
+      ...holds,
+      ...state.targets.flatMap((targets, i) => PARTS.map((part) => targets[part].animate(frames.map((f) => f[i][part]), timing)))
+    ];
     const flattening = { animations, replaced: [...previous, ...replaced], from, to, start: now };
     state.flattening = flattening;
     Promise.all(animations.map((animation) => animation.ready)).then(
