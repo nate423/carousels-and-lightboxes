@@ -76,10 +76,21 @@ export function createCarousel(wrapper, options = {}) {
   // the carousel stops it where it's shown, and puts the scroll position
   // back there, since that is where a drag pans from. Let go without
   // moving it or tapping another item, it carries on to where it was going.
+  //
+  // Until then, the scroll position stays where the tap put it (heldAt).
+  // Chrome may still be finishing a snap from before the tap, and adds what
+  // is left of it on top of the jump. The move is drawn to land on the
+  // tapped item, so it would land that far off. Only the jump's own scroll
+  // event is passed on: held, the carousel isn't moving, and the rest -
+  // Chrome's leftovers and the echoes of putting them back - would read as
+  // it moving again, and set what's linked to it following it.
   let movingTo = null;
   let stoppedMove = null;
+  let heldAt = null;
+  let heldJumpSeen = false;
 
   function stopMove() {
+    heldAt = null;
     const shown = ready ? effect.freeze?.(ctx) : null;
     if (shown == null) return;
     const { anchors, wrapperAnchorPoint } = geometry.get();
@@ -169,8 +180,11 @@ export function createCarousel(wrapper, options = {}) {
       effect.goTo(ctx, { index, scrollLeft: left });
       movingTo = index;
       wrapper.scrollTo({ left, behavior: "instant" });
+      heldAt = left;
+      heldJumpSeen = false;
       return;
     }
+    heldAt = null;
     wrapper.scrollTo({ left, behavior });
   }
 
@@ -182,6 +196,7 @@ export function createCarousel(wrapper, options = {}) {
   // Always a real scroll position: a carousel following on a timeline comes
   // off it, in the same task, so the frame shows the written position.
   function setProgressDirect(progress) {
+    heldAt = null;
     restingAt = progress;
     attribution.noteDirectWrite(progress);
     notifyMotion();
@@ -234,6 +249,7 @@ export function createCarousel(wrapper, options = {}) {
   // scroll position to the progress being shown first, so the frame the
   // switch lands in looks the same as the one before it.
   function follow(leader) {
+    heldAt = null;
     const progress = leader.getCurrentProgress();
     const onTimeline = timelineFollow.leader();
 
@@ -420,6 +436,14 @@ export function createCarousel(wrapper, options = {}) {
   // not scrolling.
   wrapper.addEventListener("scroll", (event) => {
     if (!event.isTrusted) return;
+    // Held where a tap put it: anything but the jump is put back, and not
+    // passed on.
+    if (heldAt !== null) {
+      const off = Math.abs(wrapper.scrollLeft - heldAt) >= 0.5;
+      if (off) wrapper.scrollLeft = heldAt;
+      if (off || heldJumpSeen) return;
+      heldJumpSeen = true;
+    }
     const rebased = rebasedTo !== null && wrapper.scrollLeft === rebasedTo;
     rebasedTo = null;
     if (rebased) return;
@@ -510,6 +534,7 @@ export function createCarousel(wrapper, options = {}) {
     // snapped to - neither of which is the item that was centred. One being
     // moved by a finger or a gesture of its own is left to it.
     const resting = !leader && !press.isPressed() && !attribution.isMovingItself() ? restingAt : null;
+    heldAt = null;
     // Its items are about to move, and the browser may resnap it after them.
     restsOnItem = false;
     timelineFollow.stop();
