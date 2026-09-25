@@ -87,6 +87,19 @@
   justify-content: center;
 }
 
+/* Only the thumbnail as drawn takes taps. The item's own box and the outer
+   edge don't move with it, so they overlap its neighbors' thumbnails; the
+   inner edge, clipped by the outer one, covers exactly what shows. A tap
+   still reaches the item's click handler by bubbling up. */
+.expand-effect .expand-effect-item,
+.expand-effect .expand-effect-left-edge {
+  pointer-events: none;
+}
+
+.expand-effect .expand-effect-right-edge {
+  pointer-events: auto;
+}
+
 /* The two clipping edges and the thumbnail are all laid out at the grown
    width, always, so growing never changes a box. The outer edge clips
    with the left corners rounded, the inner one with the right, and the
