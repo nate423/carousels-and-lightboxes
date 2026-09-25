@@ -126,6 +126,21 @@ export function createRamkaSlidesController(slidesEl) {
   const attribution = createScrollAttribution(slidesEl, { onSelfReclaim: snap.restore, leadsUnasked: true });
   const geometry = createGeometryCache(slidesEl, getItems);
 
+  // ramka hears its arrow, Home and End keys on its lightbox content, which
+  // holds the slides but isn't them, so those keys never reach the slides'
+  // own keydown listener. Nor do clicks on its previous/next buttons. Without
+  // these, the slides stay "driven" after the strip has led, and their moves
+  // are taken for echoes and not passed on to the strip.
+  const content = slidesEl.closest("[data-ramka-content]");
+  content?.addEventListener("keydown", attribution.noteSelfInput, { passive: true });
+  content?.addEventListener(
+    "pointerdown",
+    (event) => {
+      if (event.target.closest("[data-ramka-previous], [data-ramka-next]")) attribution.noteSelfInput();
+    },
+    { passive: true }
+  );
+
   function goToIndex(index, { behavior = "smooth" } = {}) {
     const items = getItems();
     if (!items[index]) return;

@@ -134,6 +134,11 @@ export function createScrollAttribution(wrapper, { onSelfReclaim, leadsUnasked =
     selfScrollStartedAt: () => selfScrollStartedAt,
     getDrivenProgress: () => lastDrivenProgress,
 
+    // Real input on this carousel heard somewhere other than the wrapper -
+    // for a scroller whose owner handles some of its input on an ancestor
+    // (ramka's keys, on its lightbox content).
+    noteSelfInput: markSelfDriven,
+
     // Called by goToIndex: an explicit command to this
     // carousel, not an echo of something driving it, so the scrolling it is
     // about to do counts as moving for its own reasons and propagates
