@@ -25,7 +25,13 @@ let failed = false;
 for (const [label, selector, dx, steps, checkStrip] of scenarios) {
   await page.evaluate(() => window.__takeFrames());
   await wheel(page, selector, dx, steps);
-  const frames = await page.evaluate(() => window.__takeFrames());
+  const measured = await page.evaluate(() => window.__takeFrames());
+  // Mouse-wheeling the main carousel, WebKit sometimes reports a scroll
+  // position in a scroll event that doesn't stick (#45). The page draws what
+  // the event reported, so those frames are skipped.
+  const unstuck = (f) => selector === "#main-carousel" && f.reported !== f.left;
+  const frames = measured.filter((f) => !unstuck(f));
+  const skipped = measured.length - frames.length;
   const bad = frames.filter((f) => (checkStrip && f.strip > 0.5) || f.opacity > 0.02);
   failed ||= bad.length > 0;
   console.log(
@@ -33,6 +39,7 @@ for (const [label, selector, dx, steps, checkStrip] of scenarios) {
     `frames ${frames.length}`,
     checkStrip ? `worst strip ${round(Math.max(0, ...frames.map((f) => f.strip)))}px` : "strip flattened, not checked",
     `worst opacity ${round(Math.max(0, ...frames.map((f) => f.opacity)), 3)}`,
+    ...(skipped ? [`skipped ${skipped} (#45)`] : []),
     bad.length ? `BAD ${bad.length}: ${JSON.stringify(bad.slice(0, 3).map((f) => ({ P: round(f.P, 3), strip: round(f.strip), opacity: round(f.opacity, 3) })))}` : "ok"
   );
 }

@@ -19,7 +19,9 @@ node dev/headless/following.mjs chromium http://localhost:57000/ios-scrubber/
   carousel's centre items match the fade's, at the main carousel's measured
   progress. A frame is bad if the strip is more than 0.5px out, or an
   opacity more than 0.02. Found the one-frame jumps when following on a
-  timeline starts or stops.
+  timeline starts or stops. While the main carousel is wheeled in WebKit,
+  it skips frames where the last scroll event reported a position that
+  didn't stick (#45), and prints how many.
 - **`flattening.mjs`** - drags the strip, drags it again mid-grow-back, and
   has the main carousel take over, and checks the centre thumbnail never
   changes width by more than 4px from one frame to the next. Found the

@@ -134,13 +134,20 @@ export const PROBE = () => {
     return { k, width: shown[k].width };
   }
 
+  // Where the main carousel's last real scroll event said it was, read
+  // before any of the page's own listeners run.
+  let reportedLeft = main.scrollLeft;
+  window.addEventListener("scroll", (event) => {
+    if (event.isTrusted && event.target === main) reportedLeft = main.scrollLeft;
+  }, true);
+
   window.__frames = [];
   function measure() {
     const P = mainProgress();
     // Past either end the look winds its end item down, which the formula
     // above doesn't describe.
     if (P <= 0.02 || P >= items.length - 1.02) return;
-    window.__frames.push({ P, strip: stripError(P), opacity: opacityError(P), centre: centreThumb() });
+    window.__frames.push({ P, strip: stripError(P), opacity: opacityError(P), centre: centreThumb(), reported: reportedLeft, left: main.scrollLeft });
   }
   function frame() {
     setTimeout(measure, 0);
