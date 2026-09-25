@@ -118,11 +118,23 @@ export function ScrubberGallery({ items, ariaLabel }) {
         >
           {items.map((item, i) => {
             const ratio = itemAspectRatio(item);
+            // The neighbors' ratios let styles.css work out how far away they
+            // sit, which is where this slide's fade ends.
+            const prev = items[i - 1];
+            const next = items[i + 1];
             return (
               <Lightbox.Slide
                 key={item.id ?? i}
                 className={snug ? 'lb-slide-snug' : undefined}
-                style={snug ? { '--lb-snug-ratio': ratio } : undefined}
+                style={
+                  snug
+                    ? {
+                        '--lb-snug-ratio': ratio,
+                        '--lb-snug-ratio-prev': prev ? itemAspectRatio(prev) : ratio,
+                        '--lb-snug-ratio-next': next ? itemAspectRatio(next) : ratio,
+                      }
+                    : undefined
+                }
               >
                 <Lightbox.Item
                   index={i}

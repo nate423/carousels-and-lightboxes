@@ -80,3 +80,100 @@ body {
   object-fit: cover;
   display: block;
 }
+
+/* --- Slide fade ------------------------------------------------------------
+   The iOS scrubber's fade look on ramka's slides: the current slide at full
+   opacity, fading toward --lb-fade-opacity as it moves away, and fully faded
+   when a neighbor becomes current.
+
+   One shared rule for every slide, split in two halves. Each slide's view
+   timeline is centered at `cover 50%`, whatever its size. The slide fades in
+   over the stretch before that, from where its previous neighbor was
+   current, and its zoom stage fades out over the stretch after, until its
+   next neighbor is current. Nested opacities multiply, so together they draw
+   the full fade. Only the two distances differ per slide, and they come from
+   the same width formula lightbox.css lays the slides out with. */
+
+/* Registered so each distance resolves to pixels on the slide itself.
+   Unregistered, cqw would resolve again on the zoom stage, which is its own
+   size container. */
+@property --lb-fade-reach-prev {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 0px;
+}
+
+@property --lb-fade-reach-next {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 0px;
+}
+
+.lb-slide {
+  --lb-fade-opacity: 0.5;
+  /* Slide widths and gaps, restated from lightbox.css. */
+  --lb-fade-gap: 1.25rem;
+  --lb-fade-width: 100cqw;
+  --lb-fade-width-prev: 100cqw;
+  --lb-fade-width-next: 100cqw;
+  /* How far the view timeline moves between each neighbor being current and
+     this slide being current: half of each width plus the gap. */
+  --lb-fade-reach-prev: calc(var(--lb-fade-width) / 2 + var(--lb-fade-gap) + var(--lb-fade-width-prev) / 2);
+  --lb-fade-reach-next: calc(var(--lb-fade-width) / 2 + var(--lb-fade-gap) + var(--lb-fade-width-next) / 2);
+}
+
+@media (min-width: 768px) {
+  .lb-slide {
+    --lb-fade-gap: 0px;
+  }
+
+  .lb-content-snug .lb-slide-snug {
+    --lb-fade-gap: var(--lb-snug-gap);
+    --lb-fade-width: var(--lb-snug-width);
+    --lb-fade-width-prev: min(
+      calc(100cqw - 2 * var(--lb-inset-inline)),
+      calc((100cqh - var(--lb-inset-top) - var(--lb-inset-bottom)) * var(--lb-snug-ratio-prev))
+    );
+    --lb-fade-width-next: min(
+      calc(100cqw - 2 * var(--lb-inset-inline)),
+      calc((100cqh - var(--lb-inset-top) - var(--lb-inset-bottom)) * var(--lb-snug-ratio-next))
+    );
+  }
+}
+
+/* The fade-out goes on the zoom stage rather than the item or the media:
+   ramka dims the item while it's pulled to dismiss, and hides the media
+   during the open and close morphs, both through opacity, and an animation
+   would override them. */
+@supports (view-timeline: --lb-slide inline) {
+  .lb-slide {
+    view-timeline: --lb-slide inline;
+    animation: lb-fade-in linear both;
+    animation-timeline: --lb-slide;
+    animation-range: cover calc(50% - var(--lb-fade-reach-prev)) cover 50%;
+  }
+
+  .lb-slide [data-ramka-zoom] {
+    animation: lb-fade-out linear both;
+    animation-timeline: --lb-slide;
+    animation-range: cover 50% cover calc(50% + var(--lb-fade-reach-next));
+  }
+}
+
+@keyframes lb-fade-in {
+  from {
+    opacity: var(--lb-fade-opacity);
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes lb-fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: var(--lb-fade-opacity);
+  }
+}
