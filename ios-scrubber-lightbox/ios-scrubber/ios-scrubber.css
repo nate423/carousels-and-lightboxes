@@ -2,15 +2,15 @@
    Only what is true of this page alone. The page chrome and the carousel
    and item boxes are in shared/base.css; the fade the main carousel draws is
    in shared/effects/fade.css (which the one .fade wrapper here answers to),
-   and the strip's own look is shared/effects/expand.css (which the
+   and the strip's own effect is shared/effects/expand.css (which the
    .expand-effect wrapper, added by expand.js, answers to). */
 
 /* --- Main carousel ---------------------------------------------------------
-   This page is happy with the fade look's own default --noncurrent-opacity
+   This page is happy with the fade effect's own default --noncurrent-opacity
    (see .fade in shared/effects/fade.css; .fade never reads
    --noncurrent-scale, so there's no slot for it here) - left commented out
    rather than restated live, so the slot is visible without a duplicate
-   number that could drift from the look's actual default; uncomment and
+   number that could drift from the effect's actual default; uncomment and
    edit to override. */
 .main-carousel {
   --noncurrent-opacity: 0.4;
@@ -25,10 +25,10 @@
    scroll-snap, from the shared .carousel-wrapper rules) - no custom
    drag/transform here.
 
-   This page is happy with the expand look's own default size (see
+   This page is happy with the expand effect's own default size (see
    .expand-effect in shared/effects/expand.css for the 2:3/1:1 ratio math)
    - left commented out below rather than restated live, so the slot is
-   visible without a duplicate number that could drift from the look's
+   visible without a duplicate number that could drift from the effect's
    actual default; uncomment and edit to actually override.*/
 .carousel-wrapper.ios-thumbnail-scrubber-strip {
   height: 100px;
@@ -41,7 +41,7 @@
 }
 
 /* The thumbnails' own finish. Their size, and everything about how they
-   grow, is the expand look's (see shared/effects/expand.css). */
+   grow, is the expand effect's (see shared/effects/expand.css). */
 .expand-effect-thumb {
   background-color: hsl(220, 14%, 70%);
 }

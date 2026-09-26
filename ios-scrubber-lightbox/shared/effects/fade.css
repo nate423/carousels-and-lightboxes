@@ -1,11 +1,11 @@
-/* The fade look's scaffolding: the per-item view-timeline that
+/* The fade effect's scaffolding: the per-item view-timeline that
    shared/effects/fade.js hangs its generated animation-name/-range off.
 
    Scoped to .fade, a class a wrapper opts into, the same way .scale-fade works
-   - and for the same reason: which carousels want which look is a fact about
+   - and for the same reason: which carousels want which effect is a fact about
    the page, and saying it in the markup is where leaving it off is visible. */
 
-/* This look's own default for how faded a non-current item is - scoped
+/* This effect's own default for how faded a non-current item is - scoped
    here, not to every .carousel-wrapper (see shared/effects/scale-fade.css's
    header for why), since .fade never reads --noncurrent-scale at all. */
 .fade {
@@ -43,8 +43,8 @@
   }
 }
 
-/* This look moves nothing, so the only thing left to write is the
-   scroll-error correction - not part of the look itself, but what makes
+/* This effect moves nothing, so the only thing left to write is the
+   scroll-error correction - not part of the effect itself, but what makes
    it land where it was asked to. It matters because a driven carousel's
    scroll position is quantised: without this, a carousel being scrubbed
    steps a whole pixel at a time instead of gliding. Static, and so free,

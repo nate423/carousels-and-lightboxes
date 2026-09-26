@@ -1,6 +1,6 @@
 // Checks that the filmstrip page's two carousels stay in step. Scrolls each
 // one in turn, and on every frame compares both carousels' items with what
-// the scale-fade look should draw at the scrolled carousel's position. A
+// the scale-fade effect should draw at the scrolled carousel's position. A
 // frame more than 0.5px off is bad, such as the other carousel drifting and
 // then jumping into place (#15).
 //
@@ -29,7 +29,7 @@ await page.evaluate(async () => {
     };
   });
 
-  // How far a carousel's items are from the look at progress P: the worst
+  // How far a carousel's items are from the effect at progress P: the worst
   // of the seven items nearest the center, in position or width.
   function error(c, P) {
     const { anchors, sizes, wrapper, items } = c;
@@ -54,7 +54,7 @@ await page.evaluate(async () => {
     if (!leader) return;
     const P = computeCurrentProgress(leader.anchors, leader.wrapper.scrollLeft + leader.wrapper.offsetWidth / 2);
     // Skipped near either end, where the scrolled carousel's position stops
-    // at the end but the look keeps going.
+    // at the end but the effect keeps going.
     if (P <= 0.02 || P >= leader.items.length - 1.02) return;
     const frame = { P };
     carousels.forEach((c) => (frame[c.id] = error(c, P)));

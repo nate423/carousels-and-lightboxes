@@ -162,7 +162,7 @@ export function createRamkaSlidesController(slidesEl) {
   }
 
   // As a continuous follower, it can only be written: ramka draws its own
-  // slides, so there is no look here to lay across another carousel's
+  // slides, so there is no effect here to lay across another carousel's
   // timeline. No page links it this way today.
   function follow(leader) {
     setProgressDirect(leader.getCurrentProgress());

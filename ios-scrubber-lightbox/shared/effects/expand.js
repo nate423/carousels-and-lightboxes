@@ -1,15 +1,15 @@
-// A carousel look for fixed-size items at a constant gap, where only the
+// A carousel effect for fixed-size items at a constant gap, where only the
 // one nearest the center grows - both its own thumbnail and the room its
 // neighbours leave around it - drawn entirely with translates, never with
 // a bigger layout box. Used by the iOS-Photos-style scrubber
 // strip, but nothing here is specific to that page.
 //
-// The same look computed by hand is archived at
+// The same effect computed by hand is archived at
 // archive/proto-v1/js/effects/ios-scrubber-effect.js (settle-effect.js
 // wrapped around looks/ios-box-look.js) - the reference the derivation
 // below was checked against.
 //
-// --- The look, as a function of progress ---------------------------------
+// --- The effect, as a function of progress ---------------------------------
 //
 // With P = currentProgress and u = i - P (how many items away item i is
 // from current, signed):
@@ -37,7 +37,7 @@
 // never scaled, so never stretched (#8). The thumbnail moves right by d
 // inside them, back to where it started, so what it holds stays put and is
 // cropped narrower rather than squeezed. The outer edge also carries the
-// item's shift. Nothing about the look ever changes a box's size, so
+// item's shift. Nothing about the effect ever changes a box's size, so
 // nothing it does can move the layout, the snap points, or the scroll
 // position underneath it.
 //
@@ -47,14 +47,14 @@
 //
 // --- Flattening while it leads --------------------------------------------
 //
-// With flattenWhileLeading, the look falls away while the strip is being
+// With flattenWhileLeading, the effect falls away while the strip is being
 // dragged - every thumbnail collapsed, no room made - and comes back once
 // it comes to rest, as iOS Photos does. That can't be a multiplier on the
-// look, since nothing on the compositor multiplies one animation by
+// effect, since nothing on the compositor multiplies one animation by
 // another. It doesn't need to be: flat doesn't depend on progress, and
-// the look only needs to come back where the strip rests. So starting to
-// lead, the look eases from where it stands to flat and holds there; at
-// rest, it eases back to the look at that progress. Both are animations
+// the effect only needs to come back where the strip rests. So starting to
+// lead, the effect eases from where it stands to flat and holds there; at
+// rest, it eases back to the effect at that progress. Both are animations
 // over the top of the scroll-driven ones, which keep running underneath -
 // never paused - so the moment one goes, what's underneath already draws
 // the same thing. How far along one is, is worked out from its own timing,
@@ -76,7 +76,7 @@ function clamp01(x) {
 }
 
 // CSS's `ease`. The flattening samples it into keyframes rather than using
-// it as the animations' easing, since the look is linear in its strength
+// it as the animations' easing, since the effect is linear in its strength
 // but a timing function would bend each segment between keyframes on its
 // own, out of step with the others.
 function ease(t) {
@@ -108,7 +108,7 @@ export function expandEffect({ flattenWhileLeading = false } = {}) {
 
   // What each item draws at one progress, with `scrollError` - how far the
   // scroll position sits from where the progress belongs - carried in the
-  // translate, and at one strength of the look: 1 in full, 0 flat.
+  // translate, and at one strength of the effect: 1 in full, 0 flat.
   function frameAt(state, progress, scrollError = 0, strength = 1) {
     return state.items.map((item, i) => itemFrameAt(state.dims, i, progress, scrollError, strength));
   }
@@ -126,7 +126,7 @@ export function expandEffect({ flattenWhileLeading = false } = {}) {
     };
   }
 
-  // Each element the look draws on, per item: its two clipping edges and
+  // Each element the effect draws on, per item: its two clipping edges and
   // the thumbnail inside them.
   const PARTS = ["leftEdge", "rightEdge", "thumb"];
 
@@ -138,7 +138,7 @@ export function expandEffect({ flattenWhileLeading = false } = {}) {
     };
   }
 
-  // Before the items are built: their sizes, and the look's default
+  // Before the items are built: their sizes, and the effect's default
   // dimensions, hang off .expand-effect (see expand.css), and the engine
   // measures the items as soon as they exist.
   function prepare(wrapper) {
@@ -269,7 +269,7 @@ export function expandEffect({ flattenWhileLeading = false } = {}) {
     onProgress?.(computeCurrentIndex(currentProgress, state.items.length), currentProgress);
   }
 
-  // How strong the look is right now, 0 to 1, from where the flattening
+  // How strong the effect is right now, 0 to 1, from where the flattening
   // animations have got to.
   function strengthAt(state, now) {
     const { animations, from, to, start } = state.flattening;
@@ -277,12 +277,12 @@ export function expandEffect({ flattenWhileLeading = false } = {}) {
     return from + (to - from) * ease(clamp01((now - start) / FLATTEN_DURATION));
   }
 
-  // Eases the look from wherever it is to `to` - see "Flattening while it
+  // Eases the effect from wherever it is to `to` - see "Flattening while it
   // leads" above. Started over the top of any still running, which it
   // replaces - but only once it has started drawing. A new animation may
   // not draw until a frame after it's made, and cancelling the one it
   // replaces first would leave that frame to the scroll-driven animations
-  // underneath: the look in full, between flat and the start of growing
+  // underneath: the effect in full, between flat and the start of growing
   // back.
   function flattenTo(ctx, state, to) {
     const now = document.timeline.currentTime;
@@ -297,14 +297,14 @@ export function expandEffect({ flattenWhileLeading = false } = {}) {
     // Filled backwards too: a new animation's start time can land a
     // moment after the frame it first draws in, and before it starts, one
     // filled only forwards draws nothing - leaving that frame, too, to the
-    // look in full underneath.
+    // effect in full underneath.
     const timing = { duration: FLATTEN_DURATION, fill: "both", easing: "linear" };
     // Flattening, a second animation holds flat underneath the ease and
     // keeps running until replaced. WebKit runs an animation on the
     // compositor only while it is running, not while it holds its end, and
     // any scroll-driven animation already running there draws over a held
     // one: without this, the items current when the drag started spring
-    // back to the full look as soon as the ease ends.
+    // back to the full effect as soon as the ease ends.
     const holds =
       to === 0
         ? state.targets.flatMap((targets, i) =>
@@ -340,7 +340,7 @@ export function expandEffect({ flattenWhileLeading = false } = {}) {
   }
 
   // Drops the flattening at once, for a strip another carousel has started
-  // to drive: what drives it draws the look in full, over the top.
+  // to drive: what drives it draws the effect in full, over the top.
   function unflatten(state) {
     [...state.flattening.animations, ...state.flattening.replaced].forEach((animation) => animation.cancel());
     state.flattening = { animations: [], replaced: [], from: 1, to: 1, start: 0 };

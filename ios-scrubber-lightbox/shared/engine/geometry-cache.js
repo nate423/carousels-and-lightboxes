@@ -8,7 +8,7 @@ import { getItemMetrics, computeCurrentProgress, computeProgressKnots, wrapperAn
 //
 // What makes that safe is that no effect changes an item's border box.
 // They draw with transforms and with properties confined inside the box
-// (the expand look is built around this: letting an item's box grow
+// (the expand effect is built around this: letting an item's box grow
 // would feed the geometry back into the progress derived from it, which
 // is why its growth is drawn as overflow and a transform instead - see
 // .expand-effect-item in shared/effects/expand.css). So offsetLeft and

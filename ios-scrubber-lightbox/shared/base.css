@@ -1,5 +1,5 @@
 /* Shared by every page here: the page chrome, and the boxes a carousel and
-   its items are laid out in. Nothing about how any particular look draws.
+   its items are laid out in. Nothing about how any particular effect draws.
 
    These were written out once per page while the three were being reduced,
    so that pinning the axis, the alignment and the contrast policy could take
@@ -124,7 +124,7 @@ h1 {
 }
 
 /* Every carousel here scrolls natively and none of them wants the bar drawn;
-   the position is shown by the look itself, or by a navigator. */
+   the position is shown by the effect itself, or by a navigator. */
 .carousel-wrapper::-webkit-scrollbar {
   display: none;
 }
@@ -173,7 +173,7 @@ h1 {
    randomly-sized boxes' text label specifically ("Item N (WxH)") - a
    strip's thumbnails have no text of their own (createItem returns
    nothing), so giving them the same padding would only inflate their
-   rendered box past whatever itemSizing/the look's CSS vars computed,
+   rendered box past whatever itemSizing/the effect's CSS vars computed,
    with nothing to show for it. */
 .placeholder-boxes .carousel-item {
   background-color: hsl(220, 14%, 70%);
@@ -198,8 +198,8 @@ h1 {
    from it is quantised, so the items' boxes end up a fraction of a pixel
    from where the painted progress belongs.
 
-   Added to what a look draws rather than multiplied into it - this is not
-   part of the look, it is the correction that makes the look land where it
+   Added to what an effect draws rather than multiplied into it - this is not
+   part of the effect, it is the correction that makes the effect land where it
    was asked to. */
 @property --scroll-error {
   syntax: "<length>";

@@ -7,7 +7,7 @@ That file's own header documents the linking half - the adapter pattern,
 why it measures via `getBoundingClientRect` instead of the shared
 geometry cache, why its snap suspension isn't the shared one. Below is
 the other half: bugs that specifically came from wiring a
-`carousel-engine` look into ramka's React tree, hit while building this
+`carousel-engine` effect into ramka's React tree, hit while building this
 page. Not a checklist to follow - a record of what actually went wrong,
 in case the next attempt at this runs into the same class of bug.
 
@@ -56,7 +56,7 @@ literal value in its place).
 ## A CSS ordering gap baked in a wrong spacer size
 
 `createCarousel` calls `populateItems()` (which measures items to size
-the spacers) *before* `effect.setup()` (which is what adds a look's own
+the spacers) *before* `effect.setup()` (which is what adds an effect's own
 class - `expand.js` adding `.expand-effect`). `expand.css` derives
 `--expand-item-width` from `--expand-item-height` only inside a rule
 scoped to that class. Our override only set the height, not the derived
@@ -68,7 +68,7 @@ persistently offset from the main carousel whenever it was driven, by
 exactly that error, forever - nothing ever re-measured it. Invisible on
 `ios-scrubber.css`, which never overrides the height away from a default
 that happens to equal the initial-value. Fixed by declaring the derived
-width directly on our own selector, not dependent on the look's own class
+width directly on our own selector, not dependent on the effect's own class
 landing first.
 
 ## Copied transitions added lag that wasn't there in the reference page

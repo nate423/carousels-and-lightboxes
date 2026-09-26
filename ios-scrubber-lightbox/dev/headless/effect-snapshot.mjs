@@ -2,8 +2,8 @@
 // on-screen box and opacity, at 41 scroll positions, with snapping off.
 // Compare two versions' snapshots to check they draw the same thing.
 //
-//   node dev/headless/look-snapshot.mjs [chromium|webkit] [url] > a.json
-//   node dev/headless/look-snapshot.mjs compare a.json b.json
+//   node dev/headless/effect-snapshot.mjs [chromium|webkit] [url] > a.json
+//   node dev/headless/effect-snapshot.mjs compare a.json b.json
 import { readFileSync } from "node:fs";
 import { launch, openPage, badge, round } from "./lib.mjs";
 

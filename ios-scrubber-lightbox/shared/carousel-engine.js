@@ -80,7 +80,7 @@ export function createCarousel(wrapper, options = {}) {
     const state = attribution.getMotionState();
     if (state === lastMotionState) return;
     lastMotionState = state;
-    // The look first, for one that draws motion itself (see
+    // The effect first, for one that draws motion itself (see
     // flattenWhileLeading in effects/expand.js).
     if (ready) effect.onMotionChange?.(ctx, state);
     motionListeners.forEach((listener) => listener(state));
@@ -165,7 +165,7 @@ export function createCarousel(wrapper, options = {}) {
     // The polyfill advances this wrapper's timelines only from a scroll event
     // on it, and the one this write causes is not dispatched until the next
     // frame - a frame in which the new position would be painted with the old
-    // look. Dispatching one now has it catch up in the same frame the write
+    // effect. Dispatching one now has it catch up in the same frame the write
     // lands in, as a native timeline does. Every listener of this engine's
     // own skips events that aren't trusted, so only the polyfill hears it.
     if (usingScrollTimelinePolyfill) wrapper.dispatchEvent(new Event("scroll"));
@@ -197,9 +197,9 @@ export function createCarousel(wrapper, options = {}) {
       return;
     }
 
-    // What this carousel's own look is told, kept within its items. The
+    // What this carousel's own effect is told, kept within its items. The
     // timeline covers the leader's whole scroll range, which can reach a
-    // hair past either end item, and draws that itself; the look, told a
+    // hair past either end item, and draws that itself; the effect, told a
     // progress past an end, would paint an overscroll over the top of it
     // that nothing on the timeline could outrank.
     const withinItems = Math.min(Math.max(progress, 0), geometry.get().items.length - 1);
@@ -262,7 +262,7 @@ export function createCarousel(wrapper, options = {}) {
   // the scroll position it had before a write that took it off a timeline.
   // Chrome's timelines read a scroll position written from script a frame
   // late, and there the write is the whole distance followed, so that frame
-  // would show this carousel where following began. The look draws it
+  // would show this carousel where following began. The effect draws it
   // itself until the frame after, when they have caught up. The write's own
   // scroll event can't say when that is: it is dispatched before the frame
   // the timelines are still behind in.
@@ -323,10 +323,10 @@ export function createCarousel(wrapper, options = {}) {
     getGeometry: geometry.get,
     currentScrollAnchor: geometry.currentScrollAnchor,
     // Whether another carousel's timeline is drawing this one right now -
-    // in which case nothing the look paints itself may stand in its way.
+    // in which case nothing the effect paints itself may stand in its way.
     isOnTimeline: () => timelineFollow.drawing(),
     // Whether this carousel's own scroll-driven animations are a frame
-    // behind its scroll position - in which case the look has to draw it
+    // behind its scroll position - in which case the effect has to draw it
     // itself (see timelinesBehind).
     timelinesBehind: () => timelinesBehind !== null,
     onProgress: undefined
@@ -344,7 +344,7 @@ export function createCarousel(wrapper, options = {}) {
   // to latch, and snap comes back on a layout where 0 belongs to the first
   // item alone.
   snap.suspend();
-  // Anything the look needs on the wrapper before its items are built and
+  // Anything the effect needs on the wrapper before its items are built and
   // measured - a class its item sizes hang off, say.
   effect.prepare?.(wrapper);
   populateItems();
@@ -361,8 +361,8 @@ export function createCarousel(wrapper, options = {}) {
   // write has to land before the frame samples the other carousel's
   // scroll-driven animations. The browser samples them after dispatching
   // scroll events but before running animation frame callbacks; a write from
-  // a callback is painted at its new position with the look its old position
-  // gave it, and only catches up a frame later - which reads as a follower
+  // a callback is painted at its new position but drawn as its old one
+  // would be, and only catches up a frame later - which reads as a follower
   // lagging a frame behind, and as an item jumped to arriving collapsed and
   // then popping to full size.
   //
@@ -404,7 +404,7 @@ export function createCarousel(wrapper, options = {}) {
   // This is where a gesture's final position becomes final, and the apply
   // above is rAF-throttled, so the last scroll event's render is still
   // pending when this fires. Rendering once more here is what guarantees the
-  // look ends up drawing the position the carousel actually came to rest at.
+  // effect ends up drawing the position the carousel actually came to rest at.
   //
   // Only ends *this* carousel's own leading motion, not driven motion - see
   // endFollowing below for why the driven side can't trust its own
@@ -482,7 +482,7 @@ export function createCarousel(wrapper, options = {}) {
   // Recovers from an item's size changing for reasons outside this module's
   // own control (e.g. a placeholder image finishing its load mid-scroll).
   // Effects that resize items themselves as their normal scroll-driven
-  // behavior (see the iOS scrubber's look.js) opt out via
+  // behavior (see effects/expand.js) opt out via
   // effect.skipItemResizeObserver - without that, every write the effect
   // makes would itself be observed here as "an item's size changed
   // unexpectedly", re-triggering refreshGeometry (and so effect.apply

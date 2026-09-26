@@ -1,7 +1,7 @@
 /**
  * The thumbnail strip this page swaps in for ramka's own ThumbnailStrip: a
  * real carousel-engine instance (native scroll + snap, the iOS-scrubber
- * expand look), linked to ramka's Slides viewport through
+ * expand effect), linked to ramka's Slides viewport through
  * ramka-slides-controller.js instead of ramka's built-in ScrollTimeline sync.
  *
  * ramka doesn't mount its Slides until the lightbox is opened for the first

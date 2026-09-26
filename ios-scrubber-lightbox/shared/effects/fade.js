@@ -1,4 +1,4 @@
-// The scale-fade look with the scale removed: the current item at full
+// The scale-fade effect with the scale removed: the current item at full
 // opacity, its neighbours faded, nothing moving. Used where a carousel is
 // context rather than the subject - e.g. the iOS scrubber page's main
 // carousel, which just shows what the strip is scrubbing.
@@ -8,7 +8,7 @@
 // exactly as that neighbour becomes current, whatever their sizes. That's
 // also why each item needs its own generated @keyframes rule instead of a
 // shared one - see scale-fade.js's header for the mechanics, which this
-// look shares.
+// effect shares.
 //
 // No gap-compensation needed: nothing here changes an item's size, so no
 // gap ever opens between neighbours.

@@ -111,5 +111,5 @@ iOS 18 and Safari 17 (the polyfill) are out of scope.
 
 ## Out of scope
 
-Carousels, looks, linking logic, multiple items. Those come after, onto
+Carousels, effects, linking logic, multiple items. Those come after, onto
 whatever this proves.

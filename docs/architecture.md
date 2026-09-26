@@ -31,16 +31,16 @@ are the first cases. The same core should carry card stacks, slot-machine
 wheels, editable items, and collections of thousands of items.
 
 The core is not one component for every use case. It is a small set of
-general parts that each look and each page composes.
+general parts that each effect and each page composes.
 
 ## What we have
 
 - **Native scrollers.** Every carousel is a real scroll container with
   native momentum, snap and rubber-banding.
-- **Looks as scroll-driven animations.** Each look (scale-fade, fade,
+- **Effects as scroll-driven animations.** Each effect (scale-fade, fade,
   expand) generates keyframes that the browser runs on the carousel's own
   scroll timeline, on the compositor.
-- **Exact keyframes.** Every look is linear in progress between whole
+- **Exact keyframes.** Every effect is linear in progress between whole
   items, so keyframes at each item's anchor draw it exactly, not
   approximately.
 - **Linked carousels.** Whichever carousel is moving for its own reasons
@@ -48,7 +48,7 @@ general parts that each look and each page composes.
   which scroller the browser is moving. The follower is drawn on the
   leader's scroll timeline, with no script between the finger and the
   follower.
-- **A few firm rules.** No look changes an item's layout box. Geometry is
+- **A few firm rules.** No effect changes an item's layout box. Geometry is
   measured once per layout change, not per frame. Progress math is pure
   functions (`carousel-math.js`).
 
@@ -81,7 +81,7 @@ iOS scrubber page, 30 items, desktop Chrome:
 | Main carousel dragged, strip following | 210 | 3,240 |
 
 While the strip follows, each thumbnail's outer edge carries the strip's
-whole follow distance (about 850px) in its own animation. The look's own
+whole follow distance (about 850px) in its own animation. The effect's own
 movement is about ±12px. Thirty separate animations must agree every frame
 on motion they all share. That is the leading suspect for #32.
 
@@ -90,7 +90,7 @@ How keyframe counts grow:
 - **expand:** O(n). One shared `@keyframes`, a per-item range.
 - **scale-fade:** O(n²). Gap compensation makes each item's shift depend on
   every item between it and the center, so each item gets n + 2 keyframes.
-- **Following on a timeline, any look:** O(n × m), one keyframe per item
+- **Following on a timeline, any effect:** O(n × m), one keyframe per item
   per leader item.
 
 At 1,000 items, scale-fade alone is about a million keyframes. Most of
@@ -100,17 +100,17 @@ them describe items at positions where they're off screen.
 
 1. **Motion shared by every item goes on one element.** A carousel-wide
    offset (follow distance, scroll error) is one animation on a track that
-   wraps the items. Items carry only their own look. Items can then never
-   drift apart, since there is only one copy of the shared motion. The look
+   wraps the items. Items carry only their own effect. Items can then never
+   drift apart, since there is only one copy of the shared motion. The effect
    itself (an item growing, its neighbors moving over) differs per item and
    stays on each item.
 2. **An item only needs keyframes where it's on screen.** Each item's
    keyframes cover the positions where it's visible, plus a margin, and it
-   holds an unseen value elsewhere. This works for any look, and keyframes
+   holds an unseen value elsewhere. This works for any effect, and keyframes
    grow with (items × items visible at once). It is the first step toward
    virtualization: an item with no keyframes outside its window can also
    have no content there, and a resize only redoes the items whose windows
-   include it. A look that depends only on an item's distance from the
+   include it. An effect that depends only on an item's distance from the
    current one, `u = i - progress`, can go further and share one set of
    keyframes across items, but only when every item is the same size (the
    expand strip).
@@ -120,20 +120,20 @@ them describe items at positions where they're off screen.
    spring), motion belongs with script, or is compiled by script into a
    compositor animation that script can replace at any moment.
 4. **What's on screen is computed, never read back.** The browser can't
-   report what the compositor is showing. Every look is a pure function of
+   report what the compositor is showing. Every effect is a pure function of
    progress and every time-based animation has a known curve, so JS can
    always compute the on-screen position and velocity. Every handoff starts
    from that.
 5. **Handoffs are atomic within a frame.** Write the new state before
    switching who draws; keep the old drawer until the new one is ready.
-   Implemented once, not per look.
+   Implemented once, not per effect.
 6. **Springs keep velocity.** Interrupting or retargeting a motion carries
    its current velocity into the next one.
 
 ## Direction
 
 - **Progress is the model.** A carousel's state is its progress. Scrollers
-  are input devices that produce it; looks are views of it.
+  are input devices that produce it; effects are views of it.
 - **Progress sources.** A scroll timeline, a finger, and a spring over time
   all produce progress. What draws an item doesn't care which one it is on,
   and can switch mid-motion with position and velocity carried over.
@@ -146,7 +146,7 @@ them describe items at positions where they're off screen.
   compositor animation (`linear()` easing). It stays smooth while the main
   thread is busy, and on interruption script computes the exact state from
   the spring's equation and launches the next one.
-- **Looks as data.** A look declares its parts (the elements it draws on)
+- **Effects as data.** An effect declares its parts (the elements it draws on)
   and a pure `frame(u, strength)`. One compiler turns that into
   keyframes for its own timeline, animations on another carousel's
   timeline, a script painter, and time-based transitions.
@@ -160,7 +160,7 @@ them describe items at positions where they're off screen.
   and the DOM follows it. Virtualize item contents and animations, and keep
   every slot: empty, sized slots are cheap, and keep native snap and scroll
   length correct.
-- **Slots and a sticky visual layer.** For looks whose items overlap, the
+- **Slots and a sticky visual layer.** For effects whose items overlap, the
   scroller holds only empty slots, and the visuals sit in one layer inside
   the same scroller, held in place with `position: sticky`. The slots give
   native momentum and snap and set the scroll distance per item; the layer
@@ -168,13 +168,13 @@ them describe items at positions where they're off screen.
   touch on them still pans it and a text field in an item still works
   natively. Whether the layer rubber-bands on iOS is untested (#46).
 
-### Looks this should carry
+### Effects this should carry
 
-- **Card stack (iMessage-style):** each card's look depends on its distance
+- **Card stack (iMessage-style):** each card's effect depends on its distance
   from the top card, with a cap on how many show behind it. Cards overlap,
   so it needs the sticky visual layer. A JS version of this stack
   (abjt.dev/lab/card-stack) computes each card's transform on scroll.
-- **Cover flow:** each item's look depends on its distance from the
+- **Cover flow:** each item's effect depends on its distance from the
   current one.
 - **Slot-machine wheel:** items placed statically around a drum; only the
   drum rotates. One animated element. `rotateX` is linear in progress, so
@@ -188,7 +188,7 @@ them describe items at positions where they're off screen.
 - **No canvas, WebGPU or WASM for the core.** Drawing in rAF puts every
   view a frame behind native scrolling, and gives up DOM text, editing,
   accessibility, and the React integration.
-- **The scroll-timeline polyfill doesn't draw looks.** Where it loads, the
+- **The scroll-timeline polyfill doesn't draw effects.** Where it loads, the
   script painter draws them in one rAF loop.
 
 ## Known platform limits
@@ -221,7 +221,7 @@ them describe items at positions where they're off screen.
 4. Alongside: the handoff prototype (#42, see
    [handoff-proto.md](handoff-proto.md)) and the sticky visual layer
    proof of concept (#46).
-5. After those: looks as data with one compiler and explicit presenter
+5. After those: effects as data with one compiler and explicit presenter
    state (#43); then virtualization and dynamic sizes (#44).
 
 Polyfill drawing: see #19.

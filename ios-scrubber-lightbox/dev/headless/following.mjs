@@ -1,6 +1,6 @@
 // Whether each linked carousel on the iOS scrubber page draws exactly what
 // it should on every frame, while the other one leads it: the strip against
-// the expand look's formula, the main carousel's centre items against the
+// the expand effect's formula, the main carousel's centre items against the
 // fade's, both from the main carousel's measured progress. A frame that's
 // off - the first or last of following, say - shows up as a bad frame.
 //

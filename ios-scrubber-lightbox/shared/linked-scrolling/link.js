@@ -164,7 +164,7 @@ export function linkCarousels(a, b, { aWhileFollowing, bWhileFollowing }) {
       }
       if (!source.isMovingItself()) {
         // Scrolled, but not because anything asked it to move: the browser
-        // re-snapping it after a layout change, or nudging it as its look
+        // re-snapping it after a layout change, or nudging it as its effect
         // changes size - which iOS does to the iOS scrubber's strip as its
         // thumbnails grow back after a drag. Only a carousel moving for its
         // own reasons leads, or that nudge, several times over, moves the

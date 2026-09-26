@@ -5,28 +5,28 @@
 // Written from script, a follower is several steps behind the finger: the
 // leader scrolls, its scroll event reaches the main thread, the link writes
 // the follower's scroll position, and only then can the follower's own
-// scroll-driven look catch up. On a timeline there are no steps. The
-// follower's look is keyframed directly against the leader's scroll offset,
-// so it moves whenever and however the leader's own look does, with no
+// scroll-driven effect catch up. On a timeline there are no steps. The
+// follower's effect is keyframed directly against the leader's scroll offset,
+// so it moves whenever and however the leader's own effect does, with no
 // script in between and no quantised scroll position to correct for.
 //
 // This is exact rather than sampled. The follower's progress is the
 // leader's, and the leader's progress is linear in its scroll offset
-// between neighbouring item anchors. Every look here is linear in progress
+// between neighbouring item anchors. Every effect here is linear in progress
 // between whole items too, and so is where the follower's track would be
 // scrolled to. So a keyframe at each of the leader's anchors
 // (computeProgressKnots) is the entire curve.
 //
 // While this is showing, the follower's real scroll position stays wherever
-// it was when following began, and its look is drawn with the difference
+// it was when following began, and its effect is drawn with the difference
 // folded in as a translate: the same --scroll-error correction a driven
 // carousel already carries for quantisation, only larger. The effect
 // supplies the keyframes (followFrames) at each sample's progress and
-// error; this module knows nothing about how any look draws.
+// error; this module knows nothing about how any effect draws.
 //
 // Starting and stopping never shows. The carousel engine writes the real
 // scroll position to the progress being shown before starting, and again
-// before stopping, and the look draws that progress itself until the
+// before stopping, and the effect draws that progress itself until the
 // timeline's animations are ready - a new animation may leave its first
 // frame or so for later ones to draw. So either way the frame that paints
 // shows the same thing the previous one did, drawn the other way. When
@@ -92,9 +92,9 @@ export function createTimelineFollow({ effect, ctx, enabled = true }) {
 
     // This carousel's own scroll-driven animations keep running
     // underneath, outranked, rather than being paused while the timeline
-    // draws it. A paused one holds the look it had when it was paused, and
+    // draws it. A paused one holds the effect it had when it was paused, and
     // a resumed one can take a frame to catch up, so on the way off it
-    // would show that old look at the scroll position just written.
+    // would show that old effect at the scroll position just written.
     const timeline = timelineFor(leader.wrapper);
     const animations = effect.followFrames(ctx, samples).map(({ target, keyframes }) =>
       target.animate(
@@ -111,7 +111,7 @@ export function createTimelineFollow({ effect, ctx, enabled = true }) {
     // nothing underneath it can be trusted to show the right thing in the
     // meantime: Chrome's timeline for this carousel still reads its scroll
     // position from before the write that preceded this, for a frame. So
-    // until these are ready, the look keeps drawing this carousel itself.
+    // until these are ready, the effect keeps drawing this carousel itself.
     Promise.all(animations.map((animation) => animation.ready)).then(
       () => {
         if (showing !== shown) return;

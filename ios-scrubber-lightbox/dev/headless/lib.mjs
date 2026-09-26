@@ -51,7 +51,7 @@ export async function wheel(page, selector, dx, steps, { gap = 16, settle = 1200
   await page.waitForTimeout(settle);
 }
 
-// Injected into the iOS scrubber page. Reads the look's dimensions from the
+// Injected into the iOS scrubber page. Reads the effect's dimensions from the
 // strip's own custom properties, and on every frame - just after it, once
 // every animation frame callback including the engine's has run - records
 // the main carousel's progress as measured from where its items are, and
@@ -94,7 +94,7 @@ export const PROBE = () => {
     return mid < centres[0] ? 0 : centres.length - 1;
   }
 
-  // How far the strip is from the expand look at full strength, at the main
+  // How far the strip is from the expand effect at full strength, at the main
   // carousel's progress: the worst of the seven thumbnails around the centre.
   function stripError(P) {
     const box = strip.getBoundingClientRect();
@@ -144,7 +144,7 @@ export const PROBE = () => {
   window.__frames = [];
   function measure() {
     const P = mainProgress();
-    // Past either end the look winds its end item down, which the formula
+    // Past either end the effect winds its end item down, which the formula
     // above doesn't describe.
     if (P <= 0.02 || P >= items.length - 1.02) return;
     window.__frames.push({ P, strip: stripError(P), opacity: opacityError(P), centre: centreThumb(), reported: reportedLeft, left: main.scrollLeft });

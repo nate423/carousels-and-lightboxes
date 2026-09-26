@@ -1,4 +1,4 @@
-// The scale-fade look's math. Items other than the centered one are drawn
+// The scale-fade effect's math. Items other than the centered one are drawn
 // smaller, which opens gaps between them; each item is shifted toward the
 // center to close those gaps, so the spacing stays even.
 import { transition, computeCurrentProgress, computeEdgeAnchors } from "../../carousel-math.js";
@@ -50,9 +50,9 @@ export function computeGapCompensatedFrame(anchors, sizes, noncurrentScale, curr
   return { itemProgress, scales, translations };
 }
 
-// The scroll positions where the look can change direction, and what every
+// The scroll positions where the effect can change direction, and what every
 // item draws at each. Keyframes at these points, with linear interpolation
-// between them, reproduce the look exactly.
+// between them, reproduce the effect exactly.
 //
 // These are the positions where each item is centered. Between two of them,
 // progress moves linearly with scroll, so each item's centeredness, scale,

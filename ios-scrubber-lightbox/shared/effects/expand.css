@@ -1,20 +1,20 @@
-/* === The expand look, painted natively ===
+/* === The expand effect, painted natively ===
    Fixed-size items at a constant gap, where only the one nearest the center
    grows - both its thumbnail and the room its neighbours leave around it -
    drawn with translates alone, so the compositor can run all of it, and never as a bigger layout box, so this carousel's own layout (and
    therefore its snap points, and the offsetLeft/offsetWidth reads
    carousel-math derives progress from) can't move as a side effect of what
-   the look paints. See archive/proto-v1/js/effects/looks/ios-box-look.js for
+   the effect paints. See archive/proto-v1/js/effects/looks/ios-box-look.js for
    what went wrong when it could.
 
    Paired with shared/effects/expand.js, which generates the keyframes and
-   each item's animation-range, and explains the look they draw.
+   each item's animation-range, and explains the effect they draw.
 
-   Horizontal only, like the look it mirrors: the translates below are
+   Horizontal only, like the effect it mirrors: the translates below are
    written on X. A vertical strip would want the same on Y and a block-axis
    timeline.
 
-   The look's own default dimensions - 2:3 collapsed, 1:1 grown, matching
+   The effect's own default dimensions - 2:3 collapsed, 1:1 grown, matching
    iOS Photos' scrubber - live below on .expand-effect, the same way
    .scale-fade/.fade own their default --noncurrent-scale/-opacity (see
    those files). A page overrides --expand-item-height (or any of the three
@@ -51,7 +51,7 @@
   scroll-timeline-name: --carousel-scroll;
   scroll-timeline-axis: inline;
 
-  /* The look's own default size for the items nested inside: a collapsed
+  /* The effect's own default size for the items nested inside: a collapsed
      thumbnail is 2:3, the centred one grows to 1:1 - both derived from one
      height so they can't drift apart. A page overrides --expand-item-height
      (see the iOS scrubber page's own stylesheet) to resize the whole strip

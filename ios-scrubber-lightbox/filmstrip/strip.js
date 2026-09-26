@@ -7,7 +7,7 @@
 // effect the main carousel already has, just tuned smaller (see
 // .thumbnail-scrubber-strip's --noncurrent-scale in this page's
 // stylesheet) - no bespoke visual code needed for the "current thumbnail
-// is bigger" look.
+// is bigger" effect.
 import { createCarousel } from "../shared/carousel-engine.js";
 import { scaleFadeEffect } from "../shared/effects/scale-fade.js";
 import { linkCarousels } from "../shared/linked-scrolling/link.js";
@@ -32,7 +32,7 @@ export function attachFilmstrip(mainCarousel, scrubberWrapper, { followOnTimelin
         origin: (index) => sourceItems[index].offsetWidth / sourceItems[index].offsetHeight || 1
       }
     },
-    // Thumbnails are empty boxes - the look is all the content there is.
+    // Thumbnails are empty boxes - the effect is all the content there is.
     // Passed explicitly because the engine's default fills an item with its
     // own index as text.
     createItem: () => {},

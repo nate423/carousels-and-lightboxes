@@ -129,7 +129,7 @@ const fixed = (value, width) => pad(value.toFixed(1), width);
 const signed = (value) => (value >= 0 ? "+" : "") + value.toFixed(1);
 
 // KNOWN STALE: both readers below sample inline styles, which only the
-// hand-computed iOS look ever wrote. That look is archived, and the native
+// hand-computed iOS effect ever wrote. That effect is archived, and the native
 // one paints from generated stylesheet rules instead, so both now read 0.
 // Re-pointing them at the resolved --item-shift and thumb width means
 // getComputedStyle, which this panel has so far refused on purpose (see the

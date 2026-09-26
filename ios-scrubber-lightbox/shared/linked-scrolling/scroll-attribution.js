@@ -1,8 +1,8 @@
 // Every scroll a carousel wrapper emits is attributed to one of two sources,
 // and anything watching it - a link relaying it to another carousel, an
 // effect that renders differently depending on who is moving it (see
-// the iOS scrubber's look.js) - reads that attribution instead of trying to
-// reconstruct it from raw DOM events of its own.
+// flattenWhileLeading in effects/expand.js) - reads that attribution
+// instead of trying to reconstruct it from raw DOM events of its own.
 //
 //   "self"   - this carousel is moving for its own reasons: a real gesture
 //              on it, or a goToIndex command aimed at it.
@@ -49,7 +49,7 @@
 // `leadsUnasked` counts every scroll that isn't a driven echo as moving for
 // its own reasons, asked for or not - for a scroller something else moves
 // through input this module never sees (ramka's slides: its own buttons and
-// keys), and whose look nothing here draws, so it has no look to nudge it.
+// keys), and whose effect nothing here draws, so nothing nudges it.
 export function createScrollAttribution(wrapper, { onSelfReclaim, leadsUnasked = false } = {}) {
   let scrollSource = "self";
 
@@ -71,7 +71,7 @@ export function createScrollAttribution(wrapper, { onSelfReclaim, leadsUnasked =
   // moving (above), but it can say whether anyone asked for a move at all.
   // The browser also scrolls a carousel by itself, with no gesture behind
   // it: re-snapping after a layout change, for one. Counting that as leading
-  // lets a look that changes layout on leading feed itself, as the iOS
+  // lets an effect that changes layout on leading feed itself, as the iOS
   // strip's contrast change did in iOS Safari: every change of contrast
   // provoked a scroll, which restarted leading, which changed it back.
   let selfMoveRequested = false;

@@ -1,4 +1,4 @@
-// The default carousel look. The centered item is full size and fully
+// The default carousel effect. The centered item is full size and fully
 // opaque. Every other item is drawn at one smaller scale and one lower
 // opacity (--noncurrent-scale, --noncurrent-opacity). An item changes
 // between the two only while moving between the center and the next item
@@ -7,10 +7,10 @@
 //
 // Used by the scale-fade page and by both carousels on the filmstrip page.
 //
-// The browser draws the look by itself: each item has an animation tied to
+// The browser draws the effect by itself: each item has an animation tied to
 // the carousel's scroll position (a scroll timeline). setup() generates
 // those animations. apply() runs on scroll, reports the current item, and
-// draws the look from JS in the few cases the animations can't (see paint).
+// draws the effect from JS in the few cases the animations can't (see paint).
 //
 // "Progress" throughout is the carousel's position in items: 3 means item 3
 // is centered, 3.5 means halfway between items 3 and 4.
@@ -50,19 +50,19 @@ function getWrapperState(wrapper) {
 // different at each point. `stops` are what the item draws at each point
 // across the range.
 //
-// Scale and translate are one transform, and the whole look runs on one
+// Scale and translate are one transform, and the whole effect runs on one
 // timeline. On iOS 27, an item animated with separate scale and translate
 // animations disappears as its full-size box nears the screen edge, while
 // its shrunken shape is still on screen (#1). Translate comes before scale
 // in the transform so it moves the item in screen pixels.
 //
-// Transform and opacity animate on the compositor, so the look keeps moving
+// Transform and opacity animate on the compositor, so the effect keeps moving
 // when the main thread is busy.
 //
 // The rule is only queued here; setup() writes each stylesheet once, after
 // all items, since every write reparses the whole sheet.
 function setItemKeyframes(state, item, stops, animationRange) {
-  const name = `item-look-${item.dataset.itemId}`;
+  const name = `item-effect-${item.dataset.itemId}`;
   const keyframes = stops
     .map(
       ({ percent, translate, scale, opacity }) =>
@@ -130,7 +130,7 @@ function opacityFor(state, itemProgress) {
   return state.noncurrentOpacity + itemProgress * (1 - state.noncurrentOpacity);
 }
 
-// Draws the look from JS, as !important inline styles, which outrank the
+// Draws the effect from JS, as !important inline styles, which outrank the
 // animations. Used for the frames the animations can't show:
 //   - when another carousel drives this one past either end: its scroll
 //     position stops at the end, so the animations stop there too;

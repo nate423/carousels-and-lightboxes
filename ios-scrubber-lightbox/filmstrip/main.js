@@ -1,5 +1,5 @@
 // The filmstrip page: a scale-fade carousel navigated by a second carousel
-// rather than by dots. The strip runs the same look tuned smaller, and each
+// rather than by dots. The strip runs the same effect tuned smaller, and each
 // side drives the other through shared/linked-scrolling/.
 //
 // The main carousel has to be populated and laid out before the strip is
