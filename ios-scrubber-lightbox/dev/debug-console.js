@@ -16,7 +16,7 @@ import { onScrollEnd } from "../shared/engine/scroll-end.js";
 // Bumped by hand whenever the scrubber's motion changes, so a capture taken on
 // a phone says which build produced it - otherwise a stale page and a fixed one
 // are indistinguishable from the log alone.
-const LOG_VERSION = 6;
+const LOG_VERSION = 7;
 
 const CONSOLE_ENABLED = false;
 const BUFFER_LIMIT = 900;
@@ -280,7 +280,36 @@ export function watchHandover(a, b, title = "handover") {
     );
     // Inferred where the browser has no 'scrollend' (see scroll-end.js), so
     // an end that doesn't reach the link as "gesture over" shows too.
-    onScrollEnd(carousel.wrapper, () => panel.log(`${t()} ${name} scrollend | ${both()}`));
+    onScrollEnd(carousel.wrapper, () => {
+      panel.log(`${t()} ${name} scrollend | ${both()}`);
+      if (carousel.wrapper.querySelector(".expand-effect-item")) setTimeout(() => logExpandAnimations(panel, t, name, carousel.wrapper), 600);
+    });
     carousel.onScrollEnd(() => panel.log(`${t()} ${name} gesture over`));
+  }
+}
+
+// What an expand-effect strip draws once it has come to rest - after the
+// grow-back, so only the scroll-driven animations are left - for the items
+// from the one before the current to the end: each outer edge's computed
+// translate (which carries the item's shift) and every animation on it.
+// Chasing #53, where one thumbnail near the end draws its last keyframe.
+// Runs once per scrollend, so the layout reads here cost nothing that
+// matters.
+function logExpandAnimations(panel, t, name, wrapper) {
+  const items = [...wrapper.querySelectorAll(".expand-effect-item")];
+  const pitch = items.length > 1 ? items[1].offsetLeft - items[0].offsetLeft : 1;
+  const max = wrapper.scrollWidth - wrapper.clientWidth;
+  const current = Math.round(wrapper.scrollLeft / pitch);
+  panel.log(`${t()} ${name} rest left:${fixed(wrapper.scrollLeft, 0)} max:${fixed(max, 0)} pitch:${fixed(pitch, 0)} ~item ${current}/${items.length}`);
+  const value = (x) => (x == null ? "null" : typeof x === "object" && "value" in x ? `${fixed(x.value, 0)}${x.unit === "percent" ? "%" : x.unit}` : fixed(Number(x), 0));
+  const range = (r) => (r == null ? "?" : typeof r === "object" && "offset" in r ? value(r.offset) : typeof r === "object" ? value(r) : String(r));
+  for (let i = Math.max(0, current - 1); i < items.length; i++) {
+    const edge = items[i].querySelector(".expand-effect-left-edge");
+    const anims = edge.getAnimations().map((anim) => {
+      const kind = anim.animationName ?? (anim.timeline && anim.timeline !== document.timeline ? "scroll" : "waapi");
+      const timing = anim.effect?.getComputedTiming?.() ?? {};
+      return `${kind} ${anim.playState} t:${value(anim.currentTime)} p:${timing.progress == null ? "null" : timing.progress.toFixed(3)} r:${range(anim.rangeStart)}..${range(anim.rangeEnd)}`;
+    });
+    panel.log(`  i${i} tx:${getComputedStyle(edge).translate} inline-range:${edge.style.animationRange || "-"} | ${anims.join(" ; ") || "no animations"}`);
   }
 }
