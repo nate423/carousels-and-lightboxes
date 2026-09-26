@@ -23,7 +23,7 @@
 // thumbnail is (collapsed + grow * growth) wide. Both are linear in P
 // between whole items, and every item runs the same curve offset by its
 // own index, so one set of keyframes serves the whole strip - each item
-// only gets its own animation-range, the two items either side of it.
+// only gets its own animation-range, around the two items either side of it.
 //
 // --- Drawn with what the compositor can animate ---------------------------
 //
@@ -174,10 +174,18 @@ export function expandEffect({ flattenWhileLeading = false } = {}) {
     };
     stateByWrapper.set(wrapper, state);
 
-    // One curve for every item, across the two items either side of it:
-    // 0% is the previous item current, 50% this one, 100% the next. Item 0
-    // at progress -1, 0 and 1 is any item i at i - 1, i and i + 1.
-    const stops = [-1, 0, 1].map((progress, k) => ({ percent: k * 50, frame: itemFrameAt(dims, 0, progress) }));
+    // One curve for every item, across the two items either side of it and
+    // half an item beyond: 0% is half an item before the previous item is
+    // current, 50% this one, 100% half an item after the next. Item 0 at
+    // progress -1.5 to 1.5 is any item i at i - 1.5 to i + 1.5. The curve
+    // is flat beyond the items either side, so the extra halves just hold.
+    // They keep every resting position off the edge of an item's range:
+    // at an edge, the polyfill can put the item a hair before its range,
+    // and WebKit then draws its last keyframe (#53).
+    const stops = [-1.5, -1, 0, 1, 1.5].map((progress) => ({
+      percent: Number((((progress + 1.5) / 3) * 100).toFixed(6)),
+      frame: itemFrameAt(dims, 0, progress)
+    }));
     const names = Object.fromEntries(PARTS.map((part) => [part, `expand-${part}-${stripId}`]));
     PARTS.forEach((part) =>
       sheet.set(
@@ -186,13 +194,14 @@ export function expandEffect({ flattenWhileLeading = false } = {}) {
       )
     );
 
-    // Each item's range: from the scroll offset where the item before it is
-    // current to where the item after it is. The pitch is uniform, so the
-    // items either side of the ends are one pitch further out.
+    // Each item's range: from half a pitch before the scroll offset where
+    // the item before it is current to half a pitch after where the item
+    // after it is. The pitch is uniform, so the items either side of the
+    // ends are one pitch further out.
     const pitch = anchors.length > 1 ? anchors[1] - anchors[0] : 0;
     items.forEach((item, i) => {
-      const start = anchors[i] - pitch - wrapperAnchorPoint;
-      const range = `${start}px ${start + 2 * pitch}px`;
+      const start = anchors[i] - 1.5 * pitch - wrapperAnchorPoint;
+      const range = `${start}px ${start + 3 * pitch}px`;
       const id = item.dataset.itemId;
       const selectors = {
         leftEdge: `.expand-effect-item[data-item-id="${id}"] .expand-effect-left-edge`,
