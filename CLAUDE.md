@@ -15,6 +15,7 @@ Tracked in GitHub Issues (`nate423/carousels-and-lightboxes`); `ISSUES.md` only 
 ## Dev servers and test versions
 
 - **Fixed ports:** 56576 is always `main`, run from the main checkout. Never switch branches under it or stop it, even during cleanup. 57000 is the current work branch, run from its worktree. 57008 is for whatever reference version the current work compares against. Experiments get throwaway ports from 57010.
+- **Start `main` detached.** Servers started with the app's preview tool stop when their Claude session ends. Start 56576 from the main checkout with `nohup npm --prefix ios-scrubber-lightbox run dev -- --port 56576 --strictPort > /tmp/carousels-56576.log 2>&1 & disown`. If it won't start, check what holds the port (`lsof -nP -iTCP:56576 -sTCP:LISTEN`) before anything else.
 - **Version badge:** every page shows its version bottom-left (`ios-scrubber-lightbox/dev/version-badge-plugin.js`): branch, commit, "+changes", `VERSION_LABEL` and any `?switches`. Start experiment servers with `VERSION_LABEL` set so a phone screenshot says what was tested.
 - The dev server already listens on the LAN (`server.host: true` in `ios-scrubber-lightbox/vite.config.js`). Put any query switches for an experiment (`?follow=direct`, `?seed=...`) in the links.
 
