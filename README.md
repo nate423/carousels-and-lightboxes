@@ -15,7 +15,7 @@ ios-scrubber-lightbox/
   scale-fade/              a carousel with a page-dot navigator
   filmstrip/               the same effect, navigated by a proportional filmstrip
   ios-scrubber/             fixed-size thumbnails; only the centred one expands
-  shared/
+  shared/                  the carousel core (see its README)
     carousel-math.js        numbers in, numbers out
     carousel-engine.js      builds and drives one scroller
     effects/                the scale-fade, fade and expand effects
